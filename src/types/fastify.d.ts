@@ -1,12 +1,13 @@
 import { SupabaseClient, User } from "@supabase/supabase-js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { FastifyRequest, FastifyReply } from "fastify"; // Import base types
+import { FastifyRequest, FastifyReply, FastifyInstance as OriginalFastifyInstance } from "fastify";
 
 // Extend Fastify interfaces globally
 declare module "fastify" {
-  interface FastifyInstance {
+  interface FastifyInstance extends OriginalFastifyInstance {
     // Decorator added by src/plugins/gemini.ts
-    gemini: GoogleGenerativeAI;
+    gemini: GoogleGenerativeAI | null; // Allow null if initialization fails
+
     // Decorator added by src/plugins/supabaseAuth.ts
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
@@ -14,8 +15,6 @@ declare module "fastify" {
   interface FastifyRequest {
     // Property added by src/plugins/supabaseAuth.ts hook
     user?: User;
-    // Property added by src/plugins/supabaseAuth.ts hook
-    supabase?: SupabaseClient;
   }
 }
 

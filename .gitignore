@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+build/
 
 # Logs
 logs
@@ -36,3 +37,4 @@ coverage/
 *.njsproj
 *.sln
 *.sw?
+.vercel

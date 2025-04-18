@@ -1,81 +1,92 @@
 import { FastifyInstance } from "fastify";
-import { GoogleGenerativeAI, Content, Part, GenerateContentResult } from "@google/generative-ai";
+import {
+  GoogleGenerativeAI,
+  GenerateContentResult,
+  ModelParams,
+  GenerateContentStreamResult,
+} from "@google/generative-ai";
 
-// Define an interface for the generation options for clarity
-interface GenerateTextOptions {
-  prompt: string;
-  // Add other potential options like model name, safety settings, etc.
-  modelName?: string; // e.g., "gemini-pro"
-}
-
-/**
- * Service class for interacting with the Gemini API.
- */
 export class GeminiService {
-  private gemini: GoogleGenerativeAI;
-  private fastify: FastifyInstance; // Keep a reference to the Fastify instance for logging
+  private fastify: FastifyInstance;
+  private genAI: GoogleGenerativeAI | null;
 
   constructor(fastifyInstance: FastifyInstance) {
-    if (!fastifyInstance.gemini) {
-      fastifyInstance.log.error(
-        "Gemini client not found on Fastify instance. Ensure the gemini plugin is registered before this service is used."
-      );
-      throw new Error("Gemini client is not initialized.");
-    }
-    this.gemini = fastifyInstance.gemini;
     this.fastify = fastifyInstance;
+    // Access the decorated Gemini client instance
+    this.genAI = this.fastify.gemini;
+
+    if (!this.genAI) {
+      this.fastify.log.error(
+        "Gemini client (fastify.gemini) not available during GeminiService instantiation. Ensure geminiPlugin is registered before routes/services using it."
+      );
+      // Optionally throw an error to prevent service usage without a client
+      // throw new Error("Gemini client not initialized.");
+    }
   }
 
   /**
-   * Generates text content based on a given prompt using the specified Gemini model.
-   *
-   * @param {GenerateTextOptions} options - The options for text generation, including the prompt.
-   * @returns {Promise<string>} The generated text content.
-   * @throws {Error} If the generation fails or returns no text.
+   * Generates text content using the configured Gemini model.
+   * @param params - Parameters including the prompt.
+   * @param params.prompt - The text prompt for generation.
+   * @param params.modelName - Optional model name override (defaults to 'gemini-pro').
+   * @returns The generated text.
+   * @throws Error if the Gemini client is not initialized or API call fails.
    */
-  async generateText({ prompt, modelName = "gemini-pro" }: GenerateTextOptions): Promise<string> {
-    this.fastify.log.info(`Generating text with model: ${modelName}`);
+  async generateText(params: { prompt: string; modelName?: string }): Promise<string> {
+    if (!this.genAI) {
+      throw new Error("Gemini client is not initialized.");
+    }
+
+    const modelName = params.modelName || "gemini-pro"; // Default model
+    this.fastify.log.debug({ modelName, promptLength: params.prompt.length }, "Generating text with Gemini");
+
     try {
-      const model = this.gemini.getGenerativeModel({ model: modelName });
-
-      // Simple text-only prompt
-      const result: GenerateContentResult = await model.generateContent(prompt);
-      const response = result.response;
-
-      if (!response) {
-        this.fastify.log.error({ prompt, modelName }, "Gemini API returned no response.");
-        throw new Error("Gemini API returned no response.");
-      }
-
-      // Check for safety ratings or blocks if necessary (optional)
-      // if (response.promptFeedback?.blockReason) {
-      //   this.fastify.log.warn({ reason: response.promptFeedback.blockReason }, "Prompt blocked by safety settings.");
-      //   throw new Error(`Prompt blocked due to: ${response.promptFeedback.blockReason}`);
-      // }
-      // response.candidates?.forEach(candidate => {
-      //   if (candidate.finishReason !== 'STOP') {
-      //      this.fastify.log.warn({ reason: candidate.finishReason }, "Candidate generation finished unexpectedly.");
-      //   }
-      //   // Check candidate.safetyRatings
-      // });
-
+      const model = this.genAI.getGenerativeModel({ model: modelName });
+      const result: GenerateContentResult = await model.generateContent(params.prompt);
+      const response = await result.response;
       const text = response.text();
-      if (!text) {
-        this.fastify.log.error({ prompt, modelName, response }, "Gemini API response contained no text.");
-        throw new Error("Gemini API response contained no text.");
-      }
-
-      this.fastify.log.info("Text generation successful.");
+      this.fastify.log.debug({ modelName, responseLength: text.length }, "Gemini text generation successful");
       return text;
     } catch (error: any) {
-      this.fastify.log.error({ error: error.message, prompt, modelName }, "Error generating text with Gemini API");
-      // Re-throw a more generic error or handle specific API errors
-      throw new Error("Failed to generate text via Gemini API.");
+      this.fastify.log.error(error, `Gemini API error during generateText (model: ${modelName})`);
+      // Re-throw a more specific error or handle as needed
+      throw new Error(`Gemini API error: ${error.message}`);
     }
   }
 
-  // Add more methods here for other Gemini interactions (e.g., chat, embeddings)
-}
+  /**
+   * Generates text content as a stream using the configured Gemini model.
+   * @param params - Parameters including the prompt.
+   * @param params.prompt - The text prompt for generation.
+   * @param params.modelName - Optional model name override (defaults to 'gemini-pro').
+   * @returns An async iterable stream of generated text chunks.
+   * @throws Error if the Gemini client is not initialized.
+   */
+  async generateTextStream(params: { prompt: string; modelName?: string }): Promise<AsyncIterable<string>> {
+    if (!this.genAI) {
+      throw new Error("Gemini client is not initialized.");
+    }
 
-// Export an instance or provide a factory function if needed,
-// but typically services are instantiated within the scope where Fastify instance is available (e.g., routes)
+    const modelName = params.modelName || "gemini-pro"; // Default model
+    this.fastify.log.debug({ modelName, promptLength: params.prompt.length }, "Generating text stream with Gemini");
+
+    try {
+      const model = this.genAI.getGenerativeModel({ model: modelName });
+      const result: GenerateContentStreamResult = await model.generateContentStream(params.prompt);
+
+      // Return the stream directly for the route handler to iterate
+      // Note: Error handling for the stream itself happens in the route handler
+      return (async function* () {
+        for await (const chunk of result.stream) {
+          yield chunk.text();
+        }
+      })();
+    } catch (error: any) {
+      this.fastify.log.error(error, `Gemini API error during generateTextStream initiation (model: ${modelName})`);
+      // Re-throw error to be caught by the route handler
+      throw new Error(`Gemini API stream initiation error: ${error.message}`);
+    }
+  }
+
+  // Add other Gemini-related methods here if needed (e.g., chat, embeddings)
+}

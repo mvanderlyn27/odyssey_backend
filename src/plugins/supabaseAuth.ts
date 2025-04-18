@@ -1,80 +1,63 @@
+import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
-import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify"; // Added FastifyPluginOptions
-import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
-import config from "../config"; // Relative path
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-// Note: FastifyRequest augmentation (user, supabase) is now handled globally in src/types/fastify.d.ts
+// Define the structure of the user object added to the request
+import { User } from "@supabase/supabase-js";
 
-/**
- * Fastify plugin to authenticate requests using Supabase JWT.
- * It verifies the Authorization header and attaches the user object to the request.
- *
- * @param {FastifyInstance} fastify - The Fastify instance.
- * @param {object} opts - Plugin options, including optional `supabaseClient`.
- * @param {Function} done - Callback function to signal completion.
- */
-async function supabaseAuthPlugin(
-  fastify: FastifyInstance,
-  opts: FastifyPluginOptions & { supabaseClient?: SupabaseClient }
-) {
-  // Use provided Supabase client or create a new one
-  const supabase: SupabaseClient = opts.supabaseClient || createClient(config.supabaseUrl, config.supabaseAnonKey);
+// Augment FastifyRequest interface locally for this plugin if not done globally
+// declare module 'fastify' {
+//   interface FastifyRequest {
+//     user?: User;
+//   }
+// }
+// Note: We will handle global augmentation in src/types/fastify.d.ts later
 
-  if (!opts.supabaseClient) {
-    fastify.log.info("Initialized new Supabase client for auth plugin.");
-  } else {
-    fastify.log.info("Using provided Supabase client override for auth plugin.");
-  }
-
-  // Note: Using the anon key (or the provided client) here is standard for client-side auth.
-  // For server-to-server interactions requiring admin privileges,
-  // you'd typically use the service_role key, but keep it secure!
-  // const supabase = createClient(config.supabaseUrl, config.supabaseAnonKey); // Removed direct creation here
-
-  // Decorate request with the determined Supabase client instance
-  fastify.decorateRequest("supabase", undefined); // Initialize with undefined
-  fastify.addHook("onRequest", async (request: FastifyRequest) => {
-    request.supabase = supabase; // Assign the actual client in the hook
-  });
-
-  // Add a preHandler hook to check for authentication on routes that use this plugin
-  fastify.decorate("authenticate", async (request: FastifyRequest, reply: FastifyReply) => {
+async function supabaseAuthPlugin(fastify: FastifyInstance, options: FastifyPluginOptions) {
+  const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
+    fastify.log.debug("Attempting authentication via supabaseAuthPlugin");
     try {
-      const authHeader = request.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        reply.code(401).send({ error: "Unauthorized", message: "Missing or invalid Authorization header" });
-        return; // Important to return here to stop further execution
+      if (!request.headers.authorization) {
+        fastify.log.warn("Authentication failed: Missing Authorization header");
+        return reply.code(401).send({ error: "Unauthorized", message: "Missing Authorization header" });
       }
-
-      const token = authHeader.split(" ")[1];
+      const token = request.headers.authorization.split(" ")[1];
       if (!token) {
-        reply.code(401).send({ error: "Unauthorized", message: "Bearer token missing" });
-        return;
+        fastify.log.warn("Authentication failed: Invalid Authorization header format");
+        return reply.code(401).send({ error: "Unauthorized", message: "Invalid Authorization header format" });
       }
 
-      // Verify the token using Supabase
+      // Manually create a Supabase client instance for auth verification
+      // Consider caching this client or creating it once if performance is critical
+      if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+        fastify.log.error("Supabase environment variables not set for auth plugin.");
+        return reply.code(500).send({ error: "Internal Server Error", message: "Auth service not configured." });
+      }
+      const supabaseClient: SupabaseClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+
+      // Verify token and get user data
       const {
         data: { user },
         error,
-      } = await supabase.auth.getUser(token);
+      } = await supabaseClient.auth.getUser(token);
 
       if (error || !user) {
-        fastify.log.warn({ error }, "Supabase auth error or no user found for token");
-        reply.code(401).send({ error: "Unauthorized", message: error?.message || "Invalid token or user not found" });
-        return;
+        fastify.log.warn({ error: error?.message }, "Authentication failed: Invalid token or Supabase error");
+        return reply.code(401).send({ error: "Unauthorized", message: error?.message || "Invalid token" });
       }
 
       // Attach user to the request object
       request.user = user;
-      fastify.log.info({ userId: user.id }, "User authenticated successfully");
-    } catch (err) {
-      fastify.log.error(err, "Authentication hook error");
-      reply.code(500).send({ error: "Internal Server Error", message: "An error occurred during authentication" });
+      fastify.log.debug({ userId: user.id }, "User authenticated successfully via plugin");
+    } catch (err: any) {
+      fastify.log.error(err, "Error during authentication in supabaseAuthPlugin");
+      reply.code(500).send({ error: "Internal Server Error", message: "Authentication error" });
     }
-  });
+  };
+
+  // Decorate Fastify instance with the authenticate function
+  fastify.decorate("authenticate", authenticate);
+  fastify.log.info("Supabase authenticate decorator registered.");
 }
 
-export default fp(supabaseAuthPlugin, {
-  name: "supabaseAuth",
-  // dependencies: ['some-other-plugin'] // Add dependencies if needed
-});
+export default fp(supabaseAuthPlugin);

@@ -1,24 +1,22 @@
 {
   "compilerOptions": {
-    "target": "ES2020", // Specify ECMAScript target version
-    "module": "CommonJS", // Specify module code generation
-    "lib": ["ES2020"], // Specify library files to be included in the compilation
-    // "outDir": "./dist", // Removed - Compile JS alongside TS
-    // "rootDir": ".", // Removed - Let TS determine root based on includes
-    "strict": true, // Enable all strict type-checking options
-    "esModuleInterop": true, // Enables emit interoperability between CommonJS and ES Modules
-    "skipLibCheck": true, // Skip type checking of declaration files
-    "forceConsistentCasingInFileNames": true, // Disallow inconsistently-cased references to the same file
-    "resolveJsonModule": true, // Include modules imported with .json extension
-    "baseUrl": ".", // Base directory to resolve non-absolute module names
-    // "paths": {}, // Path aliases removed
-    "sourceMap": true, // Generate corresponding '.map' file
-    "declaration": true, // Generate corresponding '.d.ts' file
-    "typeRoots": [ // Explicitly tell TS where to find type declarations
+    "target": "ES2020",                     /* Keep newer target */
+    "module": "CommonJS",                   /* Keep module type */
+    "lib": ["ES2020"],                      /* Keep specified libs */
+    "outDir": "./build",                    /* Use template's output directory */
+    "strict": true,                         /* Keep strict mode */
+    "esModuleInterop": true,                /* Keep interop */
+    "skipLibCheck": true,                   /* Keep skipLibCheck */
+    "forceConsistentCasingInFileNames": true, /* Keep consistent casing */
+    "resolveJsonModule": true,              /* Keep JSON module resolution */
+    "baseUrl": ".",                         /* Keep base URL */
+    "sourceMap": true,                      /* Keep source maps */
+    "declaration": true,                    /* Keep declaration files */
+    "typeRoots": [                          /* Keep custom type roots */
       "./node_modules/@types",
       "./src/types"
     ]
   },
-  "include": ["src/**/*.ts", "api/**/*.ts"], // Only include source files needed for runtime
-  "exclude": ["node_modules", "tests/**/*"] // Exclude tests from compilation
+  "include": ["index.ts", "src/**/*.ts"],   /* Update include for new entry point and source */
+  "exclude": ["node_modules", "tests/**/*", "cloudrun_template/**/*"] /* Keep exclude, add template dir */
 }
