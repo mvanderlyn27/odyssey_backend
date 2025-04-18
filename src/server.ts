@@ -70,6 +70,11 @@ export async function buildApp(
     return { message: "API is running!" };
   });
 
+  // --- Ping Route for Health Check ---
+  app.get("/ping", async (request, reply) => {
+    return { status: "ok", timestamp: new Date().toISOString() };
+  });
+
   // Optional: Wait for plugins to be ready if needed
   // await app.ready();
 
