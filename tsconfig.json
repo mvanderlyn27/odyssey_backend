@@ -10,13 +10,16 @@
     "forceConsistentCasingInFileNames": true, /* Keep consistent casing */
     "resolveJsonModule": true,              /* Keep JSON module resolution */
     "baseUrl": ".",                         /* Keep base URL */
+    "paths": {                              /* Add path alias */
+      "@/*": ["src/*"]
+    },
     "sourceMap": true,                      /* Keep source maps */
     "declaration": true,                    /* Keep declaration files */
     "typeRoots": [                          /* Keep custom type roots */
       "./node_modules/@types",
       "./src/types"
-    ]
-  },
-  "include": ["index.ts", "src/**/*.ts"],   /* Update include for new entry point and source */
-  "exclude": ["node_modules", "tests/**/*", "cloudrun_template/**/*"] /* Keep exclude, add template dir */
-}
+     ]
+   },
+   "include": ["index.ts", "src/**/*.ts"],   /* Include root index and all src files */
+   "exclude": ["node_modules", "tests", "build", "cloudrun_template"] /* Exclude tests, build output, template */
+ }
