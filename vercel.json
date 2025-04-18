@@ -6,8 +6,21 @@
       "use": "@vercel/node",
       "config": {
         "buildCommand": "npm run build",
-        "outputDirectory": "dist"
+        "outputDirectory": "dist",
+        "includeFiles": [
+          "dist/**",
+          "vercel-start.js",
+          "tsconfig.json",
+          "package.json",
+          "node_modules/**"
+         ]
       }
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "vercel-start.js"
     }
   ]
 }
