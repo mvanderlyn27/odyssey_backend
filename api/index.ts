@@ -9,6 +9,7 @@ let appInstance: Awaited<ReturnType<typeof buildApp>> | null = null;
  * Initializes the Fastify app (if needed) and passes the request to it.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  console.log(`[${new Date().toISOString()}] Handler invoked for URL: ${req.url}`); // ADDED VERY EARLY LOG
   try {
     // Initialize the app only on the first invocation (or cold start)
     if (!appInstance) {
