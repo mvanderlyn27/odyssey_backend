@@ -7,13 +7,16 @@ async function statusRoutes(fastify: FastifyInstance, options: FastifyPluginOpti
     {
       schema: {
         tags: ["Status"],
-        description: "Simple ping endpoint to check service health.",
+        summary: "Health Check Ping",
+        description: "Simple ping endpoint to check if the service is running and responsive.",
         response: {
           200: {
+            description: "Service is healthy.",
             type: "object",
             properties: {
               message: { type: "string" },
             },
+            required: ["message"], // Explicitly state required properties
           },
         },
       },
@@ -26,4 +29,5 @@ async function statusRoutes(fastify: FastifyInstance, options: FastifyPluginOpti
   // Add other status/health check routes here if needed
 }
 
-export default fp(statusRoutes);
+// Remove fp() wrapper for consistency
+export default statusRoutes;

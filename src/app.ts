@@ -19,6 +19,8 @@ import supabaseAuthPlugin, { SupabaseAuthOptions } from "./plugins/supabaseAuth"
 import { SupabaseClient } from "@supabase/supabase-js"; // For mockServices type
 import { GoogleGenerativeAI } from "@google/generative-ai"; // For mockServices type
 import { GeminiService } from "./services/geminiService"; // For mockServices type
+import aiRoutes from "./routes/ai"; // Import AI routes
+import statusRoutes from "./routes/status"; // Import Status routes
 
 // --- Helper Function for Logger Configuration ---
 function configureLoggerOptions(isProduction: boolean): any {
@@ -50,22 +52,47 @@ const swaggerOptions = {
   openapi: {
     info: {
       title: "Aura Backend API",
-      description: "API endpoints for the Aura application",
+      description: "API endpoints for the Aura application, providing AI generation capabilities.",
       version: process.env.npm_package_version || "1.0.0",
+      contact: {
+        name: "API Support",
+        url: "http://www.example.com/support", // Placeholder URL
+        email: "support@example.com", // Placeholder email
+      },
+      license: {
+        name: "MIT", // Placeholder license
+        url: "https://opensource.org/licenses/MIT", // Placeholder URL
+      },
     },
-    schemes: ["https"],
-    consumes: ["application/json"],
+    // schemes: ["https"], // Deprecated in OpenAPI 3. Use servers instead if needed.
+    // consumes: ["application/json"], // Default, often not needed explicitly
     produces: ["application/json"],
     tags: [
       { name: "AI", description: "Endpoints related to AI interactions" },
-      { name: "Auth", description: "Endpoints related to authentication" },
+      { name: "Auth", description: "Endpoints related to authentication (handled by Supabase plugin)" },
       { name: "Status", description: "Endpoints for health checks" },
     ],
+    // Define security schemes
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+          description: "Supabase JWT token required for protected endpoints.",
+        },
+      } as const, // Use 'as const' for stricter type inference
+    },
+    // Optional: Define servers if needed (e.g., for production URL)
+    // servers: [
+    //   { url: 'https://your-production-url.com', description: 'Production server' }
+    // ]
   },
 };
 
 const swaggerUiOptions = {
   routePrefix: "/docs",
+  exposeRoute: true, // Explicitly enable route exposure
 };
 
 // --- Options Interface for buildApp ---
@@ -122,22 +149,6 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.register(geminiPlugin, { ...opts.geminiOptions, mockServices: opts.mockServices });
   app.register(supabaseAuthPlugin, { ...opts.supabaseOptions, mockServices: opts.mockServices });
 
-  // --- Register Routes Passed via Options (passing mockServices) ---
-  if (opts.routes && Array.isArray(opts.routes)) {
-    app.log?.info(`Registering ${opts.routes.length} route plugin(s) passed via options.`);
-    await Promise.all(
-      opts.routes.map((route) => app.register(route.plugin, { ...route.options, mockServices: opts.mockServices }))
-    );
-  } else {
-    // If no routes are passed (e.g., during testing specific routes), autoload defaults
-    // This assumes the compiled structure where routes are in ./routes relative to app.js
-    app.log?.info("No routes passed via options, attempting to autoload from default directory.");
-    app.register(fastifyAutoload, {
-      dir: path.join(__dirname, "routes"),
-      options: { prefix: "/api", mockServices: opts.mockServices }, // Pass mocks to autoloaded routes too
-    });
-  }
-
   // --- Register Swagger (conditionally) ---
   if (!isProduction) {
     app.register(fastifySwagger, swaggerOptions);
@@ -146,6 +157,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   } else {
     app.log.info("Swagger docs disabled in production environment.");
   }
+
+  app.register(fastifyAutoload, {
+    dir: path.join(__dirname, "routes"),
+    options: { prefix: "/api", mockServices: opts.mockServices }, // Pass mocks to autoloaded routes too
+  });
 
   return app;
 }

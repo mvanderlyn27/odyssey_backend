@@ -1,9 +1,0 @@
-# Environment variables for Cloud Run deployment
-# IMPORTANT: Add this file to .gitignore!
-SUPABASE_URL: "https://wcbatliggyayqktwppyr.supabase.co"
-SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndjYmF0bGlnZ3lheXFrdHdwcHlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQ1MDMzODAsImV4cCI6MjA2MDA3OTM4MH0.UqDkULjHqmr0soszslpeVL8P5aioMrbHX4uxAAX60kM"
-GEMINI_API_KEY: "AIzaSyA3Kwo0Lsnk1aAt8A5dKde8Dv8SiKqvLD8"
-# Optional: Set log level for production if desired
-# LOG_LEVEL: "info"
-# Optional: Configure CORS origin for production
-# CORS_ORIGIN: "https://your-frontend-domain.com"

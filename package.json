@@ -7,7 +7,11 @@
     "test": "tap test/**/*.test.ts",
     "build": "rm -rf build/; npx tsc -p tsconfig.json",
     "start": "node build/index.js",
-    "develop": "ts-node-dev --respawn --transpile-only --exit-child index.ts"
+    "develop": "ts-node-dev --respawn --transpile-only --exit-child index.ts",
+    "loadtest": "autocannon http://localhost:3000/api/status/ping",
+    "clinic:doctor": "clinic doctor --on-port 'autocannon localhost:3000/api/status/ping' -- node build/index.js",
+    "clinic:bubbleprof": "clinic bubbleprof --on-port 'autocannon localhost:3000/api/status/ping' -- node build/index.js",
+    "clinic:flame": "clinic flame --on-port 'autocannon localhost:3000/api/status/ping' -- node build/index.js"
   },
   "keywords": [],
   "author": "",
