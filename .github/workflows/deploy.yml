@@ -3,6 +3,7 @@ name: Deploy to Cloud Run
 on:
   push:
     branches: [main] # Trigger only on pushes to the main branch
+  workflow_dispatch: # Allows manual triggering from the Actions tab
 
 env:
   GCP_PROJECT_ID: aura-fitness-457121
@@ -57,9 +58,12 @@ jobs:
           image: ${{ env.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
           # Optional: Set environment variables for Cloud Run service if needed
           # env_vars: |
-          #   KEY1=VALUE1
-          #   KEY2=VALUE2
-          # Optional: Set secrets for Cloud Run service if needed
+          # Set environment variables using GitHub Actions secrets
+          env_vars: |
+            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+            SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          # Optional: Set secrets for Cloud Run service if needed (using Google Secret Manager)
           # secrets: |
           #   SECRET_NAME=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUR_SECRET_NAME:latest
 
