@@ -20,6 +20,7 @@ lerna-debug.log*
 .env.development.local
 .env.test.local
 .env.production.local
+cloudrun-env.yaml # Ignore Cloud Run environment variables file
 
 # OS generated files
 .DS_Store

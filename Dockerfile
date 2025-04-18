@@ -1,24 +1,31 @@
 # Use the official Node.js image.
 # https://hub.docker.com/_/node
-FROM node:20.8.0-alpine
+FROM node:slim
+
+# Install Bun globally
+RUN apt-get update && apt-get install -y curl unzip && \
+    curl -fsSL https://bun.sh/install | bash && \
+    apt-get remove -y curl unzip && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
+
+# Add bun to the PATH
+ENV PATH="/root/.bun/bin:${PATH}"
 
 # Create and change to the app directory.
 WORKDIR /usr/src/app
 
 # Copy application dependency manifests to the container image.
-# A wildcard is used to ensure both package.json AND package-lock.json are copied.
-# Copying this separately prevents re-running npm install on every code change.
-COPY package*.json ./
+COPY package.json bun.lockb ./
 
-# Install production dependencies.
-RUN npm ci
-
-COPY . .
-
-RUN npm run build
+# Install production dependencies using Bun.
+# --frozen-lockfile ensures we use dependencies exactly as defined in bun.lockb
+RUN bun install --frozen-lockfile
 
 # Copy local code to the container image.
+# This includes the src/ directory and tsconfig.json etc.
 COPY . .
 
-# Run the web service on container startup.
-CMD npm start
+# Build the TypeScript code to JavaScript in the build/ directory
+RUN bun run build
+
+# Run the web service on container startup using Bun
+CMD ["bun", "start"]

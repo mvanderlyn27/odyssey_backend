@@ -119,8 +119,6 @@ server.register(supabaseAuthPlugin); // Register the plugin
 // --- Autoload Routes ---
 server.register(fastifyAutoload, {
   dir: path.join(__dirname, "src/routes"),
-  ignorePattern: /.*(test|spec).ts/,
-  dirNameRoutePrefix: true, // Explicitly include directory name in route path
 });
 
 // --- Register Swagger (only in non-production environments) ---
@@ -134,7 +132,7 @@ if (process.env.NODE_ENV !== "production") {
 
 // --- Start Server ---
 const port = Number(process.env.PORT) || 8080;
-const host = IS_GOOGLE_CLOUD_RUN ? "0.0.0.0" : "localhost";
+const host = "0.0.0.0"; // Always listen on 0.0.0.0 inside the container
 
 const start = async () => {
   try {
