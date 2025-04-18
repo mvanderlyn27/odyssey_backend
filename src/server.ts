@@ -2,6 +2,7 @@ import Fastify, { FastifyInstance, FastifyServerOptions } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js"; // Import SupabaseClient type
 import { GoogleGenerativeAI } from "@google/generative-ai"; // Import Gemini type
 import config from "@/config";
+import cors from "@fastify/cors"; // Add this import
 import supabaseAuthPlugin from "@/plugins/supabaseAuth";
 import geminiPlugin from "@/plugins/gemini";
 import aiRoutes from "@/routes/ai";
@@ -35,6 +36,14 @@ export async function buildApp(
   const app: FastifyInstance = Fastify(serverOptions);
 
   // --- Plugin Registration ---
+
+  // Register CORS plugin - Allow all origins for local development/simulators
+  await app.register(cors, {
+    origin: true, // Reflects the request origin, effectively allowing any origin
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Specify allowed methods
+    credentials: true, // Allow cookies/authorization headers
+  });
+
   // Register essential plugins first
 
   // If a Gemini override is provided (for testing), decorate with it *before* registering the real plugin
