@@ -5,43 +5,40 @@ import {
   FastifyReply,
   FastifySchema,
   RouteGenericInterface,
-  HookHandlerDoneFunction,
 } from "fastify";
 import fp from "fastify-plugin";
-import { createClient, SupabaseClient } from "@supabase/supabase-js"; // Re-add import for manual client creation
 import { GeminiService } from "../../services/geminiService"; // Import the service
+import { BuildAppOptions } from "../../app"; // Import BuildAppOptions to access mockServices
 
 // Note: FastifyInstance augmentations are handled in src/types/fastify.d.ts
 
-// Define the expected request body structure using JSON Schema
+// --- Define Options for this Plugin ---
+// Include mockServices from BuildAppOptions for type checking
+export interface AiRoutesOptions extends FastifyPluginOptions {
+  geminiService?: GeminiService; // Allow passing a service instance directly
+  mockServices?: BuildAppOptions["mockServices"]; // Include mockServices type
+}
+
+// --- Schema Definitions ---
 const generateTextBodySchema = {
   type: "object",
   required: ["prompt"],
   properties: {
     prompt: { type: "string", minLength: 1 },
-    // modelName: { type: 'string', default: 'gemini-pro' } // Optional: Allow specifying model in request
   },
-} as const; // Use 'as const' for better type inference
+} as const;
 
-// Define the interface explicitly for the request body
 interface GenerateTextBody {
   prompt: string;
-  // modelName?: string; // Add if you allow model selection in the request body
 }
-// type GenerateTextBody = FromSchema<typeof generateTextBodySchema>; // Keep commented out or remove
 
-// Define a specific RouteGenericInterface for this route
 interface GenerateTextRoute extends RouteGenericInterface {
   Body: GenerateTextBody;
-  // Reply type is complex for SSE, typically handled by setting Content-Type
 }
 
-// Define response schemas (Note: OpenAPI doesn't perfectly model SSE)
 const generateTextResponseSchema = {
   200: {
     description: "Successful SSE stream of generated text chunks.",
-    // Content-Type will be text/event-stream
-    // We can describe the 'data' payload format here if consistent
     content: {
       "text/event-stream": {
         schema: {
@@ -51,79 +48,68 @@ const generateTextResponseSchema = {
       },
     },
   },
-  400: {
-    // Keep existing error schemas
-    type: "object",
-    properties: {
-      error: { type: "string" },
-      message: { type: "string" },
-    },
-  },
-  401: {
-    // Schema defined by the auth plugin, but good to document here too
-    type: "object",
-    properties: {
-      error: { type: "string" },
-      message: { type: "string" },
-    },
-  },
-  500: {
-    type: "object",
-    properties: {
-      error: { type: "string" },
-      message: { type: "string" },
-    },
-  },
+  400: { type: "object", properties: { error: { type: "string" }, message: { type: "string" } } },
+  401: { type: "object", properties: { error: { type: "string" }, message: { type: "string" } } },
+  500: { type: "object", properties: { error: { type: "string" }, message: { type: "string" } } },
 };
 
+// --- Plugin Implementation ---
 /**
  * Plugin defining routes related to AI interactions (e.g., Gemini).
- * @param {FastifyInstance} fastify - The Fastify instance.
- * @param {FastifyPluginOptions} opts - Plugin options.
- * @param {FastifyInstance} fastify - The Fastify instance decorated with plugins.
- * @param {FastifyPluginOptions} opts - Plugin options.
  */
-async function aiRoutes(fastify: FastifyInstance, opts: FastifyPluginOptions) {
-  // Instantiate the GeminiService - this relies on fastify.gemini being decorated by the plugin
-  let geminiService: GeminiService;
-  try {
-    geminiService = new GeminiService(fastify);
-  } catch (error) {
-    fastify.log.error(
-      error,
-      "Failed to instantiate GeminiService in aiRoutes. Ensure Gemini plugin is registered and initialized."
-    );
-    // Optionally prevent routes from registering if service is critical
-    throw new Error("GeminiService instantiation failed.");
+async function aiRoutes(fastify: FastifyInstance, opts: AiRoutesOptions) {
+  let geminiService: GeminiService | undefined | null = null;
+
+  // Prioritize mock service from mockServices if available
+  if (opts.mockServices?.geminiService) {
+    fastify.log.info("Using provided mock GeminiService instance via mockServices.");
+    geminiService = opts.mockServices.geminiService;
+  }
+  // Fallback to service passed directly in aiRoutes options
+  else if (opts.geminiService) {
+    fastify.log.info("Using provided GeminiService instance via direct options.");
+    geminiService = opts.geminiService;
+  }
+  // Fallback to instantiating a new one (requires geminiPlugin to be registered first)
+  else {
+    fastify.log.info("Instantiating new GeminiService for AI routes.");
+    try {
+      geminiService = new GeminiService(fastify);
+    } catch (error) {
+      fastify.log.error(
+        error,
+        "Failed to instantiate GeminiService in aiRoutes. Ensure Gemini plugin is registered and initialized before this plugin."
+      );
+      throw new Error("GeminiService instantiation failed.");
+    }
+  }
+
+  // Ensure geminiService is valid before registering routes
+  if (!geminiService) {
+    fastify.log.error("GeminiService is not available, cannot register AI routes.");
+    throw new Error("Cannot register AI routes without a valid GeminiService.");
   }
 
   // --- Routes ---
-
-  // Define the POST route for text generation
   fastify.post<GenerateTextRoute>(
     "/generate",
     {
-      preHandler: [fastify.authenticate], // Use the authenticate decorator from the plugin
+      preHandler: [fastify.authenticate], // Assumes authenticate decorator is available
       schema: {
         description:
           "Generates text based on a provided prompt using the Gemini API, streaming the response via Server-Sent Events (SSE).",
         tags: ["AI"],
         summary: "Generate text (SSE Stream)",
         body: generateTextBodySchema,
-        response: generateTextResponseSchema, // Updated schema definition above
+        response: generateTextResponseSchema,
         security: [{ bearerAuth: [] }],
       },
     },
     async (request, reply) => {
-      // Types are inferred from fastify.post<GenerateTextRoute>
-      // User is guaranteed to be authenticated here due to preHandler hook
       const userId = request.user?.id;
       const { prompt } = request.body;
       fastify.log.info({ userId: userId, prompt }, "Received request for /ai/generate (SSE)");
 
-      // Removed duplicate declarations below
-
-      // Set headers for SSE - Do this early before potential errors
       reply.raw.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -131,22 +117,19 @@ async function aiRoutes(fastify: FastifyInstance, opts: FastifyPluginOptions) {
       });
 
       try {
-        // Use the GeminiService to generate the stream
-        const stream = await geminiService.generateTextStream({ prompt });
+        // Use the resolved GeminiService (mock or real)
+        const stream = await geminiService!.generateTextStream({ prompt }); // Use non-null assertion as we checked above
 
-        // Iterate over the stream from the service and send chunks
         for await (const chunkText of stream) {
-          // Format as SSE message: data: JSON_payload\n\n
           const sseData = JSON.stringify({ chunk: chunkText });
           reply.raw.write(`data: ${sseData}\n\n`);
           fastify.log.trace({ userId: userId, chunk: chunkText }, "Sent SSE chunk");
         }
 
         fastify.log.info({ userId: userId }, "SSE stream finished for /ai/generate");
-        reply.raw.end(); // End the response when the stream is finished
+        reply.raw.end();
       } catch (error: any) {
         fastify.log.error({ userId: userId, error: error }, "Error during SSE generation for /ai/generate");
-        // Try to send an error event if the stream hasn't ended, otherwise just log
         try {
           const sseError = JSON.stringify({
             error: "Generation Failed",
@@ -156,7 +139,6 @@ async function aiRoutes(fastify: FastifyInstance, opts: FastifyPluginOptions) {
           reply.raw.end();
         } catch (writeError) {
           fastify.log.error(writeError, "Failed to write error to SSE stream after initial error.");
-          // Ensure the connection is closed if possible
           if (!reply.raw.writableEnded) {
             reply.raw.end();
           }
@@ -164,8 +146,7 @@ async function aiRoutes(fastify: FastifyInstance, opts: FastifyPluginOptions) {
       }
     }
   );
-
-  // Add more AI-related routes here...
 }
 
-export default fp(aiRoutes); // Wrap with fastify-plugin and export
+// Remove fp() wrapper to allow prefixing to work correctly when registered
+export default aiRoutes;

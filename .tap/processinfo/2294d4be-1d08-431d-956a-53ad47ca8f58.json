@@ -1,0 +1,252 @@
+{
+  "date": "2025-04-18T21:55:14.906Z",
+  "argv": [
+    "/usr/local/bin/node",
+    "/Users/michaelvanderlyn/code/aura_backend/test/routes/ai.test.ts"
+  ],
+  "execArgv": [
+    "--import=file:///Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/typescript/dist/esm/import.mjs",
+    "--import=file:///Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/import.mjs",
+    "--enable-source-maps",
+    "--import=file:///Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/processinfo/dist/esm/import.mjs"
+  ],
+  "NODE_OPTIONS": "\"--import=file:///Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/processinfo/dist/esm/import.mjs\"",
+  "cwd": "/Users/michaelvanderlyn/code/aura_backend",
+  "pid": 62094,
+  "ppid": 62093,
+  "parent": null,
+  "uuid": "2294d4be-1d08-431d-956a-53ad47ca8f58",
+  "files": [
+    "/Users/michaelvanderlyn/code/aura_backend/test/routes/ai.test.ts",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/typescript/dist/esm/import.mjs",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@isaacs/ts-node-temp-fork-for-pr-2009/import.mjs",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@isaacs/ts-node-temp-fork-for-pr-2009/import-loader.mjs",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/import.mjs",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/mock-service.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/dist/esm/index.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/index.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/is-relative-require.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/export-line.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/munge-mocks.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/resolve-mock-entry-point.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/service-key.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/dist/esm/call-site-like.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/dist/esm/require-resolve.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/get-all-conditional-values.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/get-all-conditions.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-all-exports.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/get-unique-condition-sets.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-all-local-imports.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-conditional-value.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-import.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/is-windows.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/dist/esm/parse.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/get-conditional-values-list.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/errors.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/file-exists.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-dependency-export.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-package-import.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/to-file-url.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/to-path.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/get-named-exports-list.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/read-pkg.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-export.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/star-glob.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/find-dep-package.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/walk-up-path/dist/esm/index.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/find-star-match.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/read-json.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/index.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/index.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/glob.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/has-magic.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/ignore.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/path-scurry/dist/esm/index.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/pattern.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/walker.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/assert-valid-pattern.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/ast.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/escape.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/unescape.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/lru-cache/dist/esm/index.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/minipass/dist/esm/index.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/processor.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/brace-expressions.js",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/loader.mjs",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/hooks.mjs",
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/mock-service-client.js",
+    "/Users/michaelvanderlyn/code/aura_backend/test/helper.ts",
+    "/Users/michaelvanderlyn/code/aura_backend/src/app.ts",
+    "/Users/michaelvanderlyn/code/aura_backend/src/plugins/gemini.ts",
+    "/Users/michaelvanderlyn/code/aura_backend/src/plugins/supabaseAuth.ts",
+    "/Users/michaelvanderlyn/code/aura_backend/src/routes/ai/index.ts",
+    "/Users/michaelvanderlyn/code/aura_backend/src/services/geminiService.ts"
+  ],
+  "sources": {
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/typescript/dist/esm/import.mjs": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/typescript/src/import.mts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/import.mjs": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/src/import.mts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/mock-service.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/src/mock-service.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/dist/esm/index.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/src/index.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/index.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/index.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/is-relative-require.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/is-relative-require.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/export-line.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/src/export-line.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/munge-mocks.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/src/munge-mocks.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/resolve-mock-entry-point.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/src/resolve-mock-entry-point.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/dist/esm/service-key.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/mock/src/service-key.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/dist/esm/call-site-like.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/src/call-site-like.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/dist/esm/require-resolve.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/src/require-resolve.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/get-all-conditional-values.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/get-all-conditional-values.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/get-all-conditions.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/get-all-conditions.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-all-exports.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/resolve-all-exports.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/get-unique-condition-sets.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/get-unique-condition-sets.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-all-local-imports.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/resolve-all-local-imports.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-conditional-value.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/resolve-conditional-value.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-import.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/resolve-import.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/is-windows.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/is-windows.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/dist/esm/parse.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/@tapjs/stack/src/parse.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/get-conditional-values-list.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/get-conditional-values-list.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/errors.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/errors.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/file-exists.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/file-exists.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-dependency-export.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/resolve-dependency-export.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-package-import.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/resolve-package-import.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/to-file-url.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/to-file-url.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/to-path.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/to-path.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/get-named-exports-list.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/get-named-exports-list.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/read-pkg.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/read-pkg.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/resolve-export.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/resolve-export.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/star-glob.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/star-glob.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/find-dep-package.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/find-dep-package.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/walk-up-path/dist/esm/index.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/walk-up-path/src/index.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/find-star-match.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/find-star-match.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/dist/esm/read-json.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/src/read-json.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/index.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/src/index.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/index.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/src/index.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/glob.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/src/glob.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/has-magic.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/src/has-magic.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/ignore.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/src/ignore.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/path-scurry/dist/esm/index.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/path-scurry/src/index.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/pattern.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/src/pattern.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/walker.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/src/walker.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/assert-valid-pattern.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/src/assert-valid-pattern.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/ast.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/src/ast.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/escape.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/src/escape.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/unescape.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/src/unescape.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/lru-cache/dist/esm/index.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/lru-cache/src/index.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/minipass/dist/esm/index.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/minipass/src/index.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/dist/esm/processor.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/src/processor.ts"
+    ],
+    "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/dist/esm/brace-expressions.js": [
+      "/Users/michaelvanderlyn/code/aura_backend/node_modules/resolve-import/node_modules/glob/node_modules/minimatch/src/brace-expressions.ts"
+    ]
+  },
+  "root": "2294d4be-1d08-431d-956a-53ad47ca8f58",
+  "externalID": "test/routes/ai.test.ts",
+  "code": 0,
+  "signal": null,
+  "runtime": 1140.1365,
+  "globalsAdded": [
+    "instrumentationAdded",
+    "shouldSkipInstrumentationCheck"
+  ]
+}
