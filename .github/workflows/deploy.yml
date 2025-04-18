@@ -1,0 +1,68 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches: [main] # Trigger only on pushes to the main branch
+
+env:
+  GCP_PROJECT_ID: aura-fitness-457121
+  GCP_SA_EMAIL: aura-github@aura-fitness-457121.iam.gserviceaccount.com
+  WIF_PROVIDER: projects/113655940311/locations/global/workloadIdentityPools/aura-github-pool/providers/aura-provider
+  ARTIFACT_REGISTRY_REGION: us-central1
+  ARTIFACT_REGISTRY_REPO: aura-backend
+  CLOUD_RUN_SERVICE: aura-backend-service
+  CLOUD_RUN_REGION: us-central1
+  IMAGE_NAME: aura-backend
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: "read"
+      id-token: "write" # Required for Workload Identity Federation
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.GCP_SA_EMAIL }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Configure Docker to use gcloud credential helper for Artifact Registry
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.CLOUD_RUN_SERVICE }}
+          region: ${{ env.CLOUD_RUN_REGION }}
+          image: ${{ env.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          # Optional: Set environment variables for Cloud Run service if needed
+          # env_vars: |
+          #   KEY1=VALUE1
+          #   KEY2=VALUE2
+          # Optional: Set secrets for Cloud Run service if needed
+          # secrets: |
+          #   SECRET_NAME=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUR_SECRET_NAME:latest
+
+      # Optional: Output the deployed service URL
+      - name: Show Deployed URL
+        run: echo "Deployed to ${{ steps.deploy.outputs.url }}"
