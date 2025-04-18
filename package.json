@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "ts-node-dev --respawn --transpile-only --ignore-watch node_modules -r tsconfig-paths/register src/index.ts",
+    "dev": "ts-node-dev --respawn --transpile-only --ignore-watch node_modules src/server.ts",
     "build": "tsc",
-    "start": "node -r tsconfig-paths/register dist/index.js",
     "test": "vitest run"
   },
   "keywords": [],
@@ -16,11 +15,11 @@
     "@fastify/cors": "^11.0.1",
     "@google/generative-ai": "^0.24.0",
     "@supabase/supabase-js": "^2.49.4",
+    "@vercel/node": "^5.1.14",
     "dotenv": "^16.5.0",
     "fastify": "^5.3.0",
     "fastify-plugin": "^5.0.1",
-    "json-schema-to-ts": "^3.1.1",
-    "tsconfig-paths": "^4.2.0"
+    "json-schema-to-ts": "^3.1.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.1",

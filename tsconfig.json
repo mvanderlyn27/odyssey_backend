@@ -11,9 +11,7 @@
     "forceConsistentCasingInFileNames": true, // Disallow inconsistently-cased references to the same file
     "resolveJsonModule": true, // Include modules imported with .json extension
     "baseUrl": ".", // Base directory to resolve non-absolute module names
-    "paths": { // Module path aliases
-      "@/*": ["src/*"]
-    },
+    // "paths": {}, // Path aliases removed
     "sourceMap": true, // Generate corresponding '.map' file
     "declaration": true, // Generate corresponding '.d.ts' file
     "typeRoots": [ // Explicitly tell TS where to find type declarations

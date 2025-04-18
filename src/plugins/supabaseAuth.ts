@@ -1,7 +1,7 @@
 import fp from "fastify-plugin";
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify"; // Added FastifyPluginOptions
 import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
-import config from "@/config"; // Using path alias defined in tsconfig
+import config from "../config"; // Relative path
 
 // Note: FastifyRequest augmentation (user, supabase) is now handled globally in src/types/fastify.d.ts
 

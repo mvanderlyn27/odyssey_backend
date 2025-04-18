@@ -1,11 +1,11 @@
 import Fastify, { FastifyInstance, FastifyServerOptions } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js"; // Import SupabaseClient type
 import { GoogleGenerativeAI } from "@google/generative-ai"; // Import Gemini type
-import config from "@/config";
+import config from "./config"; // Relative path
 import cors from "@fastify/cors"; // Add this import
-import supabaseAuthPlugin from "@/plugins/supabaseAuth";
-import geminiPlugin from "@/plugins/gemini";
-import aiRoutes from "@/routes/ai";
+import supabaseAuthPlugin from "./plugins/supabaseAuth"; // Relative path
+import geminiPlugin from "./plugins/gemini"; // Relative path
+import aiRoutes from "./routes/ai"; // Relative path
 
 /**
  * Builds and configures the Fastify application instance.

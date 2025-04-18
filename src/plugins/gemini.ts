@@ -1,7 +1,7 @@
 import fp from "fastify-plugin";
 import { FastifyInstance } from "fastify";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import config from "@/config";
+import config from "../config"; // Relative path
 
 // Note: FastifyInstance augmentation (gemini) is now handled globally in src/types/fastify.d.ts
 

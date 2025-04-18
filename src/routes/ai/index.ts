@@ -7,7 +7,7 @@ import {
   RouteGenericInterface, // Import RouteGenericInterface
 } from "fastify";
 import { FromSchema } from "json-schema-to-ts"; // Helper for schema type inference
-import { GeminiService } from "@/services/geminiService";
+import { GeminiService } from "../../services/geminiService"; // Relative path
 
 // Note: FastifyInstance augmentation (authenticate) is now handled globally in src/types/fastify.d.ts
 
