@@ -24,7 +24,11 @@ const generateTextBodySchema = {
   type: "object",
   required: ["prompt"],
   properties: {
-    prompt: { type: "string", minLength: 1 },
+    prompt: {
+      type: "string",
+      minLength: 1,
+      description: "The text prompt to send to the AI model.",
+    },
   },
 } as const;
 
@@ -38,19 +42,43 @@ interface GenerateTextRoute extends RouteGenericInterface {
 
 const generateTextResponseSchema = {
   200: {
-    description: "Successful SSE stream of generated text chunks.",
+    description:
+      'Successful SSE stream. The connection stays open, sending data chunks.\nEach message follows the format: `data: {\\"chunk\\": \\"text...\\"}\\n\\n`.\nAn `event: error` message may be sent if an error occurs mid-stream.',
     content: {
       "text/event-stream": {
         schema: {
           type: "string",
-          description: 'Stream of events. Each event data payload is a JSON string like: {"chunk": "text..."}',
         },
       },
     },
   },
-  400: { type: "object", properties: { error: { type: "string" }, message: { type: "string" } } },
-  401: { type: "object", properties: { error: { type: "string" }, message: { type: "string" } } },
-  500: { type: "object", properties: { error: { type: "string" }, message: { type: "string" } } },
+  400: {
+    description: "Bad Request - Invalid input provided.",
+    type: "object",
+    properties: {
+      statusCode: { type: "integer" },
+      error: { type: "string" },
+      message: { type: "string" },
+    },
+  },
+  401: {
+    description: "Unauthorized - Missing or invalid authentication token.",
+    type: "object",
+    properties: {
+      statusCode: { type: "integer" },
+      error: { type: "string" },
+      message: { type: "string" },
+    },
+  },
+  500: {
+    description: "Internal Server Error - Failed to generate text or stream response.",
+    type: "object",
+    properties: {
+      // Note: The actual 500 error might be sent mid-stream via SSE 'event: error'
+      error: { type: "string" },
+      message: { type: "string" },
+    },
+  },
 };
 
 // --- Plugin Implementation ---
