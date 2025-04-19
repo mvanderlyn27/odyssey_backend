@@ -37,7 +37,9 @@ export class GeminiService {
       throw new Error("Gemini client is not initialized.");
     }
 
-    const modelName = params.modelName || "gemini-pro"; // Default model
+    // Use model from env var or fallback, allow override via params
+    const modelName = params.modelName || process.env.GEMINI_MODEL_NAME || "";
+    console.log("model", process.env.GEMINI_MODEL_NAME);
     this.fastify.log.debug({ modelName, promptLength: params.prompt.length }, "Generating text with Gemini");
 
     try {
@@ -67,7 +69,9 @@ export class GeminiService {
       throw new Error("Gemini client is not initialized.");
     }
 
-    const modelName = params.modelName || "gemini-pro"; // Default model
+    // Use model from env var or fallback, allow override via params
+    const modelName = params.modelName || process.env.GEMINI_MODEL_NAME || "";
+    console.log("model", process.env.GEMINI_MODEL_NAME);
     this.fastify.log.debug({ modelName, promptLength: params.prompt.length }, "Generating text stream with Gemini");
 
     try {

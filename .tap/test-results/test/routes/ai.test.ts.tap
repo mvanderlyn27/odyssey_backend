@@ -4,19 +4,19 @@ TAP version 14
         ok 1 - Should return 401 without token
         ok 2 - Should return correct error message
         1..2
-    ok 1 - POST /api/ai/generate - Unauthorized (No Token) # time=16.01ms
+    ok 1 - POST /api/ai/generate - Unauthorized (No Token) # time=21.97ms
     
     # Subtest: POST /api/ai/generate - Unauthorized (Invalid Token)
         ok 1 - Should return 401 with invalid token
         ok 2 - Should return correct error message
         1..2
-    ok 2 - POST /api/ai/generate - Unauthorized (Invalid Token) # time=1.521ms
+    ok 2 - POST /api/ai/generate - Unauthorized (Invalid Token) # time=3.146ms
     
     # Subtest: POST /api/ai/generate - Bad Request (Missing Prompt)
         ok 1 - Should return 400 with missing prompt
         ok 2 - Should return correct error message
         1..2
-    ok 3 - POST /api/ai/generate - Bad Request (Missing Prompt) # time=1.492ms
+    ok 3 - POST /api/ai/generate - Bad Request (Missing Prompt) # time=10.75ms
     
     # Subtest: POST /api/ai/generate - Success (Valid Token)
         ok 1 - Should return 200 on success
@@ -26,11 +26,11 @@ TAP version 14
         ok 5 - Payload should contain first SSE chunk
         ok 6 - Payload should contain second SSE chunk
         1..6
-    ok 4 - POST /api/ai/generate - Success (Valid Token) # time=7.483ms
+    ok 4 - POST /api/ai/generate - Success (Valid Token) # time=22.435ms
     
     1..4
 --- Tearing down: Closing test Fastify instance ---
 --- Teardown: Test Fastify instance closed successfully ---
-ok 1 - AI Routes - /api/ai/generate # time=100.73ms
+ok 1 - AI Routes - /api/ai/generate # time=144.27ms
 
 1..1
