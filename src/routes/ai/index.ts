@@ -180,7 +180,7 @@ async function aiRoutes(fastify: FastifyInstance, opts: AiRoutesOptions) {
           reply.raw.write(`data: ${sseData}\n\n`);
           fastify.log.trace({ userId: userId, chunk: chunkText }, "Sent SSE chunk");
         }
-
+        reply.raw.write("data: [DONE]\n\n");
         fastify.log.info({ userId: userId }, "SSE stream finished for /ai/generate");
         reply.raw.end();
       } catch (error: any) {
