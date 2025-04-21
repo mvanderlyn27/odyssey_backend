@@ -30,21 +30,36 @@ export class GeminiService {
    * @param params.prompt - The text prompt for generation.
    * @param params.modelName - Optional model name override (defaults to 'gemini-pro').
    * @returns The generated text.
+   * @param params.history - Optional array of previous conversation messages (Content[]).
+   * @returns The generated text.
    * @throws Error if the Gemini client is not initialized or API call fails.
    */
-  async generateText(params: { prompt: string; modelName?: string }): Promise<string> {
+  async generateText(params: {
+    prompt: string;
+    modelName?: string;
+    history?: any[]; // Use 'any[]' for now, will refine type later
+  }): Promise<string> {
     if (!this.genAI) {
       throw new Error("Gemini client is not initialized.");
     }
 
     // Use model from env var or fallback, allow override via params
-    const modelName = params.modelName || process.env.GEMINI_MODEL_NAME || "";
-    console.log("model", process.env.GEMINI_MODEL_NAME);
-    this.fastify.log.debug({ modelName, promptLength: params.prompt.length }, "Generating text with Gemini");
+    const modelName = params.modelName || process.env.GEMINI_MODEL_NAME || "gemini-1.0-pro"; // Added fallback
+    this.fastify.log.debug(
+      { modelName, promptLength: params.prompt.length, hasHistory: !!params.history?.length },
+      "Generating text with Gemini"
+    );
 
     try {
       const model = this.genAI.getGenerativeModel({ model: modelName });
-      const result: GenerateContentResult = await model.generateContent(params.prompt);
+      let result: GenerateContentResult;
+
+      // Prepare contents for the API call
+      const currentUserPrompt = { role: "user", parts: [{ text: params.prompt }] };
+      const contents = params.history ? [...params.history, currentUserPrompt] : [currentUserPrompt];
+
+      result = await model.generateContent({ contents }); // Pass full history
+
       const response = await result.response;
       const text = response.text();
       this.fastify.log.debug({ modelName, responseLength: text.length }, "Gemini text generation successful");
@@ -62,21 +77,35 @@ export class GeminiService {
    * @param params.prompt - The text prompt for generation.
    * @param params.modelName - Optional model name override (defaults to 'gemini-pro').
    * @returns An async iterable stream of generated text chunks.
+   * @param params.history - Optional array of previous conversation messages (Content[]).
+   * @returns An async iterable stream of generated text chunks.
    * @throws Error if the Gemini client is not initialized.
    */
-  async generateTextStream(params: { prompt: string; modelName?: string }): Promise<AsyncIterable<string>> {
+  async generateTextStream(params: {
+    prompt: string;
+    modelName?: string;
+    history?: any[]; // Use 'any[]' for now, will refine type later
+  }): Promise<AsyncIterable<string>> {
     if (!this.genAI) {
       throw new Error("Gemini client is not initialized.");
     }
 
     // Use model from env var or fallback, allow override via params
-    const modelName = params.modelName || process.env.GEMINI_MODEL_NAME || "";
-    console.log("model", process.env.GEMINI_MODEL_NAME);
-    this.fastify.log.debug({ modelName, promptLength: params.prompt.length }, "Generating text stream with Gemini");
+    const modelName = params.modelName || process.env.GEMINI_MODEL_NAME || "gemini-1.0-pro"; // Added fallback
+    // console.log("model", process.env.GEMINI_MODEL_NAME); // Removed console.log
+    this.fastify.log.debug(
+      { modelName, promptLength: params.prompt.length, hasHistory: !!params.history?.length },
+      "Generating text stream with Gemini"
+    );
 
     try {
       const model = this.genAI.getGenerativeModel({ model: modelName });
-      const result: GenerateContentStreamResult = await model.generateContentStream(params.prompt);
+
+      // Prepare contents for the API call
+      const currentUserPrompt = { role: "user", parts: [{ text: params.prompt }] };
+      const contents = params.history ? [...params.history, currentUserPrompt] : [currentUserPrompt];
+
+      const result: GenerateContentStreamResult = await model.generateContentStream({ contents }); // Pass full history
 
       // Return the stream directly for the route handler to iterate
       // Note: Error handling for the stream itself happens in the route handler

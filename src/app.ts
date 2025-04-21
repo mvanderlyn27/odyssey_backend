@@ -19,8 +19,7 @@ import supabaseAuthPlugin, { SupabaseAuthOptions } from "./plugins/supabaseAuth"
 import { SupabaseClient } from "@supabase/supabase-js"; // For mockServices type
 import { GoogleGenerativeAI } from "@google/generative-ai"; // For mockServices type
 import { GeminiService } from "./services/geminiService"; // For mockServices type
-import aiRoutes from "./routes/ai"; // Import AI routes
-import statusRoutes from "./routes/status"; // Import Status routes
+// Removed old/explicit route imports
 
 // --- Helper Function for Logger Configuration ---
 function configureLoggerOptions(isProduction: boolean): any {
@@ -68,7 +67,10 @@ const swaggerOptions = {
     // consumes: ["application/json"], // Default, often not needed explicitly
     produces: ["application/json"],
     tags: [
-      { name: "AI", description: "Endpoints related to AI interactions" },
+      // Updated Tags
+      { name: "Chat", description: "Endpoints for AI chat interactions" },
+      { name: "Meal Plan", description: "Endpoints for AI meal plan generation" },
+      { name: "Exercise Plan", description: "Endpoints for AI exercise plan generation" },
       { name: "Auth", description: "Endpoints related to authentication (handled by Supabase plugin)" },
       { name: "Status", description: "Endpoints for health checks" },
     ],
@@ -158,10 +160,61 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     app.log.info("Swagger docs disabled in production environment.");
   }
 
-  app.register(fastifyAutoload, {
-    dir: path.join(__dirname, "routes"),
-    options: { prefix: "/api", mockServices: opts.mockServices }, // Pass mocks to autoloaded routes too
-  });
+  // --- Autoload Routes with Explicit Prefixing for Each Area ---
+  // Register a container plugin for the /api prefix
+  app.register(
+    async (apiInstance) => {
+      // Pass mocks down to the autoloaded routes within this prefix
+      const commonOptions = { mockServices: opts.mockServices }; // Options to pass down
+
+      // Register /api/chat routes
+      apiInstance.register(
+        async (chatInstance) => {
+          chatInstance.register(fastifyAutoload, {
+            dir: path.join(__dirname, "routes/ai/chat"),
+            options: commonOptions, // Pass mocks, no prefix needed here
+          });
+        },
+        { prefix: "/chat" }
+      );
+
+      // Register /api/mealplan routes
+      apiInstance.register(
+        async (mealplanInstance) => {
+          mealplanInstance.register(fastifyAutoload, {
+            dir: path.join(__dirname, "routes/ai/mealplan"),
+            options: commonOptions, // Pass mocks, no prefix needed here
+          });
+        },
+        { prefix: "/mealplan" }
+      );
+
+      // Register /api/exerciseplan routes
+      apiInstance.register(
+        async (exerciseplanInstance) => {
+          exerciseplanInstance.register(fastifyAutoload, {
+            dir: path.join(__dirname, "routes/ai/exerciseplan"),
+            options: commonOptions, // Pass mocks, no prefix needed here
+          });
+        },
+        { prefix: "/exerciseplan" }
+      );
+
+      // Register /api/status routes
+      apiInstance.register(
+        async (statusInstance) => {
+          statusInstance.register(fastifyAutoload, {
+            dir: path.join(__dirname, "routes/status"),
+            options: commonOptions, // Pass mocks, no prefix needed here
+          });
+        },
+        { prefix: "/status" }
+      );
+
+      apiInstance.log.info("Registered route plugins via nested autoload under /api prefix");
+    },
+    { prefix: "/api" } // Apply the main /api prefix
+  ); // Apply the /api prefix to this container
 
   return app;
 }

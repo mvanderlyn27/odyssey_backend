@@ -1,0 +1,16 @@
+# Placeholder for Meal Plan Prompt Template
+#
+# This file will contain the base prompt for generating meal plans.
+# It should include placeholders for user data (e.g., goals, dietary restrictions, calorie targets).
+# Example:
+#
+# Generate a 7-day meal plan for a user with the following details:
+# Goal: {{GOAL}}
+# Calorie Target: {{CALORIES}}
+# Dietary Restrictions: {{RESTRICTIONS}}
+# Preferences: {{PREFERENCES}}
+#
+# Provide the output as structured JSON.
+#
+# --- USER DATA ---
+# {{USER_DATA_JSON}}
