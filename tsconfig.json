@@ -16,8 +16,8 @@
     "sourceMap": true,                      /* Keep source maps */
     "declaration": true,                    /* Keep declaration files */
     "typeRoots": [                          /* Keep custom type roots */
-      "./node_modules/@types",
-      "./src/types"
+      "./node_modules/@types"
+      // Removed "./src/types" as it's included via "include" below
      ]
    },
    "include": ["index.ts", "src/**/*.ts"],   /* Include root index and all src files */

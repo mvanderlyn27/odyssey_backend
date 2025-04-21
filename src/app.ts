@@ -9,6 +9,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import caching from "@fastify/caching";
 import websocket from "@fastify/websocket";
+import multipart from "@fastify/multipart"; // Import multipart plugin
 import { LoggingWinston } from "@google-cloud/logging-winston";
 import winston from "winston";
 import "dotenv/config"; // Ensure env vars are loaded
@@ -19,8 +20,7 @@ import supabaseAuthPlugin, { SupabaseAuthOptions } from "./plugins/supabaseAuth"
 import { SupabaseClient } from "@supabase/supabase-js"; // For mockServices type
 import { GoogleGenerativeAI } from "@google/generative-ai"; // For mockServices type
 import { GeminiService } from "./services/geminiService"; // For mockServices type
-import aiRoutes from "./routes/ai"; // Import AI routes
-import statusRoutes from "./routes/status"; // Import Status routes
+// Removed old/explicit route imports
 
 // --- Helper Function for Logger Configuration ---
 function configureLoggerOptions(isProduction: boolean): any {
@@ -68,7 +68,10 @@ const swaggerOptions = {
     // consumes: ["application/json"], // Default, often not needed explicitly
     produces: ["application/json"],
     tags: [
-      { name: "AI", description: "Endpoints related to AI interactions" },
+      // Updated Tags
+      { name: "Chat", description: "Endpoints for AI chat interactions" },
+      { name: "Meal Plan", description: "Endpoints for AI meal plan generation" },
+      { name: "Exercise Plan", description: "Endpoints for AI exercise plan generation" },
       { name: "Auth", description: "Endpoints related to authentication (handled by Supabase plugin)" },
       { name: "Status", description: "Endpoints for health checks" },
     ],
@@ -143,6 +146,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     credentials: true,
   });
   app.register(fastifyRequestLogger);
+  app.register(multipart, {
+    // Register multipart plugin with limits
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10 MiB limit
+    },
+  });
 
   // --- Register Application-Specific Plugins (passing mockServices) ---
   // Plugins should internally check opts.mockServices first
@@ -158,10 +167,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     app.log.info("Swagger docs disabled in production environment.");
   }
 
+  // --- Autoload Routes ---
   app.register(fastifyAutoload, {
     dir: path.join(__dirname, "routes"),
-    options: { prefix: "/api", mockServices: opts.mockServices }, // Pass mocks to autoloaded routes too
+    options: { mockServices: opts.mockServices }, // Pass options like mocks down
+    prefix: "/api", // Apply the /api prefix directly via autoload
+    // We rely on the default behavior for index.ts files to get directory prefixes
   });
+  app.log.info("Autoloading routes with /api prefix using directory structure.");
 
   return app;
 }

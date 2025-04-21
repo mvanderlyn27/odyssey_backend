@@ -8,7 +8,8 @@ declare module "fastify" {
     // Decorator added by src/plugins/gemini.ts
     gemini: GoogleGenerativeAI | null; // Allow null if initialization fails
 
-    // Decorator added by src/plugins/supabaseAuth.ts
+    // Decorators added by src/plugins/supabaseAuth.ts
+    supabase: SupabaseClient | null; // Add Supabase client decorator type
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 

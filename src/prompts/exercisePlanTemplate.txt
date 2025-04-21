@@ -1,0 +1,17 @@
+# Placeholder for Exercise Plan Prompt Template
+#
+# This file will contain the base prompt for generating exercise plans.
+# It should include placeholders for user data (e.g., fitness level, goals, available equipment, time commitment).
+# Example:
+#
+# Create a weekly exercise plan for a user with the following profile:
+# Fitness Level: {{FITNESS_LEVEL}}
+# Goal: {{GOAL}}
+# Available Equipment: {{EQUIPMENT}}
+# Days per week: {{DAYS_PER_WEEK}}
+# Time per session: {{TIME_PER_SESSION}}
+#
+# Provide the output as structured JSON including exercises, sets, reps, and rest periods.
+#
+# --- USER DATA ---
+# {{USER_DATA_JSON}}
