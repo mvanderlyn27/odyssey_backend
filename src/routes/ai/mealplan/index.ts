@@ -36,21 +36,37 @@ interface GenerateMealPlanRoute extends RouteGenericInterface {
   Body: GenerateMealPlanBody;
 }
 
-// TODO: Define specific SSE response schema if needed, or reuse a generic one
-const mealPlanStreamResponseSchema = {
+// Define response schema matching the meal_plans table structure (metadata only for now)
+const generateMealPlanResponseSchema = {
   200: {
-    description:
-      "Successful SSE stream for meal plan generation. Final response structure TBD (likely JSON chunks). A final `data: [DONE]\\n\\n` message is sent upon successful completion.",
-    content: { "text/event-stream": { schema: { type: "string" } } },
+    description: "Successful meal plan generation (metadata).",
+    type: "object",
+    properties: {
+      // Match columns from meal_plans table
+      name: { type: "string", description: "Generated name for the meal plan." },
+      description: { type: ["string", "null"], description: "Generated description." },
+      target_calories: { type: ["number", "null"], description: "Generated target daily calories." },
+      target_protein_g: { type: ["number", "null"], description: "Generated target daily protein (g)." },
+      target_carbs_g: { type: ["number", "null"], description: "Generated target daily carbs (g)." },
+      target_fat_g: { type: ["number", "null"], description: "Generated target daily fat (g)." },
+      // We are not generating the full plan_data JSON here yet
+    },
+    required: ["name"], // Name is required in the DB table
   },
   400: {
-    /* ... error schema ... */
+    description: "Bad Request",
+    type: "object",
+    properties: { error: { type: "string" }, message: { type: "string" } },
   },
   401: {
-    /* ... error schema ... */
+    description: "Unauthorized",
+    type: "object",
+    properties: { error: { type: "string" }, message: { type: "string" } },
   },
   500: {
-    /* ... error schema ... */
+    description: "Internal Server Error",
+    type: "object",
+    properties: { error: { type: "string" }, message: { type: "string" } },
   },
 };
 
@@ -77,15 +93,15 @@ async function mealPlanRoutes(fastify: FastifyInstance, opts: MealPlanRoutesOpti
 
   // --- Generate Meal Plan Route (Streaming, No History) ---
   fastify.post<GenerateMealPlanRoute>(
-    "/generate", // Path relative to /api/ai/mealplan
+    "/mealplan/generate", // Path relative to /api/ai/mealplan
     {
       preHandler: [fastify.authenticate],
       schema: {
-        description: "Generates a meal plan based on user data, streaming the response.",
-        tags: ["Meal Plan"], // New Tag
-        summary: "Generate Meal Plan (SSE Stream)",
+        description: "Generates a meal plan based on user data, returning the complete response.",
+        tags: ["Meal Plan"],
+        summary: "Generate Meal Plan (Single Response)", // Updated summary
         body: generateMealPlanBodySchema,
-        response: mealPlanStreamResponseSchema,
+        response: generateMealPlanResponseSchema, // Updated schema reference
         security: [{ bearerAuth: [] }],
       },
     },
@@ -95,56 +111,34 @@ async function mealPlanRoutes(fastify: FastifyInstance, opts: MealPlanRoutesOpti
         /* ... handle missing user ... */ return reply.status(401).send();
       }
 
-      const userData = request.body.userData; // Extract specific data
+      const userData = request.body.userData;
       fastify.log.info({ userId }, "Received request for /ai/mealplan/generate");
-
-      // --- Start Streaming ---
-      reply.raw.writeHead(200, {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
-      });
 
       try {
         // TODO:
-        // 1. Load appropriate prompt template from src/prompts/
-        // 2. Format the prompt with userData
-        const formattedPrompt = `Generate a meal plan for user: ${JSON.stringify(userData)}`; // Placeholder
+        // 1. Load appropriate prompt template from src/prompts/ (Placeholder)
+        // 2. Format the prompt with userData, asking for JSON output matching the schema
+        const formattedPrompt = `Generate meal plan metadata (name, description, target calories, protein, carbs, fat) for a user based on this data: ${JSON.stringify(
+          userData
+        )}. Output ONLY a single JSON object matching this structure: {"name": "string", "description": "string | null", "target_calories": number | null, "target_protein_g": number | null, "target_carbs_g": number | null, "target_fat_g": number | null}`; // Updated Placeholder
 
-        // 3. Define necessary tools/functions for Gemini if needed
+        // 3. Define necessary tools/functions for Gemini if needed (Not used in this simplified version)
         // const tools = [/* ... function definitions ... */];
 
-        // 4. Call a GeminiService method designed for tool use / structured output (might need a new service method)
-        //    This call should NOT include history.
-        // const stream = await geminiService!.generateStructuredStream({ prompt: formattedPrompt, tools }); // Example
-        const stream = await geminiService!.generateTextStream({ prompt: formattedPrompt }); // Using existing for placeholder
+        // 4. Call the new structured output service method
+        const mealPlanMetadata = await geminiService!.generateMealPlanMetadataStructured({ userData });
 
-        // 5. Process the stream (might involve parsing structured JSON chunks)
-        for await (const chunkText of stream) {
-          // Placeholder: Sending raw text chunks
-          const sseData = JSON.stringify({ chunk: chunkText });
-          reply.raw.write(`data: ${sseData}\n\n`);
-        }
+        // No parsing or cleaning needed here
+        // Validation happens within the service method's parsing block
 
-        // --- Signal End and Close ---
-        reply.raw.write("data: [DONE]\n\n");
-        fastify.log.info({ userId }, "Meal plan SSE stream finished successfully");
-        reply.raw.end();
+        fastify.log.info({ userId }, "Meal plan metadata generation successful (structured)");
+        // Return the structured JSON object directly
+        return reply.send(mealPlanMetadata);
       } catch (error: any) {
-        fastify.log.error({ userId, error }, "Error during meal plan generation");
-        // Handle errors (similar to chat route)
-        if (!reply.raw.headersSent) {
-          reply.status(500).send({ error: "Processing Error", message: error.message || "Failed to process request." });
-        } else if (!reply.raw.writableEnded) {
-          try {
-            const sseError = JSON.stringify({ error: "Processing Error", message: error.message });
-            reply.raw.write(`event: error\ndata: ${sseError}\n\n`);
-            reply.raw.end();
-          } catch (writeError) {
-            /* ... log writeError ... */ if (!reply.raw.writableEnded) reply.raw.end();
-          }
-        }
-      }
+        fastify.log.error({ userId, error: error.message }, "Error during meal plan generation (structured)");
+        // Let Fastify handle the error based on schema
+        throw error;
+      } // <-- Add missing closing brace for try...catch
     }
   );
 }

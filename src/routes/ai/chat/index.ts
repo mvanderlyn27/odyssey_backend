@@ -54,7 +54,7 @@ interface ChatRoute extends RouteGenericInterface {
 const chatStreamResponseSchema = {
   200: {
     description:
-      'Successful SSE stream for chat. Each message follows the format: `data: JSON.stringify({ chunk: "text..." [, conversationId: "..."] })\\n\\n`.\nThe `conversationId` is only included in the first message if a new conversation was created.\nAn `event: error` message may be sent if an error occurs mid-stream.\nA final `data: [DONE]\\n\\n` message is sent upon successful completion.',
+      'Successful SSE stream for chat. Each message follows the format: `data: JSON.stringify({ chunk: "text..." [, conversation_id: "..."] })\\n\\n`.\nThe `conversation_id` is only included in the first message if a new conversation was created.\nAn `event: error` message may be sent if an error occurs mid-stream.\nA final `data: [DONE]\\n\\n` message is sent upon successful completion.',
     content: {
       "text/event-stream": {
         schema: {
@@ -130,7 +130,7 @@ async function chatRoutes(fastify: FastifyInstance, opts: ChatRoutesOptions) {
   // --- Chat Streaming Route ---
   // Path is now relative to the prefix applied during registration (e.g., /api/ai/chat)
   fastify.post<ChatRoute>(
-    "/", // Changed path
+    "/chat", // Changed path
     {
       preHandler: [fastify.authenticate],
       schema: {
@@ -158,36 +158,37 @@ async function chatRoutes(fastify: FastifyInstance, opts: ChatRoutesOptions) {
       const supabase = fastify.supabase;
       const { prompt, conversation_id } = request.body;
       let history: Content[] = [];
-      let currentConversationId = conversation_id;
+      let currentconversation_id = conversation_id;
       let isNewConversation = false;
 
       fastify.log.info(
-        { userId: userId, promptLength: prompt.length, conversationId: currentConversationId || "NEW" },
+        { userId: userId, promptLength: prompt.length, conversation_id: currentconversation_id || "NEW" },
         "Received request for /ai/chat" // Updated log message
       );
 
+      console.log("conversation_id", currentconversation_id);
       try {
         // --- Manage Conversation History ---
-        if (currentConversationId) {
+        if (currentconversation_id) {
           // --- Existing Conversation ---
-          fastify.log.debug({ conversationId: currentConversationId }, "Fetching existing chat conversation");
+          fastify.log.debug({ conversation_id: currentconversation_id }, "Fetching existing chat conversation");
           const { data: convData, error: convError } = await supabase
             .from("conversations")
             .select("id")
-            .eq("id", currentConversationId)
+            .eq("id", currentconversation_id)
             .eq("user_id", userId)
             .maybeSingle();
 
           if (convError) {
             fastify.log.error(
-              { userId, conversationId: currentConversationId, error: convError },
+              { userId, conversation_id: currentconversation_id, error: convError },
               "Error verifying chat conversation ownership"
             );
             return reply.status(500).send({ error: "Database Error", message: "Failed to verify conversation." });
           }
           if (!convData) {
             fastify.log.warn(
-              { userId, conversationId: currentConversationId },
+              { userId, conversation_id: currentconversation_id },
               "Chat conversation not found or access denied"
             );
             return reply.status(404).send({ error: "Not Found", message: "Conversation not found or access denied." });
@@ -196,12 +197,12 @@ async function chatRoutes(fastify: FastifyInstance, opts: ChatRoutesOptions) {
           const { data: messages, error: messagesError } = await supabase
             .from("messages")
             .select("role, content")
-            .eq("conversation_id", currentConversationId)
+            .eq("conversation_id", currentconversation_id)
             .order("created_at", { ascending: true });
 
           if (messagesError) {
             fastify.log.error(
-              { userId, conversationId: currentConversationId, error: messagesError },
+              { userId, conversation_id: currentconversation_id, error: messagesError },
               "Failed to fetch chat message history"
             );
             throw new Error("Failed to fetch message history.");
@@ -213,19 +214,19 @@ async function chatRoutes(fastify: FastifyInstance, opts: ChatRoutesOptions) {
               parts: [{ text: msg.content || "" }],
             })) || [];
           fastify.log.debug(
-            { conversationId: currentConversationId, historyLength: history.length },
+            { conversation_id: currentconversation_id, historyLength: history.length },
             "Formatted chat history"
           );
 
           const { error: insertUserMsgError } = await supabase.from("messages").insert({
-            conversation_id: currentConversationId,
+            conversation_id: currentconversation_id,
             user_id: userId,
             role: "user",
             content: prompt,
           });
           if (insertUserMsgError) {
             fastify.log.error(
-              { userId, conversationId: currentConversationId, error: insertUserMsgError },
+              { userId, conversation_id: currentconversation_id, error: insertUserMsgError },
               "Failed to save user chat message"
             );
             throw new Error("Failed to save user message.");
@@ -244,18 +245,18 @@ async function chatRoutes(fastify: FastifyInstance, opts: ChatRoutesOptions) {
             fastify.log.error({ userId, error: newConvError }, "Failed to create new chat conversation");
             throw new Error("Failed to create conversation.");
           }
-          currentConversationId = newConvData.id;
-          fastify.log.info({ userId, newConversationId: currentConversationId }, "New chat conversation created");
+          currentconversation_id = newConvData.id;
+          fastify.log.info({ userId, newconversation_id: currentconversation_id }, "New chat conversation created");
 
           const { error: insertFirstMsgError } = await supabase.from("messages").insert({
-            conversation_id: currentConversationId,
+            conversation_id: currentconversation_id,
             user_id: userId,
             role: "user",
             content: prompt,
           });
           if (insertFirstMsgError) {
             fastify.log.error(
-              { userId, conversationId: currentConversationId, error: insertFirstMsgError },
+              { userId, conversation_id: currentconversation_id, error: insertFirstMsgError },
               "Failed to save first user chat message"
             );
             throw new Error("Failed to save first user message.");
@@ -277,8 +278,8 @@ async function chatRoutes(fastify: FastifyInstance, opts: ChatRoutesOptions) {
           fullModelResponse += chunkText;
           let dataToSend: any = { chunk: chunkText };
 
-          if (isNewConversation && !firstChunkSent && currentConversationId) {
-            dataToSend.conversationId = currentConversationId;
+          if (isNewConversation && !firstChunkSent && currentconversation_id) {
+            dataToSend.conversation_id = currentconversation_id;
             firstChunkSent = true;
           }
 
@@ -287,37 +288,37 @@ async function chatRoutes(fastify: FastifyInstance, opts: ChatRoutesOptions) {
         }
 
         // --- Save Model Response ---
-        if (fullModelResponse && currentConversationId) {
+        if (fullModelResponse && currentconversation_id) {
           fastify.log.debug(
-            { conversationId: currentConversationId, responseLength: fullModelResponse.length },
+            { conversation_id: currentconversation_id, responseLength: fullModelResponse.length },
             "Saving model chat response"
           );
           const { error: insertModelMsgError } = await supabase.from("messages").insert({
-            conversation_id: currentConversationId,
+            conversation_id: currentconversation_id,
             user_id: userId,
             role: "model",
             content: fullModelResponse,
           });
           if (insertModelMsgError) {
             fastify.log.error(
-              { userId, conversationId: currentConversationId, error: insertModelMsgError },
+              { userId, conversation_id: currentconversation_id, error: insertModelMsgError },
               "Failed to save model chat response"
             );
           }
         } else {
           fastify.log.warn(
-            { userId, conversationId: currentConversationId },
+            { userId, conversation_id: currentconversation_id },
             "Model chat response was empty or conversation ID missing, not saving."
           );
         }
 
         // --- Signal End and Close ---
         reply.raw.write("data: [DONE]\n\n");
-        fastify.log.info({ userId, conversationId: currentConversationId }, "Chat SSE stream finished successfully");
+        fastify.log.info({ userId, conversation_id: currentconversation_id }, "Chat SSE stream finished successfully");
         reply.raw.end();
       } catch (error: any) {
         fastify.log.error(
-          { userId, conversationId: currentConversationId, error },
+          { userId, conversation_id: currentconversation_id, error },
           "Error during chat conversation processing or SSE generation"
         );
         if (!reply.raw.headersSent) {
@@ -346,6 +347,214 @@ async function chatRoutes(fastify: FastifyInstance, opts: ChatRoutesOptions) {
   );
 
   // Add other chat-related routes here if needed (e.g., list conversations)
+
+  // --- Chat Sync Route (Realtime via DB) ---
+  fastify.post<ChatRoute>(
+    "/chat/sync", // New path for the sync route
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description:
+          "Generates a chat response, saves it to the database, and relies on Supabase Realtime for frontend updates.",
+        tags: ["Chat"],
+        summary: "Generate Chat Response (Realtime Sync)",
+        body: chatBodySchema, // Reuse the same body schema
+        response: {
+          // Define a simple success response
+          200: {
+            description: "Chat response generation initiated and saved.",
+            type: "object",
+            properties: {
+              message: { type: "string", example: "OK" },
+              conversation_id: { type: "string", format: "uuid" },
+            },
+          },
+          // Reuse error responses from the stream schema
+          400: chatStreamResponseSchema[400],
+          401: chatStreamResponseSchema[401],
+          404: chatStreamResponseSchema[404],
+          500: chatStreamResponseSchema[500],
+        },
+        security: [{ bearerAuth: [] }],
+      },
+    },
+    async (request, reply) => {
+      const userId = request.user?.id;
+      if (!userId) {
+        fastify.log.warn("User ID missing after authentication preHandler.");
+        return reply.status(401).send({ error: "Unauthorized", message: "User ID not found after authentication." });
+      }
+
+      if (!fastify.supabase) {
+        fastify.log.error("Supabase client (fastify.supabase) not available.");
+        return reply.status(500).send({ error: "Internal Server Error", message: "Database client not configured." });
+      }
+      const supabase = fastify.supabase;
+      const { prompt, conversation_id } = request.body;
+      let history: Content[] = [];
+      let currentconversation_id = conversation_id;
+
+      fastify.log.info(
+        { userId: userId, promptLength: prompt.length, conversation_id: currentconversation_id || "NEW" },
+        "Received request for /ai/chat/sync" // Updated log message
+      );
+
+      try {
+        // --- Manage Conversation History (Identical to stream route) ---
+        if (currentconversation_id) {
+          // --- Existing Conversation ---
+          fastify.log.debug({ conversation_id: currentconversation_id }, "Fetching existing chat conversation (sync)");
+          const { data: convData, error: convError } = await supabase
+            .from("conversations")
+            .select("id")
+            .eq("id", currentconversation_id)
+            .eq("user_id", userId)
+            .maybeSingle();
+
+          if (convError) {
+            fastify.log.error(
+              { userId, conversation_id: currentconversation_id, error: convError },
+              "Error verifying chat conversation ownership (sync)"
+            );
+            return reply.status(500).send({ error: "Database Error", message: "Failed to verify conversation." });
+          }
+          if (!convData) {
+            fastify.log.warn(
+              { userId, conversation_id: currentconversation_id },
+              "Chat conversation not found or access denied (sync)"
+            );
+            return reply.status(404).send({ error: "Not Found", message: "Conversation not found or access denied." });
+          }
+
+          const { data: messages, error: messagesError } = await supabase
+            .from("messages")
+            .select("role, content")
+            .eq("conversation_id", currentconversation_id)
+            .order("created_at", { ascending: true });
+
+          if (messagesError) {
+            fastify.log.error(
+              { userId, conversation_id: currentconversation_id, error: messagesError },
+              "Failed to fetch chat message history (sync)"
+            );
+            throw new Error("Failed to fetch message history.");
+          }
+
+          history =
+            messages?.map((msg) => ({
+              role: msg.role as "user" | "model",
+              parts: [{ text: msg.content || "" }],
+            })) || [];
+          fastify.log.debug(
+            { conversation_id: currentconversation_id, historyLength: history.length },
+            "Formatted chat history (sync)"
+          );
+          const { error: insertUserMsgError } = await supabase.from("messages").insert({
+            conversation_id: currentconversation_id,
+            user_id: userId,
+            role: "user",
+            content: prompt,
+          });
+          if (insertUserMsgError) {
+            fastify.log.error(
+              { userId, conversation_id: currentconversation_id, error: insertUserMsgError },
+              "Failed to save user chat message (sync)"
+            );
+            throw new Error("Failed to save user message.");
+          }
+        } else {
+          // --- New Conversation ---
+          fastify.log.debug({ userId }, "Creating new chat conversation (sync)");
+          const { data: newConvData, error: newConvError } = await supabase
+            .from("conversations")
+            .insert({ user_id: userId })
+            .select("id")
+            .single();
+
+          if (newConvError || !newConvData) {
+            fastify.log.error({ userId, error: newConvError }, "Failed to create new chat conversation (sync)");
+            throw new Error("Failed to create conversation.");
+          }
+          currentconversation_id = newConvData.id;
+          fastify.log.info(
+            { userId, newconversation_id: currentconversation_id },
+            "New chat conversation created (sync)"
+          );
+
+          const { error: insertFirstMsgError } = await supabase.from("messages").insert({
+            conversation_id: currentconversation_id,
+            user_id: userId,
+            role: "user",
+            content: prompt,
+          });
+          if (insertFirstMsgError) {
+            fastify.log.error(
+              { userId, conversation_id: currentconversation_id, error: insertFirstMsgError },
+              "Failed to save first user chat message (sync)"
+            );
+            throw new Error("Failed to save first user message.");
+          }
+        }
+
+        // --- Generate Full Response (Non-Streaming) ---
+        if (!geminiService) {
+          // This check should ideally not be needed if plugin registration is correct, but good for safety
+          throw new Error("GeminiService not available in sync route.");
+        }
+        const fullModelResponse = await geminiService.generateText({ prompt, history });
+
+        // --- Save Model Response ---
+        if (fullModelResponse && currentconversation_id) {
+          fastify.log.debug(
+            { conversation_id: currentconversation_id, responseLength: fullModelResponse.length },
+            "Saving model chat response (sync)"
+          );
+          const { error: insertModelMsgError } = await supabase.from("messages").insert({
+            conversation_id: currentconversation_id,
+            user_id: userId, // Associate model response with the user who initiated
+            role: "model",
+            content: fullModelResponse,
+          });
+          if (insertModelMsgError) {
+            // Log the error but don't necessarily fail the request,
+            // as the generation succeeded. Frontend will rely on Realtime.
+            fastify.log.error(
+              { userId, conversation_id: currentconversation_id, error: insertModelMsgError },
+              "Failed to save model chat response (sync)"
+            );
+          }
+        } else {
+          fastify.log.warn(
+            { userId, conversation_id: currentconversation_id },
+            "Model chat response was empty or conversation ID missing, not saving (sync)."
+          );
+        }
+
+        // --- Send Success Response ---
+        fastify.log.info(
+          { userId, conversation_id: currentconversation_id },
+          "Chat sync processing finished successfully"
+        );
+        // Ensure currentconversation_id is not null/undefined before sending
+        if (!currentconversation_id) {
+          throw new Error("Conversation ID became null unexpectedly during sync processing.");
+        }
+        reply.code(200).send({ message: "OK", conversation_id: currentconversation_id });
+      } catch (error: any) {
+        fastify.log.error(
+          { userId, conversation_id: currentconversation_id, error },
+          "Error during chat sync processing"
+        );
+        // Send standard error response
+        reply
+          .status(error.statusCode || 500) // Use error status code if available
+          .send({
+            error: error.name || "Processing Error",
+            message: error.message || "Failed to process chat request.",
+          });
+      }
+    }
+  );
 }
 
 // Use fp wrapper for consistency if needed, or remove if registering directly

@@ -27,15 +27,15 @@ async function supabaseAuthPlugin(fastify: FastifyInstance, options: SupabaseAut
   // Fallback to creating from environment variable
   else {
     fastify.log.info("Creating new Supabase client instance for auth from env vars.");
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
       fastify.log.error("Supabase environment variables (URL, ANON_KEY) are required for auth plugin.");
       throw new Error("Supabase URL and Anon Key must be provided via env vars or a client instance must be passed.");
     }
-    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
   }
 
   // Decorate the Fastify instance with the client if needed elsewhere (optional)
-  // fastify.decorate('supabase', supabase);
+  fastify.decorate("supabase", supabase); // <-- Uncommented this line
 
   const authenticate = async (request: FastifyRequest, reply: FastifyReply) => {
     fastify.log.debug("Attempting authentication via supabaseAuthPlugin");

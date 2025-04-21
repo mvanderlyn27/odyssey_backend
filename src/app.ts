@@ -9,6 +9,7 @@ import helmet from "@fastify/helmet";
 import rateLimit from "@fastify/rate-limit";
 import caching from "@fastify/caching";
 import websocket from "@fastify/websocket";
+import multipart from "@fastify/multipart"; // Import multipart plugin
 import { LoggingWinston } from "@google-cloud/logging-winston";
 import winston from "winston";
 import "dotenv/config"; // Ensure env vars are loaded
@@ -145,6 +146,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     credentials: true,
   });
   app.register(fastifyRequestLogger);
+  app.register(multipart, {
+    // Register multipart plugin with limits
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10 MiB limit
+    },
+  });
 
   // --- Register Application-Specific Plugins (passing mockServices) ---
   // Plugins should internally check opts.mockServices first
@@ -160,61 +167,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     app.log.info("Swagger docs disabled in production environment.");
   }
 
-  // --- Autoload Routes with Explicit Prefixing for Each Area ---
-  // Register a container plugin for the /api prefix
-  app.register(
-    async (apiInstance) => {
-      // Pass mocks down to the autoloaded routes within this prefix
-      const commonOptions = { mockServices: opts.mockServices }; // Options to pass down
-
-      // Register /api/chat routes
-      apiInstance.register(
-        async (chatInstance) => {
-          chatInstance.register(fastifyAutoload, {
-            dir: path.join(__dirname, "routes/ai/chat"),
-            options: commonOptions, // Pass mocks, no prefix needed here
-          });
-        },
-        { prefix: "/chat" }
-      );
-
-      // Register /api/mealplan routes
-      apiInstance.register(
-        async (mealplanInstance) => {
-          mealplanInstance.register(fastifyAutoload, {
-            dir: path.join(__dirname, "routes/ai/mealplan"),
-            options: commonOptions, // Pass mocks, no prefix needed here
-          });
-        },
-        { prefix: "/mealplan" }
-      );
-
-      // Register /api/exerciseplan routes
-      apiInstance.register(
-        async (exerciseplanInstance) => {
-          exerciseplanInstance.register(fastifyAutoload, {
-            dir: path.join(__dirname, "routes/ai/exerciseplan"),
-            options: commonOptions, // Pass mocks, no prefix needed here
-          });
-        },
-        { prefix: "/exerciseplan" }
-      );
-
-      // Register /api/status routes
-      apiInstance.register(
-        async (statusInstance) => {
-          statusInstance.register(fastifyAutoload, {
-            dir: path.join(__dirname, "routes/status"),
-            options: commonOptions, // Pass mocks, no prefix needed here
-          });
-        },
-        { prefix: "/status" }
-      );
-
-      apiInstance.log.info("Registered route plugins via nested autoload under /api prefix");
-    },
-    { prefix: "/api" } // Apply the main /api prefix
-  ); // Apply the /api prefix to this container
+  // --- Autoload Routes ---
+  app.register(fastifyAutoload, {
+    dir: path.join(__dirname, "routes"),
+    options: { mockServices: opts.mockServices }, // Pass options like mocks down
+    prefix: "/api", // Apply the /api prefix directly via autoload
+    // We rely on the default behavior for index.ts files to get directory prefixes
+  });
+  app.log.info("Autoloading routes with /api prefix using directory structure.");
 
   return app;
 }
