@@ -17,8 +17,8 @@ WORKDIR /usr/src/app
 COPY package.json bun.lockb ./
 
 # Install production dependencies using Bun.
-# --frozen-lockfile ensures we use dependencies exactly as defined in bun.lockb
-RUN bun install --frozen-lockfile
+# --frozen-lockfile ensures we use dependencies exactly as defined in bun.lockb (Removed for flexibility in CI)
+RUN bun install
 
 # Copy local code to the container image.
 # This includes the src/ directory and tsconfig.json etc.

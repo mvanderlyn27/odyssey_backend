@@ -23,18 +23,5 @@ jobs:
         run: npm install # Use npm to install dependencies
 
       - name: Run tests
-        # Run tap via npx. Use || true to prevent set -e from exiting early on code 1.
-        # Then, check the actual exit code ($?). Exit 0 for code 0 or 1, otherwise exit with the failure code.
-        run: |
-          npx tap test/**/*.test.ts || true
-          exit_code=$?
-          if [ $exit_code -eq 1 ]; then
-            echo "Tap exited with code 1 (likely coverage check), treating as success."
-            exit 0
-          elif [ $exit_code -eq 0 ]; then
-            echo "Tap exited with code 0 (success)."
-            exit 0
-          else
-            echo "Tap exited with code $exit_code (failure)."
-            exit $exit_code
-          fi
+        # Run tap via npx. The runner will automatically fail the step on non-zero exit codes.
+        run: npx tap test/**/*.test.ts

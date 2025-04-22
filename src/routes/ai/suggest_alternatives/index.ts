@@ -105,7 +105,7 @@ async function suggestAlternativesRoutes(fastify: FastifyInstance, opts: Suggest
 
   // Define the route handler
   fastify.post<SuggestAlternativesRoute>(
-    "/", // Path relative to autoload prefix (/api/ai/suggest_alternatives)
+    "/suggest", // Changed path to avoid potential root conflict
     {
       preHandler: [fastify.authenticate],
       schema: {

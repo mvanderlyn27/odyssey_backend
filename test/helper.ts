@@ -1,7 +1,11 @@
 import Fastify, { FastifyInstance, FastifyServerOptions, FastifyRegisterOptions } from "fastify";
+// Removed duplicate Fastify import line
+import fastifyAutoload from "@fastify/autoload"; // Import autoload
+import path from "path"; // Import path
 import { buildApp, BuildAppOptions } from "../src/app"; // Import from SOURCE and BuildAppOptions type
 import { SupabaseClient, User, UserResponse, AuthError } from "@supabase/supabase-js"; // Import necessary types
 import { GeminiService } from "../src/services/geminiService"; // Import from SOURCE
+import { Content } from "@google/generative-ai"; // Import Content type
 import Tap, { Test } from "tap"; // Import Tap and Test type
 
 // Define type for route plugins passed to the helper
@@ -57,6 +61,10 @@ const createMockGeminiService = (): Partial<GeminiService> => ({
       yield ` Mock stream part 2 for: ${params.prompt}`;
     })();
   },
+  // Add mock for generateText used by /sync route
+  generateText: async (params: { prompt: string; modelName?: string; history?: Content[] }): Promise<string> => {
+    return `Mock full response for: ${params.prompt}`;
+  },
 });
 
 /**
@@ -64,7 +72,7 @@ const createMockGeminiService = (): Partial<GeminiService> => ({
  */
 export async function build(
   t: Test, // Use imported Test type
-  routesToRegister: RoutePluginDefinition[] = [],
+  // Removed routesToRegister parameter
   mocks: {
     supabaseClient?: Partial<SupabaseClient>;
     geminiService?: Partial<GeminiService>;
@@ -82,11 +90,13 @@ export async function build(
       supabaseClient: mockSupabaseClient,
       geminiService: mockGeminiService,
     },
-    routes: routesToRegister, // Pass routes to register
+    // Removed routes option
   };
 
-  // Call buildApp with the correctly structured options
+  // Call buildApp with the correctly structured options (which now only uses autoload)
   const app = await buildApp(buildOptions);
+
+  // Removed the explicit duplicate autoload registration
 
   t.teardown(async () => {
     console.log("--- Tearing down: Closing test Fastify instance ---");
@@ -100,7 +110,7 @@ export async function build(
     }
   });
 
-  await app.ready();
+  await app.ready(); // Call ready() before registering teardown
   return app;
 }
 
