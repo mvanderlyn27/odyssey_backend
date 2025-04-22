@@ -123,7 +123,7 @@ async function exercisePlanRoutes(fastify: FastifyInstance, opts: ExercisePlanRo
 
   // --- Generate Exercise Plan Route (Single Response, No History) ---
   fastify.post<GenerateExercisePlanRoute>(
-    "/exerciseplan/generate", // Path relative to /api/ai/exerciseplan
+    "/generate", // Path relative to /api/ai/exerciseplan
     {
       preHandler: [fastify.authenticate],
       schema: {
@@ -175,4 +175,4 @@ async function exercisePlanRoutes(fastify: FastifyInstance, opts: ExercisePlanRo
   );
 }
 
-export default fp(exercisePlanRoutes);
+export default exercisePlanRoutes;

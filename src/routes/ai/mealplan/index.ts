@@ -93,7 +93,7 @@ async function mealPlanRoutes(fastify: FastifyInstance, opts: MealPlanRoutesOpti
 
   // --- Generate Meal Plan Route (Streaming, No History) ---
   fastify.post<GenerateMealPlanRoute>(
-    "/mealplan/generate", // Path relative to /api/ai/mealplan
+    "/generate", // Path relative to /api/ai/mealplan
     {
       preHandler: [fastify.authenticate],
       schema: {
@@ -143,4 +143,4 @@ async function mealPlanRoutes(fastify: FastifyInstance, opts: MealPlanRoutesOpti
   );
 }
 
-export default fp(mealPlanRoutes);
+export default mealPlanRoutes;

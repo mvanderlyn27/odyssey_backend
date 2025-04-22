@@ -111,10 +111,7 @@ export interface BuildAppOptions {
     geminiClient?: GoogleGenerativeAI | any;
     geminiService?: GeminiService;
   };
-  routes?: Array<{
-    plugin: RoutePlugin;
-    options?: FastifyRegisterOptions<any>;
-  }>;
+  // Removed routes option, rely solely on autoload
 }
 
 /**
@@ -171,10 +168,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.register(fastifyAutoload, {
     dir: path.join(__dirname, "routes"),
     options: { mockServices: opts.mockServices }, // Pass options like mocks down
-    prefix: "/api", // Apply the /api prefix directly via autoload
-    // We rely on the default behavior for index.ts files to get directory prefixes
+    // Removed prefix and dirNameRoutePrefix as routes define their full paths
   });
-  app.log.info("Autoloading routes with /api prefix using directory structure.");
+  app.log.info("Autoloading routes (routes define full paths).");
+
+  // Removed manual route registration logic
 
   return app;
 }
