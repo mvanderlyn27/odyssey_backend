@@ -24,4 +24,8 @@ jobs:
 
       - name: Run tests
         # Run tap via npx. The runner will automatically fail the step on non-zero exit codes.
-        run: npx tap test/**/*.test.ts
+        run: npm test > results.tap
+      - name: Summarize TAP results
+        uses: pcolby/tap-summary@v1
+        with:
+          path: results.tap
