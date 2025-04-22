@@ -168,10 +168,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.register(fastifyAutoload, {
     dir: path.join(__dirname, "routes"),
     options: { mockServices: opts.mockServices }, // Pass options like mocks down
-    prefix: "/api", // Apply the /api prefix directly via autoload
-    dirNameRoutePrefix: true, // Explicitly use directory names for prefixes
+    // Removed prefix and dirNameRoutePrefix as routes define their full paths
   });
-  app.log.info("Autoloading routes with /api prefix using directory structure (dirNameRoutePrefix enabled).");
+  app.log.info("Autoloading routes (routes define full paths).");
 
   // Removed manual route registration logic
 

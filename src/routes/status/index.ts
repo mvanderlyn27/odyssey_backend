@@ -3,7 +3,7 @@ import fp from "fastify-plugin";
 
 async function statusRoutes(fastify: FastifyInstance, options: FastifyPluginOptions) {
   fastify.get(
-    "/ping",
+    "/",
     {
       schema: {
         tags: ["Status"],

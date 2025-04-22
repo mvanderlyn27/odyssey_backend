@@ -91,7 +91,7 @@ async function analyzeFoodRoutes(fastify: FastifyInstance, opts: AnalyzeFoodRout
 
   // Define the route handler
   fastify.post<AnalyzeFoodRoute>(
-    "/analyze_food", // Path relative to the autoload prefix (/api/ai/analyze_food)
+    "/", // Path relative to the autoload prefix (/api/ai/analyze_food)
     {
       preHandler: [fastify.authenticate], // Ensure user is authenticated
       schema: {
@@ -177,4 +177,4 @@ async function analyzeFoodRoutes(fastify: FastifyInstance, opts: AnalyzeFoodRout
   );
 }
 
-export default fp(analyzeFoodRoutes);
+export default analyzeFoodRoutes;

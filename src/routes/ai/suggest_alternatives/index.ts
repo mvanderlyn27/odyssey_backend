@@ -105,7 +105,7 @@ async function suggestAlternativesRoutes(fastify: FastifyInstance, opts: Suggest
 
   // Define the route handler
   fastify.post<SuggestAlternativesRoute>(
-    "/suggest", // Changed path to avoid potential root conflict
+    "/", // Changed path to avoid potential root conflict
     {
       preHandler: [fastify.authenticate],
       schema: {
@@ -155,4 +155,4 @@ async function suggestAlternativesRoutes(fastify: FastifyInstance, opts: Suggest
   );
 }
 
-export default fp(suggestAlternativesRoutes);
+export default suggestAlternativesRoutes;

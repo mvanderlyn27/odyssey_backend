@@ -130,7 +130,7 @@ async function chatRoutes(fastify: FastifyInstance, opts: ChatRoutesOptions) {
   // --- Chat Streaming Route ---
   // Path is relative to the autoload prefix /api/ai/chat
   fastify.post<ChatRoute>(
-    "/chat", // Reverted to relative path
+    "/", // Reverted to relative path
     {
       preHandler: [fastify.authenticate],
       schema: {
@@ -350,4 +350,4 @@ async function chatRoutes(fastify: FastifyInstance, opts: ChatRoutesOptions) {
 }
 
 // Re-added fp wrapper
-export default fp(chatRoutes);
+export default chatRoutes;
