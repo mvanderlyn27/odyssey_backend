@@ -61,9 +61,10 @@ jobs:
           # Set environment variables using GitHub Actions secrets
           env_vars: |
             SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-            SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            SUPABASE_SERVICE_KEY=${{ secrets.SUPABASE_SERVICE_KEY }}
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
             GEMINI_MODEL_NAME=${{ vars.GEMINI_MODEL_NAME }}
+            GEMINI_VISION_MODEL_NAME=${{ vars.GEMINI_VISION_MODEL_NAME }}
           # Optional: Set secrets for Cloud Run service if needed (using Google Secret Manager)
           # secrets: |
           #   SECRET_NAME=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUR_SECRET_NAME:latest
