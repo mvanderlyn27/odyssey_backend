@@ -74,7 +74,7 @@ workout_logs (A record of a completed workout session)
 
     completed_plan_day_id (FK to plan_days, UUID) - Which plan day was finished.
 
-    workout_date (Date) - When it was done.
+    workout_date (TimestampTZ) - When it was done.
 
     start_time (TimestampTZ, nullable)
 
@@ -179,6 +179,20 @@ workout_log_sets (Log of actual performance per set)
 
 4. Workout Execution & Logging Routes
 
+    GET /workouts/logs/today
+
+        Input: None (User ID from auth token).
+
+        Output (Success):
+            200 OK: JSON object representing today's workout status. Can be one of:
+                WorkoutLogDetails: If a log exists for today (started or completed). Includes id, workout_date (ISO 8601 date-time string), plan_day_id, completed, start_time, end_time, and an array of sets (WorkoutLogSet).
+                NextWorkoutStructure: If no log exists for today but a workout is scheduled. Includes plan_day_id, day_number, day_name, and an array of exercises (with plan_exercise_id, exercise_name, display_order, and nested array of sets (DisplayPlanSet)).
+            204 No Content: If no log exists for today and no workout is scheduled (e.g., rest day, no active plan). Body is empty.
+
+        Output (Error): 401 Unauthorized, 500 Internal Server Error.
+
+        Usage: Called when the user opens the workout tab/screen. Determines if a workout is in progress, completed today, or what the next scheduled workout is. Helps direct the user to the correct state (view log, start next workout, or rest day message).
+
     GET /workouts/workouts/next
 
         Input: None (User ID from auth token).
@@ -209,9 +223,9 @@ workout_log_sets (Log of actual performance per set)
 
             Request Body: { planExerciseId: UUID, actualExerciseId: UUID, setNumber: Int, actualReps: Int, actualWeight: Float, actualWeightUnit: 'kg'|'lb', notes?: String }.
 
-        Output: 201 Created with the ID of the new workout_log_sets record.
+        Output: 201 Created with the ID of the inserted or updated workout_log_sets record.
 
-        Usage: Log each completed set during the workout session. Frontend sends the weight value and unit exactly as the user entered it.
+        Usage: Logs or updates the details for a specific set within a workout session. Performs an "upsert": if a log set already exists for the given logId, planExerciseId, and setNumber, it updates that record; otherwise, it creates a new record. Frontend sends the weight value and unit exactly as the user entered it.
 
     POST /workouts/logs/:logId/complete
 
@@ -237,7 +251,7 @@ workout_log_sets (Log of actual performance per set)
 
         Input: Optional Query Params (?limit=, ?offset=). User ID from auth token.
 
-        Output: Array of workout_logs objects (summary level: id, workout_date, completed_plan_day_id).
+        Output: Array of workout_logs objects (summary level: id, workout_date (ISO 8601 date-time string), completed_plan_day_id, completed).
 
         Usage: Display a list/calendar of past workout sessions.
 
@@ -245,7 +259,7 @@ workout_log_sets (Log of actual performance per set)
 
         Input: URL Param :logId. User ID from auth token.
 
-        Output: workout_logs object including an array of its associated workout_log_sets records (with actual_weight and actual_weight_unit as logged).
+        Output: workout_logs object including workout_date (ISO 8601 date-time string) and an array of its associated workout_log_sets records (with actual_weight and actual_weight_unit as logged).
 
         Usage: Show the user exactly what they logged for every set in a specific past workout.
 

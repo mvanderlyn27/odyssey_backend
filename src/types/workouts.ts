@@ -182,7 +182,7 @@ export interface LogSetResponse {
 // Interface for a logged set record (as stored/retrieved)
 export interface WorkoutLogSet {
   id: string; // UUID
-  workout_log_id: string; // FK to workout_logs
+  log_id: string; // FK to workout_logs (Matches DB column and schema)
   plan_exercise_id: string; // FK to plan_exercises
   actual_exercise_library_id: string; // FK to exercises_library
   set_number: number;
@@ -218,3 +218,11 @@ export interface GetLogsQuery {
 // Interface for the response of GET /progress/exercise/:exerciseId
 // This re-uses WorkoutLogSet as it contains the necessary performance data
 export type ExerciseProgressHistory = WorkoutLogSet[];
+
+// --- Today's Workout Types ---
+
+// Represents the response for GET /workouts/today
+// It can be the details of a log already started/completed today,
+// the structure of the next workout if nothing was done today,
+// or null if it's a rest day / no active plan.
+export type TodaysWorkoutResponse = WorkoutLogDetails | NextWorkoutStructure | null;
