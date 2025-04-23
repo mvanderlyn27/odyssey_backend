@@ -1,5 +1,5 @@
 import fastify, { FastifyInstance, FastifyServerOptions, FastifyRegisterOptions } from "fastify";
-import fastifyAutoload from "@fastify/autoload";
+// Removed autoload import: import fastifyAutoload from "@fastify/autoload";
 import path from "path";
 import fastifySwagger from "@fastify/swagger";
 import fastifySwaggerUi from "@fastify/swagger-ui";
@@ -20,7 +20,16 @@ import supabaseAuthPlugin, { SupabaseAuthOptions } from "./plugins/supabaseAuth"
 import { SupabaseClient } from "@supabase/supabase-js"; // For mockServices type
 import { GoogleGenerativeAI } from "@google/generative-ai"; // For mockServices type
 import { GeminiService } from "./services/geminiService"; // For mockServices type
-// Removed old/explicit route imports
+
+// --- Import Route Handlers ---
+import statusRoutes from "./routes/status";
+import aiRoutes from "./routes/ai/index"; // Explicitly import index file
+// Removed mealsRoutes import as it doesn't exist
+import usersProfileRoutes from "./routes/workouts/users";
+import exercisesRoutes from "./routes/workouts/exercises";
+import plansRoutes from "./routes/workouts/plans";
+import logsRoutes from "./routes/workouts/logs";
+import progressRoutes from "./routes/workouts/progress";
 
 // --- Helper Function for Logger Configuration ---
 function configureLoggerOptions(isProduction: boolean): any {
@@ -74,6 +83,14 @@ const swaggerOptions = {
       { name: "Exercise Plan", description: "Endpoints for AI exercise plan generation" },
       { name: "Auth", description: "Endpoints related to authentication (handled by Supabase plugin)" },
       { name: "Status", description: "Endpoints for health checks" },
+      // Add Workout Tags
+      { name: "Workouts - User", description: "User profile related workout endpoints" },
+      { name: "Workouts - Exercises", description: "Exercise library and alternative suggestions" },
+      { name: "Workouts - Plans", description: "Workout plan generation and management" },
+      { name: "Workouts - Logging", description: "Logging workout sets" },
+      { name: "Workouts - Execution", description: "Endpoints for executing a workout" },
+      { name: "Workouts - History", description: "Viewing past workout logs" },
+      { name: "Workouts - Progress", description: "Viewing exercise progress" },
     ],
     // Define security schemes
     components: {
@@ -111,7 +128,7 @@ export interface BuildAppOptions {
     geminiClient?: GoogleGenerativeAI | any;
     geminiService?: GeminiService;
   };
-  // Removed routes option, rely solely on autoload
+  // Removed routes option
 }
 
 /**
@@ -164,15 +181,17 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     app.log.info("Swagger docs disabled in production environment.");
   }
 
-  // --- Autoload Routes ---
-  app.register(fastifyAutoload, {
-    dir: path.join(__dirname, "routes"),
-    options: { mockServices: opts.mockServices }, // Pass options like mocks down
-    // Removed prefix and dirNameRoutePrefix as routes define their full paths
-  });
-  app.log.info("Autoloading routes (routes define full paths).");
-
-  // Removed manual route registration logic
+  // --- Register Routes Explicitly ---
+  app.register(statusRoutes, { prefix: "/status" });
+  app.register(aiRoutes, { prefix: "/ai" }); // Re-enable registration
+  // Removed mealsRoutes registration
+  // Register workout routes with their full prefix
+  app.register(usersProfileRoutes, { prefix: "/workouts/users" });
+  app.register(exercisesRoutes, { prefix: "/workouts/exercises" });
+  app.register(plansRoutes, { prefix: "/workouts/plans" });
+  app.register(logsRoutes, { prefix: "/workouts/logs" });
+  app.register(progressRoutes, { prefix: "/workouts/progress" });
+  app.log.info("Explicitly registered all application routes.");
 
   return app;
 }

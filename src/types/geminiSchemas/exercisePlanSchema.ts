@@ -23,13 +23,22 @@ export const exercisePlanSchema = {
             items: {
               type: "object",
               properties: {
-                name: { type: "string", description: "Name of the exercise." },
+                exerciseLibraryId: {
+                  type: "string",
+                  // format: "uuid", // Removed unsupported format for Gemini schema
+                  description: "UUID of the exercise from the exercises_library table.",
+                },
                 sets: { type: "number", description: "Number of sets." },
-                reps: { type: "string", description: "Target repetitions (e.g., '8-12', '15', 'AMRAP')." },
-                restMinutes: { type: "number", description: "Rest time in minutes between sets." },
-                notes: { type: "string", description: "Optional notes on form or execution." },
+                repMin: { type: "number", description: "Minimum target repetitions for each set." },
+                repMax: { type: "number", description: "Maximum target repetitions for each set." },
+                restSeconds: {
+                  type: "number",
+                  nullable: true,
+                  description: "Rest time in seconds between sets. Nullable.",
+                },
+                notes: { type: "string", nullable: true, description: "Optional notes on form or execution." },
               },
-              required: ["name", "sets", "reps", "restMinutes"],
+              required: ["exerciseLibraryId", "sets", "repMin", "repMax"], // restSeconds and notes are optional
             },
           },
         },
