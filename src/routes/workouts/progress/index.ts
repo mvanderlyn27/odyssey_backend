@@ -22,7 +22,7 @@ const getExerciseProgressResponseSchema = {
     type: "object",
     properties: {
       id: { type: "string", format: "uuid" },
-      workout_log_id: { type: "string", format: "uuid" },
+      log_id: { type: "string", format: "uuid" },
       plan_exercise_id: { type: "string", format: "uuid" },
       actual_exercise_library_id: { type: "string", format: "uuid" },
       set_number: { type: "number" },
@@ -34,7 +34,7 @@ const getExerciseProgressResponseSchema = {
     },
     required: [
       "id",
-      "workout_log_id",
+      "log_id",
       "plan_exercise_id",
       "actual_exercise_library_id",
       "set_number",

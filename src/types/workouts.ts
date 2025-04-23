@@ -112,7 +112,6 @@ export interface WorkoutPlan {
   name: string; // e.g., "Beginner Strength Plan"
   is_active: boolean;
   created_at: string; // ISO date string
-  // last_completed_plan_day_id?: string | null; // FK to plan_days - managed by logging logic
   // Add fields based on user preferences used for generation?
   // e.g., goal: string, experience: string, available_equipment: string[]
 }
@@ -198,7 +197,8 @@ export interface WorkoutLogSet {
 export interface WorkoutLogSummary {
   id: string; // UUID
   workout_date: string; // ISO timestamp (or just date?)
-  completed_plan_day_id?: string | null; // FK to plan_days
+  plan_day_id?: string | null; // FK to plan_days
+  completed: boolean;
   // Could add duration, etc. later
 }
 
