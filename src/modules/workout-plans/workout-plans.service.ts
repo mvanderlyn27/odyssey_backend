@@ -1,22 +1,30 @@
 import { FastifyInstance } from "fastify";
-import { WorkoutPlan, PlanType, PlanCreator } from "./workout-plans.types"; // Import necessary types
-import { GoalType } from "../user-goals/user-goals.types"; // Assuming GoalType is needed
+import {
+  WorkoutPlan,
+  PlanType,
+  PlanCreator,
+  PlanWorkout,
+  PlanWorkoutExercise,
+  CreateWorkoutPlanInput, // Use defined type
+  UpdateWorkoutPlanInput, // Use defined type
+  GeneratePlanInput,
+  ImportPlanInput,
+  UpdatePlanWorkoutExerciseInput,
+} from "./workout-plans.types"; // Import necessary types
+import { GoalType } from "../user-goals/user-goals.types";
+import { exercisePlanSchema } from "../../types/geminiSchemas/exercisePlanSchema";
+import { FunctionDeclarationSchema, Schema, SchemaType } from "@google/generative-ai";
+import { Tables, TablesInsert, TablesUpdate } from "../../types/database"; // Import DB types
 
-// Define types for request parameters, body, etc.
-interface CreateWorkoutPlanRequestBody {
-  name: string;
-  description?: string | null;
-  goal_type?: GoalType | null;
-  plan_type?: PlanType | null;
-  days_per_week?: number | null;
-  // created_by will likely be set server-side based on auth
-}
+// Type Aliases
+type DbWorkoutPlan = Tables<"workout_plans">;
+type DbWorkoutPlanInsert = TablesInsert<"workout_plans">;
+type DbPlanWorkout = Tables<"plan_workouts">;
+type DbPlanWorkoutExercise = Tables<"plan_workout_exercises">;
+type DbPlanWorkoutExerciseUpdate = TablesUpdate<"plan_workout_exercises">;
 
-// Use Partial for updates
-interface UpdateWorkoutPlanRequestBody
-  extends Partial<Omit<WorkoutPlan, "id" | "user_id" | "created_at" | "created_by">> {}
-
-export const listWorkoutPlans = async (fastify: FastifyInstance, userId: string) => {
+export const listWorkoutPlans = async (fastify: FastifyInstance, userId: string): Promise<DbWorkoutPlan[]> => {
+  // Add return type
   fastify.log.info(`Fetching workout plans for user: ${userId}`);
   try {
     if (!fastify.supabase) {
@@ -42,8 +50,9 @@ export const listWorkoutPlans = async (fastify: FastifyInstance, userId: string)
 export const createWorkoutPlan = async (
   fastify: FastifyInstance,
   userId: string,
-  planData: CreateWorkoutPlanRequestBody
-) => {
+  planData: CreateWorkoutPlanInput // Use imported type
+): Promise<DbWorkoutPlan> => {
+  // Add return type
   fastify.log.info(`Creating workout plan for user: ${userId} with data:`, planData);
 
   try {
@@ -59,10 +68,10 @@ export const createWorkoutPlan = async (
         goal_type: planData.goal_type ?? null,
         plan_type: planData.plan_type ?? null,
         days_per_week: planData.days_per_week ?? null,
-        created_by: "user", // Set creator as user
-        is_active: true, // Default to active
+        created_by: planData.created_by || "user", // Use provided or default to user
+        is_active: true, // Default new plans to active? Or false? Let's keep true for now.
         // created_at is handled by the database
-      })
+      } as DbWorkoutPlanInsert) // Type assertion
       .select() // Select the inserted row(s)
       .single(); // Expecting a single row back
 
@@ -113,8 +122,9 @@ export const updateWorkoutPlan = async (
   fastify: FastifyInstance,
   userId: string,
   planId: string,
-  updateData: UpdateWorkoutPlanRequestBody
-) => {
+  updateData: UpdateWorkoutPlanInput // Use imported type
+): Promise<DbWorkoutPlan> => {
+  // Add return type
   fastify.log.info(`Updating workout plan ${planId} for user: ${userId} with data:`, updateData);
 
   try {
@@ -174,68 +184,172 @@ export const activateWorkoutPlan = async (fastify: FastifyInstance, userId: stri
   }
 };
 
-// TODO: Define input type for user preferences
 export const generateWorkoutPlan = async (
   fastify: FastifyInstance,
   userId: string,
-  preferences: any
-): Promise<WorkoutPlan> => {
+  preferences: GeneratePlanInput // Use specific input type
+): Promise<DbWorkoutPlan> => {
+  // Return DbWorkoutPlan as the RPC result mapping is complex
   fastify.log.info(`Generating workout plan for user: ${userId} with preferences:`, preferences);
-  if (!fastify.supabase) {
-    throw new Error("Supabase client not available");
+  if (!fastify.supabase) throw new Error("Supabase client not available");
+  if (!fastify.gemini) {
+    throw new Error("Gemini client not available");
   }
-  // TODO: Implement Gemini API call
-  // 1. Craft prompt based on user preferences, goals, equipment, etc.
-  // 2. Call Gemini API (likely via geminiService)
-  // 3. Parse Gemini response (expecting structured data for plan, workouts, exercises)
-  // 4. Insert the plan, workouts, and exercises into Supabase tables within a transaction.
-  // 5. Return the created WorkoutPlan object.
+  const supabase = fastify.supabase;
+  const gemini = fastify.gemini;
 
-  throw new Error("AI plan generation not implemented yet.");
+  // Placeholder: Fetch context (profile, goal, equipment names) - Implement actual fetching
+  const userLevel = "intermediate"; // Example placeholder
+  const userGoal = preferences.goal_type || "general fitness"; // Example placeholder
+  const equipmentList =
+    preferences.available_equipment_ids.length > 0 ? preferences.available_equipment_ids.join(", ") : "none"; // Example placeholder
+
+  // Construct a detailed prompt
+  const prompt = `
+    Generate a personalized workout plan for a user with the following details:
+    - Goal: ${userGoal}
+    - Experience Level: ${preferences.experience_level}
+    - Days Per Week: ${preferences.days_per_week}
+    - Available Equipment IDs: ${equipmentList}
+    ${preferences.preferred_plan_type ? `- Preferred Plan Type: ${preferences.preferred_plan_type}` : ""}
+    - Other Preferences: [Consider adding more from GeneratePlanInput if available]
+    - Goal: [User Goal from goalData]
+    - Available Equipment IDs: [List of equipment IDs from equipmentData]
+    - Experience Level: [User Level from profileData]
+
+    Structure the output according to the provided JSON schema. Ensure exerciseLibraryId refers to valid UUIDs from the exercise library.
+    Provide a plan name, description, and detailed daily workouts including exercises, sets, rep ranges, and rest times.
+    Ensure exerciseLibraryId refers to valid UUIDs from the exercise library (if applicable, otherwise just use names).
+  `;
+  // Note: The prompt needs refinement based on exactly how exerciseLibraryId mapping works or if only names are used.
+
+  try {
+    // Cast the imported schema to the expected type for Gemini
+    const geminiSchema: Schema = exercisePlanSchema as Schema;
+
+    const model = gemini.getGenerativeModel({
+      model: "gemini-1.5-flash", // Or your preferred model
+      generationConfig: { responseMimeType: "application/json", responseSchema: geminiSchema },
+    });
+
+    const result = await model.generateContent(prompt);
+    const response = result.response;
+    const planJson = JSON.parse(response.text()); // Parse the JSON string response
+
+    fastify.log.info("Received generated plan from Gemini:", planJson);
+
+    // --- Save the generated plan to Supabase within a transaction ---
+    // This requires a Supabase RPC function to handle inserting into multiple tables atomically.
+    // Example RPC function call (assuming function name 'create_generated_plan'):
+    const { data: createdPlanData, error: rpcError } = await supabase.rpc("create_generated_plan", {
+      user_id_input: userId,
+      plan_data: planJson, // Pass the entire parsed JSON object
+    });
+
+    if (rpcError) {
+      fastify.log.error({ error: rpcError, userId, planJson }, "Error saving generated plan via RPC");
+      throw new Error(`Failed to save generated plan: ${rpcError.message}`);
+    }
+
+    if (!createdPlanData) {
+      throw new Error("Failed to retrieve created plan data after RPC call.");
+    }
+
+    // Note: The RPC function 'create_generated_plan' needs to exist in Supabase
+    // and return the created workout_plan row. Adjust the return type/mapping if needed.
+    const createdPlan: DbWorkoutPlan = createdPlanData as DbWorkoutPlan;
+
+    return createdPlan;
+  } catch (error: any) {
+    fastify.log.error(error, `Error generating workout plan for user ${userId}`);
+    // Consider more specific error handling for API errors vs. parsing errors vs. DB errors
+    throw new Error(`Failed to generate workout plan: ${error.message}`);
+  }
 };
 
-// TODO: Define input type for import data (text/image)
 export const importWorkoutPlan = async (
   fastify: FastifyInstance,
   userId: string,
-  importData: any
-): Promise<WorkoutPlan> => {
+  importData: ImportPlanInput // Use specific input type
+): Promise<DbWorkoutPlan> => {
+  // Return DbWorkoutPlan
   fastify.log.info(`Importing workout plan for user: ${userId}`);
-  if (!fastify.supabase) {
-    throw new Error("Supabase client not available");
-  }
-  // TODO: Implement Gemini API call for parsing
-  // 1. Handle input data (text or image OCR)
-  // 2. Craft prompt for Gemini to parse the input into structured plan data.
-  // 3. Call Gemini API (likely via geminiService)
-  // 4. Parse Gemini response.
-  // 5. Insert the plan, workouts, and exercises into Supabase tables within a transaction.
-  // 6. Return the created WorkoutPlan object.
+  if (!fastify.supabase) throw new Error("Supabase client not available");
+  if (!fastify.gemini) throw new Error("Gemini client not available");
 
+  // Note: Implementation requires handling text/OCR, Gemini parsing, and transactional DB inserts (likely via RPC).
+  // Placeholder implementation:
+  fastify.log.warn("AI plan import functionality is complex and not fully implemented.");
   throw new Error("AI plan import not implemented yet.");
 };
 
-// TODO: Define input type for update data and return type (PlanWorkoutExercise?)
 export const updatePlanExercise = async (
   fastify: FastifyInstance,
   userId: string,
   planExerciseId: string,
-  updateData: any
-): Promise<any> => {
-  // Replace 'any' with specific type
+  updateData: UpdatePlanWorkoutExerciseInput // Use specific input type
+): Promise<DbPlanWorkoutExercise> => {
+  // Use specific return type
   fastify.log.info(`Updating plan exercise ${planExerciseId} for user ${userId} with data:`, updateData);
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
-  // TODO: Implement logic to update plan_workout_exercises
-  // 1. Verify the plan_workout_exercise belongs to the user (join through plan_workouts and workout_plans).
-  // 2. Update the record.
-  // 3. Return the updated record.
+  const supabase = fastify.supabase;
 
-  throw new Error("Updating plan exercise not implemented yet.");
+  try {
+    // 1. Verify ownership by joining through plan_workouts and workout_plans
+    const { data: verificationData, error: verificationError } = await supabase
+      .from("plan_workout_exercises")
+      .select(
+        `
+        id,
+        plan_workouts!inner (
+          plan_id,
+          workout_plans!inner ( user_id )
+        )
+      `
+      )
+      .eq("id", planExerciseId)
+      .maybeSingle();
+
+    if (verificationError) {
+      fastify.log.error({ error: verificationError, planExerciseId }, "Error verifying plan exercise ownership");
+      throw new Error(`Failed to verify ownership: ${verificationError.message}`);
+    }
+
+    // Check if the record exists and if the user_id matches
+    const ownerId = (verificationData?.plan_workouts as any)?.workout_plans?.user_id;
+    if (!verificationData || ownerId !== userId) {
+      throw new Error(`Plan exercise ${planExerciseId} not found or does not belong to user ${userId}.`);
+    }
+
+    // 2. Update the record
+    const { data: updatedExercise, error: updateError } = await supabase
+      .from("plan_workout_exercises")
+      .update(updateData as DbPlanWorkoutExerciseUpdate) // Use type assertion
+      .eq("id", planExerciseId)
+      .select()
+      .single();
+
+    if (updateError) {
+      fastify.log.error({ error: updateError, planExerciseId, updateData }, "Error updating plan exercise");
+      throw new Error(`Failed to update plan exercise: ${updateError.message}`);
+    }
+
+    if (!updatedExercise) {
+      throw new Error("Failed to retrieve updated plan exercise after update.");
+    }
+
+    // 3. Return the updated record
+    return updatedExercise;
+  } catch (error: any) {
+    fastify.log.error(error, `Unexpected error updating plan exercise ${planExerciseId}`);
+    throw error;
+  }
 };
 
-export const deleteWorkoutPlan = async (fastify: FastifyInstance, userId: string, planId: string) => {
+export const deleteWorkoutPlan = async (fastify: FastifyInstance, userId: string, planId: string): Promise<void> => {
+  // Add return type
   fastify.log.info(`Deleting workout plan ${planId} for user: ${userId}`);
 
   try {

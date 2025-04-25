@@ -38,6 +38,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.14.1",
+    "@types/uuid": "^10.0.0",
     "autocannon": "^8.0.0",
     "clinic": "^13.0.0",
     "concurrently": "^8.2.0",

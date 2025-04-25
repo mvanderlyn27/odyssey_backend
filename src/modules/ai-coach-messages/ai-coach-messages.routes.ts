@@ -1,9 +1,9 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
 import { processUserChatMessage, getChatHistory } from "./ai-coach-messages.service";
-import { AiCoachMessage } from "./ai-coach-messages.types"; // Assuming type exists
+import { AiCoachMessage, SendAiCoachMessageInput, AiCoachChatResponse } from "./ai-coach-messages.types"; // Import necessary types
 
-// Define interfaces/schemas
+// Define interfaces/schemas for request validation (can be replaced with JSON schemas later)
 interface ChatBody {
   message: string;
   sessionId?: string;
@@ -22,7 +22,7 @@ interface ChatHistoryParams {
  */
 async function aiCoachRoutes(fastify: FastifyInstance, options: FastifyPluginOptions): Promise<void> {
   // --- POST /coach/chat --- (Send message to AI coach)
-  fastify.post<{ Body: ChatBody; Reply: AiCoachMessage }>( // Define Body and Reply types
+  fastify.post<{ Body: ChatBody; Reply: AiCoachChatResponse }>( // Define Body and correct Reply type
     "/chat",
     {
       preHandler: [fastify.authenticate], // Add subscription check later
@@ -34,8 +34,14 @@ async function aiCoachRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
         return reply.code(401).send({ error: "Unauthorized" });
       }
       try {
-        const aiResponse = await processUserChatMessage(fastify, userId, request.body);
-        return reply.send(aiResponse);
+        // Construct the input object expected by the service
+        const chatInput: SendAiCoachMessageInput = {
+          user_id: userId,
+          content: request.body.message,
+          session_id: request.body.sessionId, // Pass session_id if provided
+        };
+        const aiResponse = await processUserChatMessage(fastify, userId, chatInput);
+        return reply.send(aiResponse); // Send the AiCoachChatResponse
       } catch (error: any) {
         fastify.log.error(error, "Failed processing AI chat message");
         return reply.code(500).send({ error: "Internal Server Error", message: error.message });

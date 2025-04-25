@@ -14,11 +14,12 @@ export const getUserStreaks = async (fastify: FastifyInstance, userId: string): 
     throw new Error(`Failed to fetch streaks: ${error.message}`);
   }
 
-  // TODO: Potentially implement logic here or in a scheduled job
-  // to check if streaks are still valid based on last_incremented_at
-  // and reset current_streak if necessary before returning.
+  // Note: Checking streak validity (e.g., if current_streak should be reset based on last_incremented_at)
+  // is complex and likely requires a separate scheduled job or logic triggered by specific events.
+  // This function simply returns the currently stored streak data.
 
   return data || [];
 };
 
-// TODO: Add functions for incrementing/resetting streaks if needed by other services (e.g., finishWorkoutSession)
+// Note: Functions for incrementing/resetting streaks would be added here
+// but require specific event triggers (e.g., workout completion, login) or scheduled jobs.

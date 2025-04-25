@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
+import fp from "fastify-plugin"; // Import fastify-plugin
 import { Profile, UpdateProfileInput } from "./profile.types";
 import { FromSchema } from "json-schema-to-ts";
 import { getProfile, updateProfile } from "./profile.service";
@@ -122,4 +123,5 @@ async function profileRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
   );
 }
 
-export default profileRoutes;
+// Wrap with fp and define prefix in app.ts or main plugin file
+export default fp(profileRoutes);

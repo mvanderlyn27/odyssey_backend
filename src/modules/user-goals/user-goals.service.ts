@@ -35,7 +35,8 @@ export const createUserGoal = async (
     }
 
     // 2. Calculate estimated_completion_date (Placeholder - keep null for now)
-    const estimated_completion_date = null; // TODO: Implement calculation logic if needed
+    // Note: PRD suggests calculating this, but logic is complex and not implemented yet.
+    const estimated_completion_date = null;
 
     // 3. Insert the new goal record
     const goalToInsert = {

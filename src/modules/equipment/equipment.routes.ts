@@ -1,7 +1,8 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
-import { AddUserEquipmentInput } from "./equipment.types";
+import fp from "fastify-plugin"; // Add back fastify-plugin import
+import { AddUserEquipmentInput, Equipment } from "./equipment.types"; // Import Equipment type
 import { FromSchema } from "json-schema-to-ts";
-import { addUserEquipment } from "./equipment.service";
+import { addUserEquipment, getAllEquipment } from "./equipment.service"; // Import getAllEquipment
 
 // Define JSON schemas for validation
 const addUserEquipmentSchema = {
@@ -37,6 +38,28 @@ const addUserEquipmentSchema = {
   description: "Save the list of equipment available to the user during onboarding.",
 } as const;
 
+const getAllEquipmentSchema = {
+  response: {
+    200: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string", format: "uuid" },
+          name: { type: "string" },
+          description: { type: ["string", "null"] },
+          image_url: { type: ["string", "null"] },
+          created_at: { type: "string", format: "date-time" }, // Added created_at based on DB schema
+        },
+        required: ["id", "name", "created_at"], // Adjust required based on actual schema/needs
+      },
+    },
+    // Add other response codes like 500
+  },
+  tags: ["Equipment", "Exercises"], // Tagging for Swagger
+  description: "Get the master list of all available equipment.",
+} as const;
+
 // Define types from schemas
 type AddUserEquipmentRequest = FastifyRequest<{ Body: FromSchema<typeof addUserEquipmentSchema.body> }>;
 
@@ -46,10 +69,14 @@ type AddUserEquipmentRequest = FastifyRequest<{ Body: FromSchema<typeof addUserE
  * @param {FastifyPluginOptions} options - Plugin options.
  */
 async function equipmentRoutes(fastify: FastifyInstance, options: FastifyPluginOptions): Promise<void> {
-  // --- Add User Equipment (Onboarding) ---
-  fastify.post<{ Body: AddUserEquipmentInput; Reply: { message: string; count: number } }>(
-    "/equipment",
-    { schema: addUserEquipmentSchema },
+  // --- Add/Update User Equipment (Onboarding/Profile) ---
+  // Changed path slightly to be more RESTful for user-specific resource
+  fastify.put<{ Body: FromSchema<typeof addUserEquipmentSchema.body>; Reply: { message: string; count: number } }>(
+    "/user-equipment", // Changed path
+    {
+      schema: addUserEquipmentSchema,
+      preHandler: [fastify.authenticate], // Ensure user is authenticated
+    },
     async (request: AddUserEquipmentRequest, reply: FastifyReply): Promise<void> => {
       const userId = request.user?.id;
       if (!userId) {
@@ -68,7 +95,21 @@ async function equipmentRoutes(fastify: FastifyInstance, options: FastifyPluginO
     }
   );
 
-  // TODO: Add other equipment-related routes if needed (e.g., GET /equipment master list)
+  // --- Get All Equipment Master List ---
+  fastify.get<{ Reply: Equipment[] }>( // Use Equipment type for reply
+    "/equipment",
+    { schema: getAllEquipmentSchema }, // No preHandler needed, public list
+    async (request: FastifyRequest, reply: FastifyReply): Promise<void> => {
+      try {
+        const equipmentList = await getAllEquipment(fastify);
+        return reply.send(equipmentList);
+      } catch (error: any) {
+        fastify.log.error(error, "Failed to get equipment master list");
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
 }
 
-export default equipmentRoutes;
+// Register the plugin without a prefix, prefixes are handled by caller (e.g., app.ts) or specific routes above
+export default fp(equipmentRoutes);

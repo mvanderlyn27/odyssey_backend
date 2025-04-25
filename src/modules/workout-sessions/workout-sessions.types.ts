@@ -1,92 +1,33 @@
-import { Exercise } from "../exercises/exercises.types";
+import { Tables } from "../../types/database";
 
-/**
- * Represents the status of a workout session.
- */
-export type WorkoutSessionStatus = "started" | "paused" | "completed" | "skipped";
-
-/**
- * Represents the user's perceived feeling after a workout.
- */
-export type WorkoutFeeling = "easy" | "moderate" | "hard" | "very_hard";
-
-/**
- * Represents an actual logged workout session.
- */
-export interface WorkoutSession {
-  id: string; // UUID
-  user_id: string; // UUID FK to profiles
-  plan_workout_id: string | null; // UUID FK to plan_workouts, if following a plan
-  started_at: string; // timestampz
-  ended_at: string | null; // timestampz
-  status: WorkoutSessionStatus;
-  notes: string | null;
-  overall_feeling: WorkoutFeeling | null;
-}
-
-/**
- * Represents a logged set/rep for a specific exercise within a workout session.
- */
-export interface SessionExercise {
-  id: string; // UUID
-  workout_session_id: string; // UUID FK to workout_sessions
-  exercise_id: string; // UUID FK to exercises
-  plan_workout_exercise_id: string | null; // UUID FK to plan_workout_exercises, link back to plan
-  set_order: number;
+// Type for the request body when logging a new set
+export interface LogSetBody {
+  exercise_id: string; // UUID of the exercise from the 'exercises' table
+  plan_workout_exercise_id?: string | null; // Optional UUID linking to the planned exercise
+  set_order: number; // The order of this set for this exercise within the session (e.g., 1, 2, 3)
   logged_reps: number;
   logged_weight_kg: number;
-  logged_at: string; // timestampz
-  difficulty_rating: number | null; // RPE 1-10 maybe
-  notes: string | null;
-  was_successful_for_progression: boolean | null; // Flag if user met target for this set
+  difficulty_rating?: number | null; // Optional RPE (Rate of Perceived Exertion) 1-10
+  notes?: string | null; // Optional user notes for the set
 }
 
-// --- Input Types ---
-
-/**
- * Input for starting a new workout session.
- */
-export interface StartWorkoutSessionInput {
-  user_id: string;
-  plan_workout_id?: string | null; // Optional: Link to a planned workout
-}
-
-/**
- * Input for logging a single set of an exercise during a session.
- */
-export interface LogSessionExerciseInput {
-  workout_session_id: string;
-  exercise_id: string;
-  plan_workout_exercise_id?: string | null; // Optional: Link back to the planned exercise
-  set_order: number;
-  logged_reps: number;
-  logged_weight_kg: number;
-  difficulty_rating?: number | null;
-  notes?: string | null;
-}
-
-/**
- * Input for updating a previously logged exercise set.
- */
-export interface UpdateSessionExerciseInput {
+// Type for the request body when updating an existing logged set
+// All fields are optional, only provided fields will be updated.
+export interface UpdateSetBody {
   logged_reps?: number;
   logged_weight_kg?: number;
   difficulty_rating?: number | null;
   notes?: string | null;
 }
 
-/**
- * Input for finishing a workout session.
- */
-export interface FinishWorkoutSessionInput {
-  // workout_session_id is usually part of the route params
-  overall_feeling?: WorkoutFeeling | null;
-  notes?: string | null;
+// Type for the request body when finishing a workout session
+export interface FinishSessionBody {
+  notes?: string | null; // Optional final notes for the entire session
+  overall_feeling?: Tables<"workout_sessions">["overall_feeling"]; // Optional overall feeling enum
 }
 
-/**
- * Represents the detailed structure of a workout session for retrieval.
- */
-export interface WorkoutSessionDetails extends WorkoutSession {
-  exercises: (SessionExercise & { exercise: Exercise })[];
-}
+// You might want more specific types derived from Tables<'workout_sessions'> etc.
+// For example, a type representing a session with its exercises preloaded.
+export type WorkoutSessionWithExercises = Tables<"workout_sessions"> & {
+  session_exercises: Tables<"session_exercises">[];
+};

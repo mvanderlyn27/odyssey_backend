@@ -1,5 +1,9 @@
 import { FastifyInstance } from "fastify";
-import { AddUserEquipmentInput } from "./equipment.types";
+import { Tables, TablesInsert } from "../../types/database"; // Import base types including TablesInsert
+import { Equipment } from "./equipment.types"; // Import specific Equipment type
+
+// Type Alias
+type UserEquipmentInsert = TablesInsert<"user_equipment">;
 
 export const addUserEquipment = async (
   fastify: FastifyInstance,
@@ -29,11 +33,13 @@ export const addUserEquipment = async (
 
     const recordsToInsert = equipment_ids.map((equipment_id) => ({
       user_id: userId,
-      equipment_id: equipment_id, // Corrected field name based on PRD schema
+      equipment_id: equipment_id,
     }));
 
     // 3. Insert the new equipment links
-    const { error: insertError, count } = await supabase.from("user_equipment").insert(recordsToInsert);
+    const { error: insertError, count } = await supabase
+      .from("user_equipment")
+      .insert(recordsToInsert as UserEquipmentInsert[]); // Add type assertion if needed by TS config
 
     if (insertError) {
       fastify.log.error({ error: insertError, userId, recordsToInsert }, "Error inserting user equipment");
@@ -46,4 +52,24 @@ export const addUserEquipment = async (
     fastify.log.error(error, `Unexpected error adding equipment for user ${userId}`);
     throw error; // Re-throw the original error or a new one
   }
+};
+
+/**
+ * Retrieves the master list of all available equipment.
+ */
+export const getAllEquipment = async (fastify: FastifyInstance): Promise<Equipment[]> => {
+  fastify.log.info("Fetching all equipment master list");
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+  const supabase = fastify.supabase;
+
+  const { data, error } = await supabase.from("equipment").select("*").order("name", { ascending: true }); // Order alphabetically
+
+  if (error) {
+    fastify.log.error({ error }, "Error fetching equipment master list");
+    throw new Error(`Failed to fetch equipment list: ${error.message}`);
+  }
+
+  return data || [];
 };

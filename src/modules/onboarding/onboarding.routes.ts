@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
+import fp from "fastify-plugin"; // Import fastify-plugin
 import userGoalsRoutes from "../user-goals/user-goals.routes";
 import equipmentRoutes from "../equipment/equipment.routes";
 import { completeOnboarding } from "./onboarding.service";
@@ -31,9 +32,8 @@ const completeOnboardingSchema = {
  * @param {FastifyPluginOptions} options - Plugin options.
  */
 async function onboardingRoutes(fastify: FastifyInstance, options: FastifyPluginOptions): Promise<void> {
-  // Register sub-routes for goals and equipment within the /onboarding prefix
-  fastify.register(userGoalsRoutes); // Routes like POST /goals will be available
-  fastify.register(equipmentRoutes); // Routes like POST /equipment will be available
+  // Note: Goal setting and equipment selection routes are handled by their respective modules (user-goals, equipment)
+  // and should be registered independently in app.ts, not nested here.
 
   // --- Mark Onboarding Complete ---
   fastify.post(
@@ -57,4 +57,7 @@ async function onboardingRoutes(fastify: FastifyInstance, options: FastifyPlugin
   );
 }
 
-export default onboardingRoutes;
+// Wrap with fp and define prefix here
+export default fp(async (fastify: FastifyInstance) => {
+  fastify.register(onboardingRoutes, { prefix: "/onboarding" });
+});

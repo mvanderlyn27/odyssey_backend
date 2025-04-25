@@ -1,4 +1,5 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
+import fp from "fastify-plugin"; // Import fastify-plugin
 import { UserGoal, CreateUserGoalInput, GoalType } from "./user-goals.types";
 import { FromSchema } from "json-schema-to-ts";
 import { createUserGoal } from "./user-goals.service";
@@ -81,4 +82,5 @@ async function userGoalsRoutes(fastify: FastifyInstance, options: FastifyPluginO
   // These were not explicitly in the onboarding section of the PRD but might be useful later.
 }
 
-export default userGoalsRoutes;
+// Wrap with fp and define prefix in app.ts or main plugin file
+export default fp(userGoalsRoutes);
