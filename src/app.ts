@@ -23,16 +23,26 @@ import { GeminiService } from "./services/geminiService"; // For mockServices ty
 
 // --- Import Route Handlers ---
 import statusRoutes from "./routes/status";
-import aiRoutes from "./routes/ai/index"; // Explicitly import index file
-// Removed mealsRoutes import as it doesn't exist
-import usersProfileRoutes from "./routes/workouts/users";
-import exercisesRoutes from "./routes/workouts/exercises";
-import plansRoutes from "./routes/workouts/plans";
-import logsRoutes from "./routes/workouts/logs";
-import progressRoutes from "./routes/workouts/progress";
+// Removed deprecated workout route imports
+
+// --- Import New Module Routes ---
+import profileRoutes from "./modules/profile/profile.routes";
+import onboardingRoutes from "./modules/onboarding/onboarding.routes"; // Import consolidated onboarding routes
+import exercisesModuleRoutes from "./modules/exercises/exercises.routes"; // Import new exercises module routes
+import workoutPlanRoutes from "./modules/workout-plans/workout-plans.routes"; // Import workout plan routes
+import workoutSessionRoutes from "./modules/workout-sessions/workout-sessions.routes"; // Import workout session routes
+import streakRoutes from "./modules/streaks/streaks.routes"; // Import streak routes
+import aiCoachRoutes from "./modules/ai-coach-messages/ai-coach-messages.routes"; // Import AI coach routes
+import statsRoutes from "./modules/stats/stats.routes"; // Import stats routes
+
+// Define a more specific type for logger options
+import { PinoLoggerOptions } from "fastify/types/logger";
+import { DestinationStream } from "pino";
+
+type LoggerOptions = PinoLoggerOptions | { level: string; transport: any } | { level: string; transports: any[] };
 
 // --- Helper Function for Logger Configuration ---
-function configureLoggerOptions(isProduction: boolean): any {
+function configureLoggerOptions(isProduction: boolean): LoggerOptions {
   const isGoogleCloudRun = process.env.K_SERVICE !== undefined;
   if (isProduction || isGoogleCloudRun) {
     const loggingWinston = new LoggingWinston();
@@ -83,14 +93,12 @@ const swaggerOptions = {
       { name: "Exercise Plan", description: "Endpoints for AI exercise plan generation" },
       { name: "Auth", description: "Endpoints related to authentication (handled by Supabase plugin)" },
       { name: "Status", description: "Endpoints for health checks" },
-      // Add Workout Tags
-      { name: "Workouts - User", description: "User profile related workout endpoints" },
-      { name: "Workouts - Exercises", description: "Exercise library and alternative suggestions" },
-      { name: "Workouts - Plans", description: "Workout plan generation and management" },
-      { name: "Workouts - Logging", description: "Logging workout sets" },
-      { name: "Workouts - Execution", description: "Endpoints for executing a workout" },
-      { name: "Workouts - History", description: "Viewing past workout logs" },
-      { name: "Workouts - Progress", description: "Viewing exercise progress" },
+      // Module Tags
+      { name: "Profile", description: "User profile management endpoints" },
+      { name: "Onboarding", description: "User onboarding endpoints" },
+      { name: "Exercises", description: "Exercise library and management endpoints" },
+      { name: "Workout Plans", description: "Workout plan generation and management endpoints" },
+      // Add other module tags as needed (e.g., Workout Sessions, Body Measurements)
     ],
     // Define security schemes
     components: {
@@ -128,7 +136,6 @@ export interface BuildAppOptions {
     geminiClient?: GoogleGenerativeAI | any;
     geminiService?: GeminiService;
   };
-  // Removed routes option
 }
 
 /**
@@ -183,14 +190,19 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   // --- Register Routes Explicitly ---
   app.register(statusRoutes, { prefix: "/status" });
-  app.register(aiRoutes, { prefix: "/ai" }); // Re-enable registration
-  // Removed mealsRoutes registration
-  // Register workout routes with their full prefix
-  app.register(usersProfileRoutes, { prefix: "/workouts/users" });
-  app.register(exercisesRoutes, { prefix: "/workouts/exercises" });
-  app.register(plansRoutes, { prefix: "/workouts/plans" });
-  app.register(logsRoutes, { prefix: "/workouts/logs" });
-  app.register(progressRoutes, { prefix: "/workouts/progress" });
+  // app.register(aiRoutes, { prefix: "/ai" });
+  // Removed deprecated workout route registrations
+
+  // --- Register New Module Routes ---
+  app.register(profileRoutes, { prefix: "/profile" });
+  app.register(exercisesModuleRoutes, { prefix: "/exercises" }); // Register exercises module
+  app.register(onboardingRoutes, { prefix: "/onboarding" }); // Register consolidated onboarding routes
+  app.register(workoutPlanRoutes, { prefix: "/workout-plans" }); // Register workout plan routes
+  app.register(workoutSessionRoutes, { prefix: "/workout-sessions" }); // Register workout session routes
+  app.register(streakRoutes, { prefix: "/streaks" }); // Register streak routes
+  app.register(aiCoachRoutes, { prefix: "/coach" }); // Register AI coach routes (prefix matches PRD)
+  app.register(statsRoutes, { prefix: "/stats" }); // Register stats routes
+
   app.log.info("Explicitly registered all application routes.");
 
   return app;

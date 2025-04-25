@@ -9,29 +9,75 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      conversations: {
+      ai_coach_messages: {
         Row: {
+          content: string
           created_at: string
           id: string
-          title: string | null
-          updated_at: string
+          sender: string
+          session_id: string
           user_id: string
         }
         Insert: {
+          content: string
           created_at?: string
           id?: string
-          title?: string | null
-          updated_at?: string
+          sender: string
+          session_id: string
           user_id: string
         }
         Update: {
+          content?: string
           created_at?: string
           id?: string
-          title?: string | null
-          updated_at?: string
+          sender?: string
+          session_id?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ai_coach_messages_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      body_measurements: {
+        Row: {
+          body_fat_percentage: number | null
+          id: string
+          logged_at: string
+          other_metrics: Json | null
+          user_id: string
+          weight_kg: number | null
+        }
+        Insert: {
+          body_fat_percentage?: number | null
+          id?: string
+          logged_at?: string
+          other_metrics?: Json | null
+          user_id: string
+          weight_kg?: number | null
+        }
+        Update: {
+          body_fat_percentage?: number | null
+          id?: string
+          logged_at?: string
+          other_metrics?: Json | null
+          user_id?: string
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "body_measurements_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       equipment: {
         Row: {
@@ -54,570 +100,353 @@ export type Database = {
         }
         Relationships: []
       }
-      exercises_library: {
+      exercises: {
         Row: {
           created_at: string
           description: string | null
           equipment_required: string[]
           id: string
-          muscle_groups: string[] | null
+          image_url: string | null
           name: string
+          primary_muscle_groups: string[] | null
+          secondary_muscle_groups: string[] | null
           updated_at: string
-          video_url: string | null
         }
         Insert: {
           created_at?: string
           description?: string | null
           equipment_required: string[]
           id?: string
-          muscle_groups?: string[] | null
+          image_url?: string | null
           name: string
+          primary_muscle_groups?: string[] | null
+          secondary_muscle_groups?: string[] | null
           updated_at?: string
-          video_url?: string | null
         }
         Update: {
           created_at?: string
           description?: string | null
           equipment_required?: string[]
           id?: string
-          muscle_groups?: string[] | null
+          image_url?: string | null
           name?: string
+          primary_muscle_groups?: string[] | null
+          secondary_muscle_groups?: string[] | null
           updated_at?: string
-          video_url?: string | null
         }
         Relationships: []
       }
-      meal_logs: {
+      plan_workout_exercises: {
         Row: {
-          calories: number
-          carbs_g: number
-          created_at: string
-          date: string
-          description: string | null
-          fat_g: number
+          current_suggested_weight_kg: number | null
+          exercise_id: string
           id: string
-          meal_plan_id: string | null
-          meal_type: Database["public"]["Enums"]["meal_type"]
-          protein_g: number
-          updated_at: string
-          user_id: string
+          on_success_weight_increase_kg: number | null
+          order_in_workout: number
+          plan_workout_id: string
+          target_reps: string
+          target_rest_seconds: number | null
+          target_sets: number
         }
         Insert: {
-          calories: number
-          carbs_g: number
-          created_at?: string
-          date?: string
-          description?: string | null
-          fat_g: number
+          current_suggested_weight_kg?: number | null
+          exercise_id: string
           id?: string
-          meal_plan_id?: string | null
-          meal_type: Database["public"]["Enums"]["meal_type"]
-          protein_g: number
-          updated_at?: string
-          user_id: string
+          on_success_weight_increase_kg?: number | null
+          order_in_workout: number
+          plan_workout_id: string
+          target_reps: string
+          target_rest_seconds?: number | null
+          target_sets: number
         }
         Update: {
-          calories?: number
-          carbs_g?: number
-          created_at?: string
-          date?: string
-          description?: string | null
-          fat_g?: number
+          current_suggested_weight_kg?: number | null
+          exercise_id?: string
           id?: string
-          meal_plan_id?: string | null
-          meal_type?: Database["public"]["Enums"]["meal_type"]
-          protein_g?: number
-          updated_at?: string
-          user_id?: string
+          on_success_weight_increase_kg?: number | null
+          order_in_workout?: number
+          plan_workout_id?: string
+          target_reps?: string
+          target_rest_seconds?: number | null
+          target_sets?: number
         }
         Relationships: [
           {
-            foreignKeyName: "meal_logs_meal_plan_id_fkey"
-            columns: ["meal_plan_id"]
+            foreignKeyName: "plan_workout_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
             isOneToOne: false
-            referencedRelation: "meal_plans"
+            referencedRelation: "exercises"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "meal_logs_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "plan_workout_exercises_plan_workout_id_fkey"
+            columns: ["plan_workout_id"]
             isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
+            referencedRelation: "plan_workouts"
+            referencedColumns: ["id"]
           },
         ]
       }
-      meal_plans: {
+      plan_workouts: {
         Row: {
-          created_at: string
-          description: string | null
+          day_of_week: number | null
           id: string
           name: string
-          target_calories: number | null
-          target_carbs_g: number | null
-          target_fat_g: number | null
-          target_protein_g: number | null
-          updated_at: string
-          user_id: string
+          order_in_plan: number
+          plan_id: string
         }
         Insert: {
-          created_at?: string
-          description?: string | null
+          day_of_week?: number | null
           id?: string
           name: string
-          target_calories?: number | null
-          target_carbs_g?: number | null
-          target_fat_g?: number | null
-          target_protein_g?: number | null
-          updated_at?: string
-          user_id: string
+          order_in_plan: number
+          plan_id: string
         }
         Update: {
-          created_at?: string
-          description?: string | null
+          day_of_week?: number | null
           id?: string
           name?: string
-          target_calories?: number | null
-          target_carbs_g?: number | null
-          target_fat_g?: number | null
-          target_protein_g?: number | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "meal_plans_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-        ]
-      }
-      messages: {
-        Row: {
-          content: string
-          conversation_id: string
-          created_at: string
-          id: string
-          role: string
-          user_id: string
-        }
-        Insert: {
-          content: string
-          conversation_id: string
-          created_at?: string
-          id?: string
-          role: string
-          user_id: string
-        }
-        Update: {
-          content?: string
-          conversation_id?: string
-          created_at?: string
-          id?: string
-          role?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "messages_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "conversations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      plan_days: {
-        Row: {
-          created_at: string
-          day_number: number
-          id: string
-          name: string | null
-          plan_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          day_number: number
-          id?: string
-          name?: string | null
-          plan_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          day_number?: number
-          id?: string
-          name?: string | null
+          order_in_plan?: number
           plan_id?: string
-          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "plan_days_plan_id_fkey"
+            foreignKeyName: "plan_workouts_plan_id_fkey"
             columns: ["plan_id"]
             isOneToOne: false
             referencedRelation: "workout_plans"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      plan_exercises: {
-        Row: {
-          created_at: string
-          display_order: number
-          exercise_library_id: string
-          id: string
-          notes: string | null
-          plan_day_id: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          display_order: number
-          exercise_library_id: string
-          id?: string
-          notes?: string | null
-          plan_day_id: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          display_order?: number
-          exercise_library_id?: string
-          id?: string
-          notes?: string | null
-          plan_day_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "plan_exercises_exercise_library_id_fkey"
-            columns: ["exercise_library_id"]
-            isOneToOne: false
-            referencedRelation: "exercises_library"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "plan_exercises_plan_day_id_fkey"
-            columns: ["plan_day_id"]
-            isOneToOne: false
-            referencedRelation: "plan_days"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      plan_sets: {
-        Row: {
-          created_at: string
-          current_target_weight: number | null
-          id: string
-          plan_exercise_id: string
-          rep_max: number | null
-          rep_min: number | null
-          rest_seconds: number | null
-          set_number: number
-          target_reps_text: string | null
-          updated_at: string
-          weight_progression_amount: number
-        }
-        Insert: {
-          created_at?: string
-          current_target_weight?: number | null
-          id?: string
-          plan_exercise_id: string
-          rep_max?: number | null
-          rep_min?: number | null
-          rest_seconds?: number | null
-          set_number: number
-          target_reps_text?: string | null
-          updated_at?: string
-          weight_progression_amount?: number
-        }
-        Update: {
-          created_at?: string
-          current_target_weight?: number | null
-          id?: string
-          plan_exercise_id?: string
-          rep_max?: number | null
-          rep_min?: number | null
-          rest_seconds?: number | null
-          set_number?: number
-          target_reps_text?: string | null
-          updated_at?: string
-          weight_progression_amount?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "plan_sets_plan_exercise_id_fkey"
-            columns: ["plan_exercise_id"]
-            isOneToOne: false
-            referencedRelation: "plan_exercises"
             referencedColumns: ["id"]
           },
         ]
       }
       profiles: {
         Row: {
-          activity_level: string | null
-          available_equipment: string[] | null
+          avatar_url: string | null
           created_at: string
-          current_weight_kg: number | null
-          date_of_birth: string | null
-          dietary_restrictions: string[] | null
-          favorite_cuisines: string[] | null
+          current_goal_id: string | null
+          experience_points: number
           full_name: string | null
           height_cm: number | null
-          onboarding_completed: boolean
-          primary_goal: string | null
-          unit_preference: string
+          id: string
+          level: number
+          onboarding_complete: boolean | null
+          preferred_unit: string | null
+          subscription_status: string | null
           updated_at: string
-          user_id: string
           username: string | null
-          workout_days_pref: number[] | null
-          workout_frequency_pref: number | null
         }
         Insert: {
-          activity_level?: string | null
-          available_equipment?: string[] | null
+          avatar_url?: string | null
           created_at?: string
-          current_weight_kg?: number | null
-          date_of_birth?: string | null
-          dietary_restrictions?: string[] | null
-          favorite_cuisines?: string[] | null
+          current_goal_id?: string | null
+          experience_points?: number
           full_name?: string | null
           height_cm?: number | null
-          onboarding_completed?: boolean
-          primary_goal?: string | null
-          unit_preference?: string
-          updated_at?: string
-          user_id: string
-          username?: string | null
-          workout_days_pref?: number[] | null
-          workout_frequency_pref?: number | null
-        }
-        Update: {
-          activity_level?: string | null
-          available_equipment?: string[] | null
-          created_at?: string
-          current_weight_kg?: number | null
-          date_of_birth?: string | null
-          dietary_restrictions?: string[] | null
-          favorite_cuisines?: string[] | null
-          full_name?: string | null
-          height_cm?: number | null
-          onboarding_completed?: boolean
-          primary_goal?: string | null
-          unit_preference?: string
-          updated_at?: string
-          user_id?: string
-          username?: string | null
-          workout_days_pref?: number[] | null
-          workout_frequency_pref?: number | null
-        }
-        Relationships: []
-      }
-      progress_photos: {
-        Row: {
-          description: string | null
           id: string
-          storage_path: string
-          uploaded_at: string
+          level?: number
+          onboarding_complete?: boolean | null
+          preferred_unit?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          current_goal_id?: string | null
+          experience_points?: number
+          full_name?: string | null
+          height_cm?: number | null
+          id?: string
+          level?: number
+          onboarding_complete?: boolean | null
+          preferred_unit?: string | null
+          subscription_status?: string | null
+          updated_at?: string
+          username?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_current_goal"
+            columns: ["current_goal_id"]
+            isOneToOne: false
+            referencedRelation: "user_goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      session_exercises: {
+        Row: {
+          difficulty_rating: number | null
+          exercise_id: string
+          id: string
+          logged_at: string
+          logged_reps: number
+          logged_weight_kg: number
+          notes: string | null
+          plan_workout_exercise_id: string | null
+          set_order: number
+          was_successful_for_progression: boolean | null
+          workout_session_id: string
+        }
+        Insert: {
+          difficulty_rating?: number | null
+          exercise_id: string
+          id?: string
+          logged_at?: string
+          logged_reps: number
+          logged_weight_kg: number
+          notes?: string | null
+          plan_workout_exercise_id?: string | null
+          set_order: number
+          was_successful_for_progression?: boolean | null
+          workout_session_id: string
+        }
+        Update: {
+          difficulty_rating?: number | null
+          exercise_id?: string
+          id?: string
+          logged_at?: string
+          logged_reps?: number
+          logged_weight_kg?: number
+          notes?: string | null
+          plan_workout_exercise_id?: string | null
+          set_order?: number
+          was_successful_for_progression?: boolean | null
+          workout_session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_exercises_plan_workout_exercise_id_fkey"
+            columns: ["plan_workout_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "plan_workout_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_exercises_workout_session_id_fkey"
+            columns: ["workout_session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      streaks: {
+        Row: {
+          current_streak: number
+          id: string
+          last_incremented_at: string | null
+          longest_streak: number
+          streak_type: string
           user_id: string
         }
         Insert: {
-          description?: string | null
+          current_streak?: number
           id?: string
-          storage_path: string
-          uploaded_at?: string
+          last_incremented_at?: string | null
+          longest_streak?: number
+          streak_type: string
           user_id: string
         }
         Update: {
-          description?: string | null
+          current_streak?: number
           id?: string
-          storage_path?: string
-          uploaded_at?: string
+          last_incremented_at?: string | null
+          longest_streak?: number
+          streak_type?: string
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "progress_photos_user_id_fkey"
+            foreignKeyName: "streaks_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
+            referencedColumns: ["id"]
           },
         ]
       }
-      user_profiles: {
+      user_equipment: {
         Row: {
-          created_at: string
-          unit_preference: string
-          updated_at: string
+          equipment_id: string
           user_id: string
         }
         Insert: {
-          created_at?: string
-          unit_preference?: string
-          updated_at?: string
+          equipment_id: string
           user_id: string
         }
         Update: {
-          created_at?: string
-          unit_preference?: string
-          updated_at?: string
+          equipment_id?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      weight_logs: {
-        Row: {
-          created_at: string
-          date: string
-          id: string
-          notes: string | null
-          user_id: string
-          weight_kg: number
-        }
-        Insert: {
-          created_at?: string
-          date?: string
-          id?: string
-          notes?: string | null
-          user_id: string
-          weight_kg: number
-        }
-        Update: {
-          created_at?: string
-          date?: string
-          id?: string
-          notes?: string | null
-          user_id?: string
-          weight_kg?: number
         }
         Relationships: [
           {
-            foreignKeyName: "weight_logs_user_id_fkey"
+            foreignKeyName: "user_equipment_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_equipment_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["user_id"]
-          },
-        ]
-      }
-      workout_log_sets: {
-        Row: {
-          actual_exercise_library_id: string
-          actual_reps: number | null
-          actual_weight: number | null
-          actual_weight_unit: string | null
-          created_at: string
-          id: string
-          log_id: string
-          notes: string | null
-          plan_exercise_id: string
-          set_number: number
-          user_id: string
-        }
-        Insert: {
-          actual_exercise_library_id: string
-          actual_reps?: number | null
-          actual_weight?: number | null
-          actual_weight_unit?: string | null
-          created_at?: string
-          id?: string
-          log_id: string
-          notes?: string | null
-          plan_exercise_id: string
-          set_number: number
-          user_id: string
-        }
-        Update: {
-          actual_exercise_library_id?: string
-          actual_reps?: number | null
-          actual_weight?: number | null
-          actual_weight_unit?: string | null
-          created_at?: string
-          id?: string
-          log_id?: string
-          notes?: string | null
-          plan_exercise_id?: string
-          set_number?: number
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "workout_log_sets_actual_exercise_library_id_fkey"
-            columns: ["actual_exercise_library_id"]
-            isOneToOne: false
-            referencedRelation: "exercises_library"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workout_log_sets_log_id_fkey"
-            columns: ["log_id"]
-            isOneToOne: false
-            referencedRelation: "workout_logs"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workout_log_sets_plan_exercise_id_fkey"
-            columns: ["plan_exercise_id"]
-            isOneToOne: false
-            referencedRelation: "plan_exercises"
             referencedColumns: ["id"]
           },
         ]
       }
-      workout_logs: {
+      user_goals: {
         Row: {
-          completed: boolean
           created_at: string
-          end_time: string | null
+          estimated_completion_date: string | null
+          goal_type: string | null
           id: string
-          plan_day_id: string
-          plan_id: string
-          start_time: string | null
+          is_active: boolean | null
+          start_date: string | null
+          target_date: string | null
+          target_muscle_kg: number | null
+          target_weight_kg: number | null
           user_id: string
-          workout_date: string
         }
         Insert: {
-          completed?: boolean
           created_at?: string
-          end_time?: string | null
+          estimated_completion_date?: string | null
+          goal_type?: string | null
           id?: string
-          plan_day_id: string
-          plan_id: string
-          start_time?: string | null
+          is_active?: boolean | null
+          start_date?: string | null
+          target_date?: string | null
+          target_muscle_kg?: number | null
+          target_weight_kg?: number | null
           user_id: string
-          workout_date: string
         }
         Update: {
-          completed?: boolean
           created_at?: string
-          end_time?: string | null
+          estimated_completion_date?: string | null
+          goal_type?: string | null
           id?: string
-          plan_day_id?: string
-          plan_id?: string
-          start_time?: string | null
+          is_active?: boolean | null
+          start_date?: string | null
+          target_date?: string | null
+          target_muscle_kg?: number | null
+          target_weight_kg?: number | null
           user_id?: string
-          workout_date?: string
         }
         Relationships: [
           {
-            foreignKeyName: "workout_logs_completed_plan_day_id_fkey"
-            columns: ["plan_day_id"]
+            foreignKeyName: "user_goals_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "plan_days"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "workout_logs_plan_id_fkey"
-            columns: ["plan_id"]
-            isOneToOne: false
-            referencedRelation: "workout_plans"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -625,41 +454,100 @@ export type Database = {
       workout_plans: {
         Row: {
           created_at: string
+          created_by: string | null
           days_per_week: number | null
           description: string | null
-          experience_level: string | null
-          goals: string[] | null
+          goal_type: string | null
           id: string
-          is_active: boolean
-          name: string | null
-          updated_at: string
+          is_active: boolean | null
+          name: string
+          plan_type: string | null
+          source_description: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
+          created_by?: string | null
           days_per_week?: number | null
           description?: string | null
-          experience_level?: string | null
-          goals?: string[] | null
+          goal_type?: string | null
           id?: string
-          is_active?: boolean
-          name?: string | null
-          updated_at?: string
+          is_active?: boolean | null
+          name: string
+          plan_type?: string | null
+          source_description?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
+          created_by?: string | null
           days_per_week?: number | null
           description?: string | null
-          experience_level?: string | null
-          goals?: string[] | null
+          goal_type?: string | null
           id?: string
-          is_active?: boolean
-          name?: string | null
-          updated_at?: string
+          is_active?: boolean | null
+          name?: string
+          plan_type?: string | null
+          source_description?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "workout_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workout_sessions: {
+        Row: {
+          ended_at: string | null
+          id: string
+          notes: string | null
+          overall_feeling: string | null
+          plan_workout_id: string | null
+          started_at: string
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          ended_at?: string | null
+          id?: string
+          notes?: string | null
+          overall_feeling?: string | null
+          plan_workout_id?: string | null
+          started_at?: string
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          ended_at?: string | null
+          id?: string
+          notes?: string | null
+          overall_feeling?: string | null
+          plan_workout_id?: string | null
+          started_at?: string
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_sessions_plan_workout_id_fkey"
+            columns: ["plan_workout_id"]
+            isOneToOne: false
+            referencedRelation: "plan_workouts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
