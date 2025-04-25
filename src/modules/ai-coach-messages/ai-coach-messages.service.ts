@@ -181,7 +181,7 @@ export const processUserChatMessage = async (
 
     // 4. Call Gemini API
     const model = gemini.getGenerativeModel({
-      model: "gemini-pro", // Or the latest appropriate model
+      model: process.env.GEMINI_MODEL_NAME!, // Or the latest appropriate model
       // systemInstruction: systemPrompt, // Alternative way to provide system instructions
       tools: [modifyWorkoutFunctionDeclaration], // Include function calling tools
     });

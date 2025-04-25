@@ -73,7 +73,7 @@ const sendLevelUpMessage = async (
     return; // Cannot insert message without Supabase
   }
 
-  const model = fastify.gemini.getGenerativeModel({ model: "gemini-pro" }); // Or your preferred model
+  const model = fastify.gemini.getGenerativeModel({ model: process.env.GEMINI_MODEL_NAME! }); // Or your preferred model
   const userNameOrDefault = username || "Fitness Champion";
   const prompt = `Generate a short, encouraging, and congratulatory message for a user named "${userNameOrDefault}" who just reached Level ${newLevel} in their fitness journey in our app. Keep it under 3 sentences.`;
 

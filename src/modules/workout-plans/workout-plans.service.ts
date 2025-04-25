@@ -203,6 +203,11 @@ export const generateWorkoutPlan = async (
   const userGoal = preferences.goal_type || "general fitness"; // Example placeholder
   const equipmentList =
     preferences.available_equipment_ids.length > 0 ? preferences.available_equipment_ids.join(", ") : "none"; // Example placeholder
+  const { data: availableEquipmentNames } = await supabase
+    .from("equipment")
+    .select("name")
+    .in("id", preferences.available_equipment_ids);
+  const { data: possibleExercises } = await supabase.from("exercises").select("name, equipment_required");
 
   // Construct a detailed prompt
   const prompt = `
@@ -210,7 +215,8 @@ export const generateWorkoutPlan = async (
     - Goal: ${userGoal}
     - Experience Level: ${preferences.experience_level}
     - Days Per Week: ${preferences.days_per_week}
-    - Available Equipment IDs: ${equipmentList}
+    - Available Equipment: ${availableEquipmentNames}
+    - All Exercises: ${possibleExercises}
     ${preferences.preferred_plan_type ? `- Preferred Plan Type: ${preferences.preferred_plan_type}` : ""}
     - Other Preferences: [Consider adding more from GeneratePlanInput if available]
     - Goal: [User Goal from goalData]
@@ -228,7 +234,7 @@ export const generateWorkoutPlan = async (
     const geminiSchema: Schema = exercisePlanSchema as Schema;
 
     const model = gemini.getGenerativeModel({
-      model: "gemini-1.5-flash", // Or your preferred model
+      model: process.env.GEMINI_MODEL_NAME!, // Or your preferred model
       generationConfig: { responseMimeType: "application/json", responseSchema: geminiSchema },
     });
 
