@@ -6,10 +6,25 @@ import {
   Part,
   Content,
   FunctionDeclarationSchema,
-  SchemaType, // Import SchemaType enum
+  SchemaType,
+  FunctionCall, // Import SchemaType enum
 } from "@google/generative-ai";
 import { v4 as uuidv4 } from "uuid"; // For generating session IDs
-import { AiCoachMessage, SendAiCoachMessageInput, AiCoachChatResponse } from "./ai-coach-messages.types";
+import {
+  AiCoachMessage,
+  SendAiCoachMessageInput,
+  AiCoachChatResponse,
+  // FunctionCallResult, // Removed as it's not directly used in the response/handling flow
+  FunctionCallType,
+  UpdatedWorkoutPlanResponse, // Import the new response type
+} from "./ai-coach-messages.types";
+import { WorkoutPlan } from "../workout-plans/workout-plans.types";
+import { Exercise } from "../exercises/exercises.types";
+import { Equipment } from "../equipment/equipment.types";
+import { listExercises } from "../exercises/exercises.service"; // Assuming this returns Exercise[] | Error
+import { getAllEquipment } from "../equipment/equipment.service"; // Assuming this returns Equipment[] | Error
+import { getWorkoutPlan, getWorkoutPlanDetails } from "../workout-plans/workout-plans.service"; // Import getWorkoutPlanDetails
+import { generateUpdatedWorkoutPlan, suggestExerciseAlternatives } from "../../services/geminiService"; // Import actual service functions
 
 // Type Aliases
 type DbAiCoachMessage = Tables<"ai_coach_messages">;
@@ -50,14 +65,196 @@ const modifyWorkoutFunctionDeclaration: FunctionDeclarationsTool = {
             type: SchemaType.STRING, // Use SchemaType enum
             description: "The name of the exercise the user wants alternatives for.",
           },
+          otherRequirements: {
+            type: SchemaType.STRING,
+            description: "Any other requirements the user mentioned they want for which exercises they want to do",
+          },
         },
         required: ["exercise_name"],
       },
     },
   ],
 };
-// --- End Function Calling Setup ---
 
+// --- Removed Placeholder Functions ---
+
+// --- End Function Calling Setup ---
+// Updated signature and return type
+async function handleFunctionCall(
+  fastify: FastifyInstance,
+  userId: string,
+  sessionId: string,
+  functionCall: FunctionCall
+): Promise<{ functionName: string; response: any } | Error> {
+  // Return structure aligned with usage
+  // Return structure aligned with usage
+  const { supabase, log } = fastify;
+  if (!supabase) return new Error("Supabase client not available in handleFunctionCall");
+
+  // Cast args to any to avoid TS errors on property access
+  const args: any = functionCall.args;
+
+  switch (functionCall.name) {
+    case "modify_workout_plan": {
+      log.info({ functionCall, userId, sessionId }, "Handling modify_workout_plan function call");
+      const modificationDescription = args.modification_description;
+      if (!modificationDescription) {
+        log.warn({ functionCall, userId }, "Missing modification_description for modify_workout_plan");
+        // Return error object compatible with expected return type
+        return {
+          functionName: functionCall.name,
+          response: { success: false, message: "Missing modification_description argument." },
+        };
+      }
+
+      try {
+        // 1. Get current active workout plan ID
+        const { data: currentPlanBasic, error: planBasicError } = await supabase
+          .from("workout_plans")
+          .select("id") // Just need the ID first
+          .eq("user_id", userId)
+          .eq("is_active", true)
+          .maybeSingle();
+
+        if (planBasicError) {
+          log.error({ error: planBasicError, userId }, "Error fetching active plan ID for modification");
+          return new Error(`Error fetching active plan ID: ${planBasicError.message}`);
+        }
+        if (!currentPlanBasic) {
+          log.warn({ userId }, "No active workout plan found to modify");
+          // For now, return an informative error response.
+          return {
+            functionName: functionCall.name,
+            response: { success: false, message: "You don't have an active workout plan to modify." },
+          };
+        }
+
+        // 2. Fetch full plan details using the ID
+        // Use the newly implemented getWorkoutPlanDetails function
+        const planDetailsResult = await getWorkoutPlanDetails(fastify, currentPlanBasic.id);
+        if (planDetailsResult instanceof Error) {
+          // Error already logged within getWorkoutPlanDetails
+          log.error(
+            { error: planDetailsResult.message, userId, planId: currentPlanBasic.id }, // Log the error message
+            "Error fetching full plan details for modification"
+          );
+          return new Error(`Error fetching full plan details: ${planDetailsResult.message}`);
+        }
+        // No need to cast, planDetailsResult is WorkoutPlanDetails type
+        const currentPlanDetails = planDetailsResult;
+
+        // 3. Call the actual service function from geminiService
+        log.info({ userId, planId: currentPlanBasic.id }, "Calling Gemini service to modify workout plan");
+        const modifiedPlanResult = await generateUpdatedWorkoutPlan(fastify, userId, {
+          currentPlanDetails: currentPlanDetails, // Pass the WorkoutPlanDetails object
+          modificationDescription: modificationDescription,
+        });
+
+        if (modifiedPlanResult instanceof Error) {
+          log.error({ error: modifiedPlanResult, userId }, "Gemini service failed to modify workout plan");
+          return modifiedPlanResult; // Propagate the error
+        }
+
+        // 4. Return the successful result (raw JSON and text)
+        log.info(
+          { userId, planId: currentPlanBasic.id },
+          "Successfully received modified plan JSON from Gemini service"
+        );
+        return {
+          functionName: functionCall.name,
+          // Return the raw JSON and text as received from the service
+          response: { success: true, planJson: modifiedPlanResult.planJson, text: modifiedPlanResult.text },
+        };
+      } catch (error: any) {
+        log.error({ error, userId, functionCall }, "Error in modify_workout_plan handler");
+        // Return error object compatible with expected return type
+        // Return error object compatible with expected return type
+        return new Error(`Failed to handle modify_workout_plan: ${error.message}`);
+      }
+    }
+    case "suggest_exercise_alternatives": {
+      log.info({ functionCall, userId, sessionId }, "Handling suggest_exercise_alternatives function call");
+      // Note: Gemini function declaration uses 'exercise_name', but args might use 'exercise_id' if schema changes.
+      // Let's assume the function call provides exercise_name based on the current declaration.
+      const exerciseName = args.exercise_name;
+      const otherRequirements = args.otherRequirements;
+
+      if (!exerciseName) {
+        log.warn({ functionCall, userId }, "Missing exercise_name for suggest_exercise_alternatives");
+        // Return error object compatible with expected return type
+        return {
+          functionName: functionCall.name,
+          response: { success: false, message: "Missing exercise_name argument." },
+        };
+      }
+
+      try {
+        // 1. Fetch available exercises
+        const allExercisesResult = await listExercises(fastify, {}); // Use imported service function
+        if (allExercisesResult instanceof Error) {
+          log.error({ error: allExercisesResult }, "Error fetching all exercises for alternatives context");
+          return new Error(`Error fetching exercises: ${allExercisesResult.message}`); // Return error if fetch fails
+        }
+        const availableExercises = allExercisesResult; // Result is Exercise[]
+
+        // Find the exercise object to replace by name
+        const exerciseToReplace = availableExercises.find((ex) => ex.name.toLowerCase() === exerciseName.toLowerCase());
+        if (!exerciseToReplace) {
+          log.warn({ userId, exerciseName }, "Exercise to replace not found in available exercises list by name.");
+          return {
+            functionName: functionCall.name,
+            response: { success: false, message: `Exercise named "${exerciseName}" not found.` },
+          };
+        }
+
+        // 2. Fetch user's equipment
+        const equipmentResult = await getAllEquipment(fastify, userId); // Use imported service function
+        if (equipmentResult instanceof Error) {
+          log.error({ error: equipmentResult, userId }, "Error fetching user equipment for alternatives context");
+          return new Error(`Error fetching equipment: ${equipmentResult.message}`); // Return error if fetch fails
+        }
+        const userEquipment = equipmentResult; // Result is Equipment[]
+
+        // 3. Call the actual service function from geminiService
+        log.info({ userId, exerciseId: exerciseToReplace.id }, "Calling Gemini service for exercise alternatives"); // Corrected log key
+        const alternativesResult = await suggestExerciseAlternatives(fastify, userId, {
+          exerciseToReplace: exerciseToReplace, // Pass the full Exercise object
+          requirements: otherRequirements,
+          availableExercises: availableExercises,
+          userEquipment: userEquipment,
+        });
+
+        if (alternativesResult instanceof Error) {
+          // Use exerciseToReplace.id in the log context
+          log.error(
+            { error: alternativesResult, userId, exerciseId: exerciseToReplace.id },
+            "Gemini service failed to suggest alternatives"
+          );
+          return alternativesResult; // Propagate the error
+        }
+
+        // 4. Return the successful result
+        log.info(
+          { userId, exerciseId: exerciseToReplace.id },
+          "Successfully received alternatives from Gemini service"
+        );
+        return {
+          functionName: functionCall.name,
+          response: { success: true, alternatives: alternativesResult }, // alternativesResult is Exercise[]
+        };
+      } catch (error: any) {
+        log.error({ error, userId, functionCall }, "Error in suggest_exercise_alternatives handler");
+        // Return error object compatible with expected return type
+        // Return error object compatible with expected return type
+        return new Error(`Failed to handle suggest_exercise_alternatives: ${error.message}`);
+      }
+    }
+    default: {
+      log.warn({ functionCall, userId, sessionId }, "Unknown function call type received");
+      return new Error(`Unknown function type: ${functionCall.name}`);
+    }
+  }
+}
 // Helper to fetch context
 async function getAiContext(
   fastify: FastifyInstance,
@@ -196,28 +393,74 @@ export const processUserChatMessage = async (
     const result = await chat.sendMessage([initialPromptPart]); // Send the latest user message (potentially with prepended context)
     const response = result.response;
 
-    let aiResponseContent: string;
+    // Initialize aiResponseContent
+    let aiResponseContent: string | undefined;
+    // Variable to hold the result from our handler (now { functionName: string; response: any } | Error)
+    let handledFunctionResult: { functionName: string; response: any } | Error | undefined;
     const functionCalls = response.functionCalls();
 
-    // 5. Handle Function Calls (Basic) or Text Response
+    // 5. Handle Function Calls or Text Response
     if (functionCalls && functionCalls.length > 0) {
-      // TODO: Implement actual function execution logic
-      fastify.log.info(
-        { functionCalls, userId, sessionId },
-        "Gemini returned function calls - execution not implemented yet."
-      );
-      // For now, just inform the user we understood the request but can't do it yet.
-      // In a real scenario, you'd call the function handler here.
-      const calledFunctionName = functionCalls[0].name;
-      aiResponseContent = `I understand you want me to perform the action: '${calledFunctionName}'. However, I'm still learning how to do that automatically. Can I help in another way?`;
+      fastify.log.info({ functionCalls, userId, sessionId }, "Gemini returned function calls. Handling...");
 
-      // Example of how you *would* respond to the API if you executed the function:
-      // const apiResponse = await handleFunctionCall(functionCalls[0]); // Your function handler
-      // const result2 = await chat.sendMessage([{ functionResponse: { name: functionCalls[0].name, response: apiResponse } }]);
-      // aiResponseContent = result2.response.text();
+      // --- Function Call Handling ---
+      // We only handle the first function call for now
+      const callToHandle = functionCalls[0];
+      handledFunctionResult = await handleFunctionCall(fastify, userId, sessionId, callToHandle);
+
+      if (handledFunctionResult instanceof Error) {
+        fastify.log.error(
+          { error: handledFunctionResult, userId, sessionId, functionCall: callToHandle },
+          "Error handling function call"
+        );
+        // Inform the user about the error during function execution
+        // Use the error message if available, otherwise a generic message
+        aiResponseContent = `Sorry, I encountered an error trying to perform the action '${callToHandle.name}': ${handledFunctionResult.message}. Please try again or ask differently.`;
+        handledFunctionResult = undefined;
+        // We won't proceed to send the function response back to Gemini if handling failed.
+      } else {
+        // Ensure handledFunctionResult is not an Error before accessing properties
+        fastify.log.info(
+          { handledFunctionResult, userId, sessionId },
+          "Function call handled successfully. Sending response back to Gemini."
+        );
+        // Send the result back to Gemini to get a natural language response
+        try {
+          // Construct the FunctionResponsePart correctly using the structured response
+          const functionResponsePart = {
+            functionResponse: {
+              name: handledFunctionResult.functionName, // Use the name from our result
+              response: handledFunctionResult.response, // Use the response object from our result
+            },
+          };
+          // Send the structured result back to Gemini for a natural language summary
+          const result2 = await chat.sendMessage([functionResponsePart]);
+          aiResponseContent = result2.response.text(); // Get the final text response
+          fastify.log.info({ userId, sessionId }, "Received final text response from Gemini after function call.");
+        } catch (geminiError: any) {
+          fastify.log.error(
+            { error: geminiError, userId, sessionId, handledFunctionResult },
+            "Error sending function response back to Gemini or getting final text."
+          );
+          // Fallback response if sending back fails - use the text part if available (e.g., from plan update)
+          const fallbackText = handledFunctionResult.response?.text || JSON.stringify(handledFunctionResult.response);
+          aiResponseContent = `I processed your request for '${callToHandle.name}', but had trouble formulating a final response. The raw result was: ${fallbackText}`;
+        }
+      }
+      // --- End Function Call Handling ---
     } else {
-      // No function call, just get the text response
+      // No function call, just get the text response directly
       aiResponseContent = response.text();
+    }
+
+    // Ensure aiResponseContent has a value before storing
+
+    if (!aiResponseContent) {
+      fastify.log.warn(
+        { userId, sessionId, response, handledFunctionResult },
+        "Gemini response was empty or function handling failed to produce text."
+      );
+      aiResponseContent = "Sorry, I couldn't process that request properly. Could you please try again or rephrase?";
     }
 
     // 6. Store AI's response
@@ -225,7 +468,10 @@ export const processUserChatMessage = async (
       user_id: userId,
       session_id: sessionId,
       sender: "ai",
-      content: aiResponseContent,
+      content: aiResponseContent, // Use the final text content
+      // Optionally store function call details if needed for audit/debugging
+      // function_call_name: handledFunctionResult && !(handledFunctionResult instanceof Error) ? handledFunctionResult.functionName : undefined,
+      // function_call_response: handledFunctionResult && !(handledFunctionResult instanceof Error) ? JSON.stringify(handledFunctionResult.response) : undefined,
     };
     const { data: storedAiMessage, error: aiInsertError } = await supabase
       .from("ai_coach_messages")
@@ -242,16 +488,24 @@ export const processUserChatMessage = async (
         user_id: userId,
         session_id: sessionId,
         sender: "ai",
-        content: aiResponseContent,
+        content: aiResponseContent, // Use the final text content
         created_at: new Date().toISOString(),
+        // Add other potential fields if needed from the type
       };
       return { ai_message: tempAiMessage, session_id: sessionId };
       // Or throw? throw new Error(`Failed to store AI response: ${aiInsertError?.message || 'Unknown error'}`);
     }
 
     // 7. Return the AI's response message and session ID
+    // Store the structured data from the function call if it exists and wasn't an error
+    const functionResponseData =
+      handledFunctionResult && !(handledFunctionResult instanceof Error)
+        ? handledFunctionResult.response // Store the actual response data
+        : undefined;
+
     return {
       ai_message: storedAiMessage,
+      ai_function_response_data: functionResponseData, // Pass the structured data
       session_id: sessionId,
     };
   } catch (error: any) {

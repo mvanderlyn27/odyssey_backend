@@ -10,6 +10,7 @@ import {
   GeneratePlanInput,
   ImportPlanInput,
   UpdatePlanWorkoutExerciseInput,
+  WorkoutPlanDetails, // Import the missing type
 } from "./workout-plans.types"; // Import necessary types
 import { GoalType } from "../user-goals/user-goals.types";
 import { exercisePlanSchema } from "../../types/geminiSchemas/exercisePlanSchema";
@@ -88,7 +89,12 @@ export const createWorkoutPlan = async (
   }
 };
 
-export const getWorkoutPlan = async (fastify: FastifyInstance, userId: string, planId: string) => {
+export const getWorkoutPlan = async (
+  fastify: FastifyInstance,
+  userId: string,
+  planId: string
+): Promise<DbWorkoutPlan | Error> => {
+  // Added return type
   fastify.log.info(`Fetching workout plan ${planId} for user: ${userId}`);
 
   try {
@@ -114,7 +120,74 @@ export const getWorkoutPlan = async (fastify: FastifyInstance, userId: string, p
     return plan;
   } catch (err: any) {
     fastify.log.error(err, "Unexpected error fetching specific workout plan");
+    // Return error instead of throwing for consistency
+    if (err instanceof Error && err.message.includes("not found")) {
+      return new Error(`Workout plan with ID ${planId} not found or does not belong to user.`);
+    }
     throw new Error("An unexpected error occurred");
+  }
+};
+
+/**
+ * Fetches the detailed structure of a workout plan, including workouts and exercises.
+ * @param fastify - Fastify instance.
+ * @param planId - The ID of the workout plan to fetch.
+ * @returns The detailed workout plan structure or an Error.
+ */
+export const getWorkoutPlanDetails = async (
+  fastify: FastifyInstance,
+  planId: string
+): Promise<WorkoutPlanDetails | Error> => {
+  fastify.log.info(`Fetching details for workout plan ${planId}`);
+  if (!fastify.supabase) {
+    return new Error("Supabase client not available");
+  }
+  const supabase = fastify.supabase;
+
+  try {
+    const { data, error } = await supabase
+      .from("workout_plans")
+      .select(
+        `
+        *,
+        plan_workouts (
+          *,
+          plan_workout_exercises (
+            *,
+            exercises (*)
+          )
+        )
+      `
+      )
+      .eq("id", planId)
+      .single(); // Expect exactly one plan
+
+    if (error) {
+      fastify.log.error({ error, planId }, "Error fetching workout plan details");
+      return new Error(`Failed to fetch details for plan ${planId}: ${error.message}`);
+    }
+
+    if (!data) {
+      return new Error(`Workout plan with ID ${planId} not found.`);
+    }
+
+    // Map the data to the WorkoutPlanDetails structure
+    // Supabase's nested select should align closely, but we might need adjustments
+    const planDetails: WorkoutPlanDetails = {
+      ...data, // Spread the top-level plan fields
+      workouts: (data.plan_workouts || []).map((pw: any) => ({
+        ...pw, // Spread the plan_workout fields
+        exercises: (pw.plan_workout_exercises || []).map((pwe: any) => ({
+          ...pwe, // Spread the plan_workout_exercise fields
+          exercise: pwe.exercises, // Assign the nested exercise object
+        })),
+      })),
+    };
+
+    return planDetails;
+  } catch (err: any) {
+    fastify.log.error(err, `Unexpected error fetching details for plan ${planId}`);
+    return new Error("An unexpected error occurred while fetching plan details.");
   }
 };
 

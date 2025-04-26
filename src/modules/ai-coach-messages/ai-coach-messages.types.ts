@@ -1,3 +1,6 @@
+import { Exercise } from "../exercises/exercises.types";
+import { WorkoutPlan } from "../workout-plans/workout-plans.types";
+
 /**
  * Represents who sent the message in the AI coach chat.
  */
@@ -15,6 +18,13 @@ export interface AiCoachMessage {
   created_at: string; // timestampz
   // Optional: Add fields for message context, like related exercise or plan
 }
+
+export enum FunctionCallType {
+  ModifyWorkoutPlan = "modify_workout_plan",
+  SuggestExerciseAlternatives = "suggest_exercise_alternatives",
+}
+
+// Removed FunctionCallResult interface as it's not directly used in the current flow
 
 /**
  * Input type for sending a message to the AI coach.
@@ -41,5 +51,15 @@ export interface GetAiCoachChatHistoryQuery {
  */
 export interface AiCoachChatResponse {
   ai_message: AiCoachMessage;
+  // Directly include the possible data types returned by function calls
+  ai_function_response_data?: UpdatedWorkoutPlanResponse | { alternatives: Exercise[] };
   session_id: string; // Return the session ID (new or existing)
+}
+
+/**
+ * Response type for the generateUpdatedWorkoutPlan service function.
+ */
+export interface UpdatedWorkoutPlanResponse {
+  plan: WorkoutPlan; // The structured workout plan from Gemini
+  text: string; // Text summary of the changes or the plan itself
 }

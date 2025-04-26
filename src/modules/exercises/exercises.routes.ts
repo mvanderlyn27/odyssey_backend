@@ -61,14 +61,18 @@ async function exercisesRoutes(fastify: FastifyInstance, options: FastifyPluginO
 
   /**
    * Handles suggesting alternative exercises.
-   * @param {FastifyRequest} request - The request object.
+   * @param {FastifyRequest<{PARAMS: {userId: string, exerciseId: string}}>} request - The request object.
    * @param {FastifyReply} reply - The reply object.
    */
-  async function suggestAlternativesHandler(request: FastifyRequest, reply: FastifyReply): Promise<void> {
+  async function suggestAlternativesHandler(
+    request: FastifyRequest<{ Params: { userId: string; exerciseId: string } }>,
+    reply: FastifyReply
+  ): Promise<void> {
     fastify.log.info("Suggesting alternative exercises...");
     try {
       // TODO: Pass relevant query/body data to suggestAlternatives
-      const result = await suggestAlternatives(fastify /*, request.query or request.body */);
+      const { userId, exerciseId } = request.params;
+      const result = await suggestAlternatives(fastify, userId, exerciseId);
       reply.send(result);
     } catch (error: any) {
       fastify.log.error(error, "Failed to suggest alternative exercises");

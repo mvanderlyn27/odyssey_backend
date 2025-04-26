@@ -76,5 +76,6 @@ export interface ListExercisesQuery {
  */
 export interface AlternativeExerciseSuggestion {
   name: string; // Name of the suggested alternative exercise
+  id: string;
   reason: string; // Brief reason why it's a good alternative
 }

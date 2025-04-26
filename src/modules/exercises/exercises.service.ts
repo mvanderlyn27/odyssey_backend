@@ -3,6 +3,7 @@ import { Exercise, AlternativeExerciseSuggestion } from "./exercises.types"; // 
 import { Tables } from "../../types/database";
 import { alternativesSchema } from "../../types/geminiSchemas/alternativesSchema"; // Import the schema for structured response
 import { FunctionDeclarationsTool, Part, Content, FunctionDeclarationSchema, SchemaType } from "@google/generative-ai"; // Import Gemini types
+import { Equipment } from "../equipment/equipment.types";
 
 // Define interfaces for query parameters if needed for list/search
 interface ListExercisesQuery {
@@ -64,28 +65,42 @@ export const getExerciseById = async (fastify: FastifyInstance, exerciseId: stri
 };
 
 // Helper to get user equipment names
-async function getUserEquipmentNames(fastify: FastifyInstance, userId: string): Promise<string[]> {
-  if (!fastify.supabase) return [];
-  // Explicitly type the expected return structure from the select query
-  const { data, error } = await fastify.supabase
-    .from("user_equipment")
-    .select("equipment ( name )")
-    .eq("user_id", userId)
-    .returns<{ equipment: { name: string } | null }[]>(); // Add .returns<Type>()
-
-  if (error) {
-    fastify.log.warn({ error, userId }, "Failed to fetch user equipment for alternatives suggestion");
-    return []; // Return empty list on error
+export async function getUserEquipment(fastify: FastifyInstance, userId: string): Promise<Equipment[]> {
+  const { supabase, log } = fastify; // Destructure log as well
+  if (!supabase) {
+    log.warn("Supabase client not available in getUserEquipment");
+    return []; // Return empty array if Supabase isn't initialized
   }
-  // Ensure data and nested structure exist before mapping
-  return data?.map((ue) => ue.equipment?.name).filter((name): name is string => !!name) || [];
+
+  try {
+    // Fetch user_equipment entries and join the related equipment details
+    const { data, error } = await supabase
+      .from("user_equipment")
+      .select("*, equipment(*)") // Select all columns from the related equipment table
+      .eq("user_id", userId);
+
+    if (error) {
+      log.warn({ error, userId }, "Failed to fetch user equipment");
+      return []; // Return empty list on error
+    }
+
+    // Safely map and filter the results
+    const equipmentList: Equipment[] = (data || [])
+      .map((item) => item.equipment) // Extract the nested equipment object
+      .filter((eq): eq is Equipment => eq !== null); // Type guard to filter out nulls and ensure correct type
+
+    return equipmentList;
+  } catch (err: any) {
+    log.error({ error: err, userId }, "Unexpected error fetching user equipment");
+    return []; // Return empty array on unexpected errors
+  }
 }
 
 export const suggestAlternatives = async (
   fastify: FastifyInstance,
   userId: string,
   exerciseId: string
-): Promise<AlternativeExerciseSuggestion[]> => {
+): Promise<Exercise[]> => {
   fastify.log.info(`Suggesting alternatives for exercise: ${exerciseId}, user: ${userId}`);
   if (!fastify.supabase) throw new Error("Supabase client not available");
   if (!fastify.gemini) throw new Error("Gemini client not available");
@@ -94,16 +109,15 @@ export const suggestAlternatives = async (
   const originalExercise = await getExerciseById(fastify, exerciseId); // Reuse existing function
 
   // 2. Fetch user's equipment
-  const userEquipmentNames = await getUserEquipmentNames(fastify, userId);
+  const userEquipmentNames = (await getUserEquipment(fastify, userId)).map((eq) => eq.name);
 
   // 3. Construct Prompt for Gemini
   const model = fastify.gemini.getGenerativeModel({
-    model: "gemini-pro", // Or appropriate model
+    model: process.env.GEMINI_MODEL_NAME!, // Or appropriate model
     generationConfig: { responseMimeType: "application/json", responseSchema: alternativesSchema },
   });
 
   let prompt = `Suggest 3 alternative exercises for "${originalExercise.name}".`;
-  // Corrected property name: primary_muscle_groups (plural, array)
   prompt += `\nThe original exercise primarily targets: ${
     originalExercise.primary_muscle_groups?.join(", ") || "N/A" // Join array or use N/A
   }.`;
@@ -123,7 +137,7 @@ export const suggestAlternatives = async (
   } else {
     prompt += `\nThe user has indicated they have no specific equipment available. Suggest bodyweight or common household item alternatives.`;
   }
-  prompt += `\nProvide the response strictly in the specified JSON format, containing a list of alternatives, each with a name and a brief reason.`;
+  prompt += `\nProvide the response strictly in the specified JSON format, containing a list of alternatives `;
 
   try {
     const result = await model.generateContent(prompt);
@@ -135,14 +149,14 @@ export const suggestAlternatives = async (
       throw new Error("Gemini returned an empty response.");
     }
 
-    let suggestions: AlternativeExerciseSuggestion[];
+    let suggestions: Exercise[];
     try {
       const parsedJson = JSON.parse(responseText);
       // Validate against the expected structure (basic check)
       if (!parsedJson || !Array.isArray(parsedJson.alternatives)) {
         throw new Error("Parsed JSON does not match expected alternatives schema.");
       }
-      suggestions = parsedJson.alternatives;
+      suggestions = parsedJson;
     } catch (parseError: any) {
       fastify.log.error({ error: parseError, responseText }, "Failed to parse Gemini JSON response for alternatives");
       throw new Error(`Failed to parse AI response: ${parseError.message}`);

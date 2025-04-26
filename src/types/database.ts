@@ -221,6 +221,8 @@ export type Database = {
       }
       profiles: {
         Row: {
+          admin: boolean
+          available_equipment_ids: string[]
           avatar_url: string | null
           created_at: string
           current_goal_id: string | null
@@ -236,6 +238,8 @@ export type Database = {
           username: string | null
         }
         Insert: {
+          admin?: boolean
+          available_equipment_ids: string[]
           avatar_url?: string | null
           created_at?: string
           current_goal_id?: string | null
@@ -251,6 +255,8 @@ export type Database = {
           username?: string | null
         }
         Update: {
+          admin?: boolean
+          available_equipment_ids?: string[]
           avatar_url?: string | null
           created_at?: string
           current_goal_id?: string | null
@@ -554,6 +560,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_workout_plan: {
+        Args: { user_id_input: string; plan_id_input: string }
+        Returns: undefined
+      }
       is_plan_day_owner: {
         Args: { plan_day_id: string }
         Returns: boolean
