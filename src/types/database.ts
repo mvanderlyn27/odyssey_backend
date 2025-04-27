@@ -136,6 +136,27 @@ export type Database = {
         }
         Relationships: []
       }
+      muscle_groups: {
+        Row: {
+          created_at: string
+          id: string
+          muscle_ranking_data: Json
+          name: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          muscle_ranking_data: Json
+          name?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          muscle_ranking_data?: Json
+          name?: string | null
+        }
+        Relationships: []
+      }
       plan_workout_exercises: {
         Row: {
           current_suggested_weight_kg: number | null
@@ -222,7 +243,6 @@ export type Database = {
       profiles: {
         Row: {
           admin: boolean
-          available_equipment_ids: string[]
           avatar_url: string | null
           created_at: string
           current_goal_id: string | null
@@ -239,7 +259,6 @@ export type Database = {
         }
         Insert: {
           admin?: boolean
-          available_equipment_ids: string[]
           avatar_url?: string | null
           created_at?: string
           current_goal_id?: string | null
@@ -256,7 +275,6 @@ export type Database = {
         }
         Update: {
           admin?: boolean
-          available_equipment_ids?: string[]
           avatar_url?: string | null
           created_at?: string
           current_goal_id?: string | null

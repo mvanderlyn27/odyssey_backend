@@ -1,6 +1,108 @@
 import { PrimaryMuscleGroup } from "../exercises/exercises.types";
 
 /**
+ * Defines the possible time periods for statistics calculation.
+ */
+export type TimePeriod = "day" | "week" | "month" | "year" | "all";
+
+/**
+ * Represents statistics for a single exercise, potentially grouped by time.
+ */
+export interface ExerciseStats {
+  total_reps: number;
+  total_weight_lifted: number;
+  max_weight_lifted: number;
+  grouped_stats: Record<
+    string, // Group key (e.g., 'YYYY-MM-DD', 'YYYY-WW', 'YYYY-MM', 'YYYY', 'all')
+    {
+      total_reps: number;
+      total_weight_lifted: number;
+      max_weight_lifted: number;
+    }
+  >;
+}
+
+/**
+ * Represents statistics for a single exercise within a workout session.
+ */
+export interface SessionExerciseStat {
+  exercise_name: string;
+  total_reps: number;
+  total_weight_lifted: number;
+  max_weight_lifted: number;
+  is_personal_record: boolean;
+}
+
+/**
+ * Represents statistics for a specific workout session.
+ */
+export interface SessionStats {
+  session_id: string;
+  user_id: string;
+  total_reps: number;
+  total_weight_lifted: number;
+  max_weight_lifted_overall: number;
+  exercises: Record<string, SessionExerciseStat>; // Keyed by exercise_id
+}
+
+/**
+ * Represents a top-performing exercise based on a specific metric.
+ */
+export interface TopExerciseStat {
+  exercise_id: string;
+  name: string; // Changed from exercise_name for consistency
+  max_weight?: number; // Used for top_exercises_by_weight
+  count?: number; // Used for top_exercises_by_frequency
+}
+
+/**
+ * Represents overall statistics for a user.
+ */
+export interface UserStats {
+  total_workouts: number;
+  total_weight_lifted: number;
+  top_exercises_by_weight: TopExerciseStat[];
+  top_exercises_by_frequency: TopExerciseStat[];
+  grouped_workouts: Record<string, number>; // Group key -> workout count
+}
+
+/**
+ * Represents the ranking structure for a muscle group.
+ */
+export interface MuscleRanking {
+  rank: string;
+  required_weight_kg: number;
+}
+
+/**
+ * Represents statistics for a specific muscle group within the body stats.
+ */
+export interface MuscleGroupStat {
+  name: string | null;
+  last_trained: string | null; // ISO timestampz
+  muscle_ranking: string | null; // Calculated rank based on performance
+}
+
+/**
+ * Represents overall body statistics, focusing on muscle groups.
+ */
+export interface BodyStats {
+  muscle_group_stats: Record<string, MuscleGroupStat>; // Keyed by muscle_group_id
+}
+
+/**
+ * Represents statistics for a single muscle group.
+ */
+export interface MuscleStats {
+  muscle_group_id: string;
+  name: string | null;
+  last_trained: string | null; // ISO timestampz
+  muscle_ranking: string | null; // Calculated rank based on performance
+}
+
+// --- Original Placeholder Types (Kept for reference, can be removed if not needed) ---
+
+/**
  * Represents a single data point for exercise progress.
  */
 export interface ExerciseProgressPoint {
