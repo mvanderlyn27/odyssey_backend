@@ -1,35 +1,49 @@
 /**
- * Represents the type of streak being tracked.
+ * Represents a user's streak data for workout completion.
  */
-export type StreakType = "weekly_workout_completion" | "daily_login" | "consistent_tracking"; // Added consistent_tracking
-
-/**
- * Represents a user's streak data for a specific type.
- */
-export interface Streak {
-  id: string; // UUID
-  user_id: string; // UUID FK to profiles
-  streak_type: StreakType;
+export interface UserStreak {
+  user_id: string; // UUID FK to auth.users
   current_streak: number;
   longest_streak: number;
-  last_incremented_at: string | null; // timestampz
+  last_streak_activity_date: string | null; // date in YYYY-MM-DD format
+  streak_broken_at: string | null; // timestamptz
+  streak_recovered_at: string | null; // timestamptz
+  streak_value_before_break: number | null;
+  last_paid_recovery_at: string | null; // timestamptz
+  created_at: string; // timestamptz
+  updated_at: string; // timestamptz
 }
 
 /**
- * Input type for potentially resetting or manually adjusting a streak (admin/internal use).
+ * Input type for manually recovering a streak (admin/internal use).
  */
-export interface UpdateStreakInput {
-  current_streak?: number;
-  longest_streak?: number;
-  last_incremented_at?: string | null;
+export interface RecoverStreakInput {
+  /**
+   * The date to set as the last streak activity date (YYYY-MM-DD format).
+   * If not provided, defaults to current date.
+   */
+  activity_date?: string;
+
+  /**
+   * The streak value to restore. If not provided, will use streak_value_before_break
+   * or default to 1 if that value is not available.
+   */
+  streak_value?: number;
+
+  /**
+   * Whether this is a paid recovery. Affects the last_paid_recovery_at field.
+   */
+  is_paid_recovery?: boolean;
 }
 
 /**
- * Data structure for returning streak information via API.
+ * Response type for streak information via API.
  */
-export interface UserStreaksResponse {
-  weekly_workout_completion?: Streak;
-  daily_login?: Streak;
-  consistent_tracking?: Streak;
-  // Add other streak types as needed
+export interface UserStreakResponse {
+  current_streak: number;
+  longest_streak: number;
+  last_streak_activity_date: string | null;
+  streak_broken_at: string | null;
+  streak_recovered_at: string | null;
+  days_until_expiry: number | null; // Calculated field, not stored in DB
 }

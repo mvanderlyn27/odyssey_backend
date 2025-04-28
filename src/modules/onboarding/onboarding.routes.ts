@@ -12,7 +12,35 @@ const completeOnboardingSchema = {
       type: "object",
       properties: {
         message: { type: "string" },
-        profile: { $ref: "#/components/schemas/Profile" }, // Reference the Profile schema
+        // Replace $ref with inline schema definition
+        profile: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            username: { type: ["string", "null"] },
+            full_name: { type: ["string", "null"] },
+            avatar_url: { type: ["string", "null"] },
+            onboarding_complete: { type: "boolean" },
+            created_at: { type: "string", format: "date-time" },
+            updated_at: { type: ["string", "null"], format: "date-time" },
+            experience_points: { type: "integer" },
+            level: { type: "integer" },
+            preferred_unit: { type: "string", enum: ["metric", "imperial"] },
+            height_cm: { type: ["integer", "null"] },
+            current_goal_id: { type: ["string", "null"], format: "uuid" },
+            subscription_status: { type: "string", enum: ["free", "trial", "active", "canceled"] },
+          },
+          required: [
+            "id",
+            "onboarding_complete",
+            "created_at",
+            "experience_points",
+            "level",
+            "preferred_unit",
+            "subscription_status",
+          ],
+          additionalProperties: false,
+        },
       },
       required: ["message", "profile"],
     },
@@ -58,6 +86,4 @@ async function onboardingRoutes(fastify: FastifyInstance, options: FastifyPlugin
 }
 
 // Wrap with fp and define prefix here
-export default fp(async (fastify: FastifyInstance) => {
-  fastify.register(onboardingRoutes, { prefix: "/onboarding" });
-});
+export default onboardingRoutes;

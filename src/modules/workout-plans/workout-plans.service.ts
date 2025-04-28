@@ -280,7 +280,7 @@ export const generateWorkoutPlan = async (
     .from("equipment")
     .select("name")
     .in("id", preferences.available_equipment_ids);
-  const { data: possibleExercises } = await supabase.from("exercises").select("name, equipment_required");
+  const { data: possibleExercises } = await supabase.from("exercises").select("id, name, equipment_required");
 
   // Construct a detailed prompt
   const prompt = `
@@ -349,17 +349,167 @@ export const generateWorkoutPlan = async (
 export const importWorkoutPlan = async (
   fastify: FastifyInstance,
   userId: string,
-  importData: ImportPlanInput // Use specific input type
+  importData: ImportPlanInput
 ): Promise<DbWorkoutPlan> => {
-  // Return DbWorkoutPlan
   fastify.log.info(`Importing workout plan for user: ${userId}`);
   if (!fastify.supabase) throw new Error("Supabase client not available");
   if (!fastify.gemini) throw new Error("Gemini client not available");
 
-  // Note: Implementation requires handling text/OCR, Gemini parsing, and transactional DB inserts (likely via RPC).
-  // Placeholder implementation:
-  fastify.log.warn("AI plan import functionality is complex and not fully implemented.");
-  throw new Error("AI plan import not implemented yet.");
+  const supabase = fastify.supabase;
+  const gemini = fastify.gemini;
+
+  try {
+    // 1. Extract content from the import data
+    const { text_content, image_content, plan_name, goal_type } = importData;
+    let contentToProcess: string;
+    let imageToProcess: string | undefined;
+
+    // Determine what content to process
+    if (image_content) {
+      imageToProcess = image_content;
+      contentToProcess = "Please extract the workout plan from this image.";
+    } else if (text_content) {
+      contentToProcess = text_content;
+    } else {
+      throw new Error("No content provided for import. Please provide either text or an image.");
+    }
+
+    // 2. Prepare the prompt for Gemini
+    const prompt = `
+      Extract and structure a workout plan from the following content:
+      ${contentToProcess}
+      
+      Please format the workout plan with the following details:
+      - Plan name (use "${plan_name || "Imported Workout Plan"}" if not specified)
+      - Plan type (full_body, split, upper_lower, push_pull_legs, or other)
+      - Goal type (${goal_type || "general fitness"} if not specified in the content)
+      - Days per week
+      - For each workout day:
+        - Name of the workout
+        - Day of the week (1-7, where 1 is Monday)
+        - Exercises with:
+          - Exercise name (match to our exercise library if possible)
+          - Sets
+          - Reps
+          - Rest time in seconds
+      
+      Structure the output as a complete workout plan that can be saved to our database.
+    `;
+
+    // 3. Call Gemini to process the content
+    const model = gemini.getGenerativeModel({
+      model: process.env.GEMINI_MODEL_NAME!,
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: exercisePlanSchema as Schema,
+      },
+    });
+
+    // Process with image if available
+    let result;
+    if (imageToProcess) {
+      // Convert base64 image to parts for Gemini
+      const imageParts = [
+        {
+          inlineData: {
+            data: imageToProcess,
+            mimeType: "image/jpeg", // Adjust based on actual image format
+          },
+        },
+      ];
+
+      result = await model.generateContent([prompt, ...imageParts]);
+    } else {
+      result = await model.generateContent(prompt);
+    }
+
+    const response = result.response;
+    const planJson = JSON.parse(response.text());
+
+    fastify.log.info("Received extracted plan from Gemini:", planJson);
+
+    // 4. Validate the extracted plan structure
+    if (!planJson.name || !planJson.workouts || !Array.isArray(planJson.workouts)) {
+      throw new Error("Invalid plan structure extracted from content");
+    }
+
+    // 5. Map exercise names to IDs from our database
+    const exerciseNames = planJson.workouts.flatMap((workout: { exercises: { name: string }[] }) =>
+      workout.exercises.map((exercise) => exercise.name.toLowerCase())
+    );
+
+    const { data: exercisesData } = await supabase.from("exercises").select("id, name").in("name", exerciseNames);
+
+    // Create a mapping of exercise names to IDs
+    const exerciseNameToId = new Map();
+    if (exercisesData) {
+      exercisesData.forEach((exercise) => {
+        exerciseNameToId.set(exercise.name.toLowerCase(), exercise.id);
+      });
+    }
+
+    // 6. Save the plan to the database using a transaction via RPC
+    const planData = {
+      name: planJson.name,
+      description: planJson.description || `Imported on ${new Date().toLocaleDateString()}`,
+      goal_type: goal_type || planJson.goal_type || "general fitness",
+      plan_type: planJson.plan_type || "other",
+      days_per_week: planJson.days_per_week || planJson.workouts.length,
+      created_by: "ai", // Mark as AI-imported
+      source_description: "Imported from " + (image_content ? "image" : "text"),
+      is_active: false, // Default to inactive
+      workouts: planJson.workouts.map(
+        (
+          workout: {
+            name: string;
+            day_of_week?: number;
+            exercises: Array<{ name: string; sets?: number; reps?: string; rest_seconds?: number }>;
+          },
+          index: number
+        ) => ({
+          name: workout.name,
+          day_of_week: workout.day_of_week || index + 1,
+          order_in_plan: index + 1,
+          exercises: workout.exercises.map((exercise, exIndex) => {
+            const exerciseId = exerciseNameToId.get(exercise.name.toLowerCase());
+            if (!exerciseId) {
+              fastify.log.warn(`Exercise not found in database: ${exercise.name}`);
+            }
+
+            return {
+              exercise_id: exerciseId || null, // Will need to handle missing exercises
+              exercise_name: exercise.name, // Keep the name for reference
+              order_in_workout: exIndex + 1,
+              target_sets: exercise.sets || 3,
+              target_reps: exercise.reps || "8-12",
+              target_rest_seconds: exercise.rest_seconds || 60,
+            };
+          }),
+        })
+      ),
+    };
+
+    // Call the RPC function to create the plan with all related records
+    const { data: createdPlanData, error: rpcError } = await supabase.rpc("create_imported_plan", {
+      user_id_input: userId,
+      plan_data: planData,
+    });
+
+    if (rpcError) {
+      fastify.log.error({ error: rpcError, userId, planData }, "Error saving imported plan via RPC");
+      throw new Error(`Failed to save imported plan: ${rpcError.message}`);
+    }
+
+    if (!createdPlanData) {
+      throw new Error("Failed to retrieve created plan data after RPC call.");
+    }
+
+    // Return the created plan
+    return createdPlanData as DbWorkoutPlan;
+  } catch (error: any) {
+    fastify.log.error(error, `Error importing workout plan for user ${userId}`);
+    throw new Error(`Failed to import workout plan: ${error.message}`);
+  }
 };
 
 export const updatePlanExercise = async (

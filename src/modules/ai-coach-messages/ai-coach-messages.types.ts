@@ -63,3 +63,9 @@ export interface UpdatedWorkoutPlanResponse {
   plan: WorkoutPlan; // The structured workout plan from Gemini
   text: string; // Text summary of the changes or the plan itself
 }
+export interface AiCoachSessionSummary {
+  session_id: string;
+  last_message_at?: string; // Example field
+  first_message_preview?: string; // Example field
+  // Add other relevant summary fields if returned by the API
+}

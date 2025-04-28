@@ -14,6 +14,8 @@ const createUserGoalSchema = {
       target_weight_kg: { type: ["number", "null"], minimum: 0 },
       target_muscle_kg: { type: ["number", "null"], minimum: 0 }, // Or maybe target lift numbers
       target_date: { type: ["string", "null"], format: "date" },
+      current_weight_kg: { type: ["number", "null"], minimum: 0 },
+      height_cm: { type: ["number", "null"], minimum: 0 },
     },
     required: ["goal_type"],
     additionalProperties: false,
@@ -83,4 +85,4 @@ async function userGoalsRoutes(fastify: FastifyInstance, options: FastifyPluginO
 }
 
 // Wrap with fp and define prefix in app.ts or main plugin file
-export default fp(userGoalsRoutes);
+export default userGoalsRoutes;

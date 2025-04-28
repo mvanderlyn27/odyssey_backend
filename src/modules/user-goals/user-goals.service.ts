@@ -6,8 +6,72 @@ interface CreateUserGoalInput {
   target_weight_kg?: number | null;
   target_muscle_kg?: number | null;
   target_date?: string | null;
+  current_weight_kg?: number | null;
+  height_cm?: number | null;
 }
 
+// Constants for weight and muscle change rates (based on healthy averages)
+const WEIGHT_LOSS_RATE_KG_PER_WEEK = 0.5; // Conservative estimate of 0.5kg per week
+const MUSCLE_GAIN_RATE_KG_PER_MONTH = 0.25; // Conservative estimate of 0.25kg per month
+
+/**
+ * Calculates the estimated completion date for a weight loss goal
+ * @param currentWeight Current weight in kg
+ * @param targetWeight Target weight in kg
+ * @returns Estimated completion date or null if inputs are invalid
+ */
+const calculateWeightLossCompletionDate = (
+  currentWeight: number,
+  targetWeight: number
+): Date | null => {
+  if (!currentWeight || !targetWeight || currentWeight <= targetWeight) {
+    return null;
+  }
+  
+  const weightToLose = currentWeight - targetWeight;
+  const weeksNeeded = weightToLose / WEIGHT_LOSS_RATE_KG_PER_WEEK;
+  const daysNeeded = Math.ceil(weeksNeeded * 7);
+  
+  const estimatedDate = new Date();
+  estimatedDate.setDate(estimatedDate.getDate() + daysNeeded);
+  
+  return estimatedDate;
+};
+
+/**
+ * Calculates the estimated completion date for a muscle gain goal
+ * @param currentMuscle Current muscle mass in kg (estimated if not provided)
+ * @param targetMuscle Target muscle mass in kg
+ * @returns Estimated completion date or null if inputs are invalid
+ */
+const calculateMuscleGainCompletionDate = (
+  currentWeight: number,
+  targetMuscle: number
+): Date | null => {
+  if (!currentWeight || !targetMuscle) {
+    return null;
+  }
+  
+  // Rough estimate: assume current muscle mass is about 40% of total weight for an average person
+  const estimatedCurrentMuscle = currentWeight * 0.4;
+  const muscleToGain = targetMuscle - estimatedCurrentMuscle;
+  
+  if (muscleToGain <= 0) {
+    return null;
+  }
+  
+  const monthsNeeded = muscleToGain / MUSCLE_GAIN_RATE_KG_PER_MONTH;
+  const daysNeeded = Math.ceil(monthsNeeded * 30);
+  
+  const estimatedDate = new Date();
+  estimatedDate.setDate(estimatedDate.getDate() + daysNeeded);
+  
+  return estimatedDate;
+};
+
+/**
+ * Creates a new user goal with estimated completion date
+ */
 export const createUserGoal = async (
   fastify: FastifyInstance,
   userId: string,
@@ -34,9 +98,40 @@ export const createUserGoal = async (
       throw new Error(`Failed to deactivate existing goals: ${updateError.message}`);
     }
 
-    // 2. Calculate estimated_completion_date (Placeholder - keep null for now)
-    // Note: PRD suggests calculating this, but logic is complex and not implemented yet.
-    const estimated_completion_date = null;
+    // 2. Calculate estimated_completion_date based on goal type and user metrics
+    let estimated_completion_date: string | null = null;
+    
+    if (inputGoalData.goal_type === 'lose_weight' && 
+        inputGoalData.current_weight_kg && 
+        inputGoalData.target_weight_kg) {
+      const completionDate = calculateWeightLossCompletionDate(
+        inputGoalData.current_weight_kg,
+        inputGoalData.target_weight_kg
+      );
+      
+      if (completionDate) {
+        estimated_completion_date = completionDate.toISOString().split("T")[0];
+        fastify.log.info(`Estimated weight loss completion date: ${estimated_completion_date}`);
+      }
+    } 
+    else if (inputGoalData.goal_type === 'gain_muscle' && 
+             inputGoalData.current_weight_kg && 
+             inputGoalData.target_muscle_kg) {
+      const completionDate = calculateMuscleGainCompletionDate(
+        inputGoalData.current_weight_kg,
+        inputGoalData.target_muscle_kg
+      );
+      
+      if (completionDate) {
+        estimated_completion_date = completionDate.toISOString().split("T")[0];
+        fastify.log.info(`Estimated muscle gain completion date: ${estimated_completion_date}`);
+      }
+    }
+    
+    // If user provided a target date, we can use that instead of our calculation
+    if (inputGoalData.target_date) {
+      fastify.log.info(`User provided target date: ${inputGoalData.target_date}, using this instead of calculation`);
+    }
 
     // 3. Insert the new goal record
     const goalToInsert = {

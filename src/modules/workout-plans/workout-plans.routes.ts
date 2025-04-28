@@ -1,6 +1,6 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
-import { WorkoutPlan, PlanType } from "./workout-plans.types"; // Import necessary types
+import { WorkoutPlan, PlanType, ImportPlanInput, GeneratePlanInput } from "./workout-plans.types"; // Import necessary types
 import { GoalType } from "../user-goals/user-goals.types"; // Assuming GoalType is needed
 import {
   listWorkoutPlans,
@@ -8,7 +8,9 @@ import {
   getWorkoutPlan,
   updateWorkoutPlan,
   deleteWorkoutPlan,
-  activateWorkoutPlan, // Import the new service function
+  activateWorkoutPlan,
+  generateWorkoutPlan,
+  importWorkoutPlan, // Import the importWorkoutPlan service
 } from "./workout-plans.service";
 
 // Define types for request parameters, body, etc.
@@ -38,6 +40,11 @@ interface UpdateWorkoutPlanRequest
   extends FastifyRequest<{ Params: { planId: string }; Body: UpdateWorkoutPlanRequestBody }> {}
 
 interface DeleteWorkoutPlanRequest extends FastifyRequest<{ Params: { planId: string } }> {}
+
+// Define interfaces for generate and import plan requests
+interface GenerateWorkoutPlanRequest extends FastifyRequest<{ Body: GeneratePlanInput }> {}
+
+interface ImportWorkoutPlanRequest extends FastifyRequest<{ Body: ImportPlanInput }> {}
 
 /**
  * Encapsulates the routes for workout plan management.
@@ -354,8 +361,7 @@ async function workoutPlanRoutes(fastify: FastifyInstance, opts: FastifyPluginOp
   );
 
   // --- POST /plans/generate --- (Generate plan using AI)
-  // TODO: Define schema for request body (user preferences) and response (generated plan)
-  fastify.post(
+  fastify.post<{ Body: GeneratePlanInput }>(
     "/generate",
     {
       preHandler: [fastify.authenticate], // Add subscription check middleware later
@@ -363,20 +369,59 @@ async function workoutPlanRoutes(fastify: FastifyInstance, opts: FastifyPluginOp
         tags: ["Workout Plans", "AI"],
         summary: "Generate a workout plan using AI based on user preferences",
         security: [{ bearerAuth: [] }],
-        // TODO: Add request body schema
-        // TODO: Add response schema (likely the created WorkoutPlan structure)
+        body: {
+          type: "object",
+          required: ["days_per_week", "experience_level"],
+          properties: {
+            days_per_week: { type: "integer", minimum: 1, maximum: 7 },
+            experience_level: { type: "string", enum: ["beginner", "intermediate", "advanced"] },
+            goal_type: { type: "string", enum: Object.values(GoalType) },
+            preferred_plan_type: {
+              type: "string",
+              enum: ["full_body", "split", "upper_lower", "push_pull_legs", "other"],
+            },
+            available_equipment_ids: {
+              type: "array",
+              items: { type: "string", format: "uuid" },
+            },
+            focus_areas: {
+              type: "array",
+              items: { type: "string" },
+            },
+          },
+        },
+        response: {
+          201: {
+            description: "Plan generated successfully",
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              name: { type: "string" },
+              description: { type: ["string", "null"] },
+              // Include other plan properties
+            },
+          },
+          401: {
+            description: "Unauthorized",
+            type: "object",
+            properties: { error: { type: "string" }, message: { type: "string" } },
+          },
+          500: {
+            description: "Server error",
+            type: "object",
+            properties: { error: { type: "string" }, message: { type: "string" } },
+          },
+        },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: GenerateWorkoutPlanRequest, reply: FastifyReply) => {
       const userId = request.user?.id;
       if (!userId) {
         return reply.code(401).send({ error: "Unauthorized" });
       }
       try {
-        // TODO: Implement generateWorkoutPlan service function
-        // const generatedPlan = await generateWorkoutPlan(fastify, userId, request.body);
-        // return reply.code(201).send(generatedPlan);
-        return reply.code(501).send({ message: "AI plan generation not implemented yet." });
+        const generatedPlan = await generateWorkoutPlan(fastify, userId, request.body);
+        return reply.code(201).send(generatedPlan);
       } catch (error: any) {
         fastify.log.error(error, "Failed to generate workout plan");
         return reply.code(500).send({ error: "Internal Server Error", message: error.message });
@@ -385,8 +430,7 @@ async function workoutPlanRoutes(fastify: FastifyInstance, opts: FastifyPluginOp
   );
 
   // --- POST /plans/import --- (Import plan using AI)
-  // TODO: Define schema for request body (text/image data) and response (imported plan)
-  fastify.post(
+  fastify.post<{ Body: ImportPlanInput }>(
     "/import",
     {
       preHandler: [fastify.authenticate], // Add subscription check middleware later
@@ -394,20 +438,53 @@ async function workoutPlanRoutes(fastify: FastifyInstance, opts: FastifyPluginOp
         tags: ["Workout Plans", "AI"],
         summary: "Import a workout plan from text or image using AI",
         security: [{ bearerAuth: [] }],
-        // TODO: Add request body schema (multipart/form-data likely needed for images)
-        // TODO: Add response schema (likely the created WorkoutPlan structure)
+        body: {
+          type: "object",
+          properties: {
+            text_content: { type: "string" },
+            image_content: { type: "string", description: "Base64 encoded image" },
+            plan_name: { type: "string" },
+            goal_type: { type: "string", enum: Object.values(GoalType) },
+          },
+          oneOf: [{ required: ["text_content"] }, { required: ["image_content"] }],
+        },
+        response: {
+          201: {
+            description: "Plan imported successfully",
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              name: { type: "string" },
+              description: { type: ["string", "null"] },
+              // Include other plan properties
+            },
+          },
+          400: {
+            description: "Bad Request",
+            type: "object",
+            properties: { error: { type: "string" }, message: { type: "string" } },
+          },
+          401: {
+            description: "Unauthorized",
+            type: "object",
+            properties: { error: { type: "string" }, message: { type: "string" } },
+          },
+          500: {
+            description: "Server error",
+            type: "object",
+            properties: { error: { type: "string" }, message: { type: "string" } },
+          },
+        },
       },
     },
-    async (request: FastifyRequest, reply: FastifyReply) => {
+    async (request: ImportWorkoutPlanRequest, reply: FastifyReply) => {
       const userId = request.user?.id;
       if (!userId) {
         return reply.code(401).send({ error: "Unauthorized" });
       }
       try {
-        // TODO: Implement importWorkoutPlan service function
-        // const importedPlan = await importWorkoutPlan(fastify, userId, request.body);
-        // return reply.code(201).send(importedPlan);
-        return reply.code(501).send({ message: "AI plan import not implemented yet." });
+        const importedPlan = await importWorkoutPlan(fastify, userId, request.body);
+        return reply.code(201).send(importedPlan);
       } catch (error: any) {
         fastify.log.error(error, "Failed to import workout plan");
         return reply.code(500).send({ error: "Internal Server Error", message: error.message });
@@ -503,23 +580,6 @@ async function workoutPlanRoutes(fastify: FastifyInstance, opts: FastifyPluginOp
       }
     }
   );
-
-  // --- Health Check --- (Optional but recommended)
-  fastify.get(
-    "/health",
-    {
-      schema: {
-        tags: ["Workout Plans"],
-        summary: "Health check for the workout plans module",
-        response: {
-          200: { description: "Service is healthy", type: "object", properties: { status: { type: "string" } } },
-        },
-      },
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      return reply.send({ status: "OK" });
-    }
-  );
 }
 
-export default fp(workoutPlanRoutes, { name: "workoutPlanRoutes" });
+export default workoutPlanRoutes;

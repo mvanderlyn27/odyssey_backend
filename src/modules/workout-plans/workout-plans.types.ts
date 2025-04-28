@@ -134,7 +134,10 @@ export interface GeneratePlanInput {
  */
 export interface ImportPlanInput {
   user_id: string;
-  source_description: string; // The text to parse
+  text_content: string;
+  image_content: string;
+  plan_name: string;
+  goal_type: GoalType;
   // Potentially image data if OCR is involved
 }
 

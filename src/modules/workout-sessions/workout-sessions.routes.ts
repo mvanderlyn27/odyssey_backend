@@ -66,8 +66,12 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
       const userId = request.user?.id;
       if (!userId) return reply.code(401).send({ error: "Unauthorized" });
       try {
-        // TODO: Implement getNextWorkout service function
-        return reply.code(501).send({ message: "Get next workout not implemented yet." });
+        const { data, completed, message, error } = await getNextWorkout(fastify, userId);
+        if (error) {
+          return reply.code(404).send({ error: "No workout found" });
+        } else {
+          return reply.send({ data, completed, message });
+        }
       } catch (error: any) {
         fastify.log.error(error, "Failed to get next workout");
         return reply.code(500).send({ error: "Internal Server Error", message: error.message });
@@ -96,23 +100,6 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
         fastify.log.error(error, "Failed to start workout session");
         return reply.code(500).send({ error: "Internal Server Error", message: error.message });
       }
-    }
-  );
-
-  // --- GET /workouts/live/{sessionId} --- (Get live workout state - Placeholder)
-  fastify.get<{ Params: SessionParams }>( // Apply type here
-    "/live/:sessionId",
-    {
-      preHandler: [fastify.authenticate],
-      // TODO: Add schema
-    },
-    async (request: FastifyRequest<{ Params: SessionParams }>, reply: FastifyReply) => {
-      // Apply type here
-      const userId = request.user?.id;
-      const { sessionId } = request.params;
-      if (!userId) return reply.code(401).send({ error: "Unauthorized" });
-      // This might be better handled via Supabase Realtime directly on the client
-      return reply.code(501).send({ message: "Live workout state via polling not implemented." });
     }
   );
 
@@ -217,4 +204,4 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
   );
 }
 
-export default fp(workoutSessionRoutes);
+export default workoutSessionRoutes;

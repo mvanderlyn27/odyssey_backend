@@ -1,7 +1,17 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
-import { processUserChatMessage, getChatHistory } from "./ai-coach-messages.service";
-import { AiCoachMessage, SendAiCoachMessageInput, AiCoachChatResponse } from "./ai-coach-messages.types"; // Import necessary types
+import {
+  processUserChatMessage,
+  getChatHistory,
+  getUserChatSessions, // Import new service function
+  deleteChatSession, // Import new service function
+} from "./ai-coach-messages.service";
+import {
+  AiCoachMessage,
+  SendAiCoachMessageInput,
+  AiCoachChatResponse,
+  AiCoachSessionSummary,
+} from "./ai-coach-messages.types"; // Import necessary types
 
 // Define interfaces/schemas for request validation (can be replaced with JSON schemas later)
 interface ChatBody {
@@ -10,6 +20,10 @@ interface ChatBody {
 }
 
 interface ChatHistoryParams {
+  sessionId: string;
+}
+
+interface DeleteChatParams {
   sessionId: string;
 }
 
@@ -71,6 +85,54 @@ async function aiCoachRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
       }
     }
   );
+
+  // --- GET /coach/sessions --- (Get all unique session IDs for the user)
+  fastify.get<{ Reply: AiCoachSessionSummary[] }>( // Reply is an array of session IDs (strings)
+    "/sessions",
+    {
+      preHandler: [fastify.authenticate],
+      // TODO: Add schema for response serialization if needed
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        const sessionSummaries = await getUserChatSessions(fastify, userId);
+        return reply.send(sessionSummaries);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed getting chat sessions for user ${userId}`);
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
+
+  // --- DELETE /coach/chat/{sessionId} --- (Delete a specific chat session)
+  fastify.delete<{ Params: DeleteChatParams }>( // Define Params
+    "/chat/:sessionId",
+    {
+      preHandler: [fastify.authenticate],
+      // TODO: Add schema
+    },
+    async (request: FastifyRequest<{ Params: DeleteChatParams }>, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { sessionId } = request.params;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        await deleteChatSession(fastify, userId, sessionId);
+        // Send 204 No Content for successful deletion, or a simple success message
+        return reply.code(200).send({ message: "Chat session deleted successfully." });
+        // return reply.code(204).send(); // Alternative: No content response
+      } catch (error: any) {
+        fastify.log.error(error, `Failed deleting chat session ${sessionId} for user ${userId}`);
+        // Handle potential errors, e.g., session not found (though delete is often idempotent)
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
 }
 
-export default fp(aiCoachRoutes);
+export default aiCoachRoutes;

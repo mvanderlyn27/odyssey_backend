@@ -222,17 +222,6 @@ const getMuscleStatsSchema = {
 type GetMuscleStatsSuccessResponse = FromSchema<(typeof getMuscleStatsSchema.response)[200]>;
 type GetMuscleStatsReply = GetMuscleStatsSuccessResponse | ErrorResponse;
 
-// --- Module Augmentation for request.user ---
-interface AuthenticatedUser {
-  id: string;
-}
-
-declare module "fastify" {
-  interface FastifyRequest {
-    user?: AuthenticatedUser;
-  }
-}
-
 /**
  * Plugin that registers all statistics-related routes.
  */
@@ -470,4 +459,4 @@ async function statsRoutes(fastify: FastifyInstance, options: FastifyPluginOptio
   );
 }
 
-export default fp(statsRoutes);
+export default statsRoutes;

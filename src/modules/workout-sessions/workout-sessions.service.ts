@@ -101,10 +101,26 @@ const sendLevelUpMessage = async (
   }
 };
 
+// Helper function to get UTC start and end of day
+const getUtcTodayRange = (): { startOfDay: string; endOfDay: string } => {
+  const now = new Date();
+  const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+  const endOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+  return {
+    startOfDay: startOfDay.toISOString(),
+    endOfDay: endOfDay.toISOString(),
+  };
+};
+
 export const getNextWorkout = async (
   fastify: FastifyInstance,
   userId: string
-): Promise<Tables<"plan_workouts"> | null | { message: string }> => {
+): Promise<{
+  data?: Tables<"plan_workouts"> | Tables<"workout_sessions">;
+  completed?: boolean;
+  message?: string;
+  error?: Error;
+}> => {
   fastify.log.info(`Getting next workout for user: ${userId}`);
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
@@ -112,10 +128,34 @@ export const getNextWorkout = async (
   const supabase = fastify.supabase;
 
   try {
+    // --- Check if a workout was completed today ---
+    const { startOfDay, endOfDay } = getUtcTodayRange();
+    const { data: sessionToday, error: todaySessionError } = await supabase
+      .from("workout_sessions")
+      .select("*") // Only need to know if one exists
+      .eq("user_id", userId)
+      .eq("status", "completed")
+      .gte("ended_at", startOfDay)
+      .lte("ended_at", endOfDay)
+      .limit(1)
+      .maybeSingle();
+
+    if (todaySessionError) {
+      fastify.log.error({ error: todaySessionError, userId }, "Error checking for workout completed today");
+      // Decide if this should be a hard error or proceed cautiously
+      // For now, let's proceed but log the error
+    }
+
+    if (sessionToday) {
+      return sessionToday; // Return message indicating completion
+    }
+
+    // --- If no workout today, proceed to find the next planned workout ---
+
     // 1. Find the user's active workout plan
     const { data: activePlan, error: planError } = await supabase
       .from("workout_plans")
-      .select("id, days_per_week, name") // Added name for potential message
+      .select("id, days_per_week, name")
       .eq("user_id", userId)
       .eq("is_active", true)
       .maybeSingle();
@@ -126,17 +166,17 @@ export const getNextWorkout = async (
     }
 
     if (!activePlan) {
-      return null; // Indicate no active plan
+      return { completed: false, message: "no active plan" }; // Indicate no active plan
     }
 
-    // 2. Find the last completed workout session for this plan
+    // 2. Find the *absolute* last completed workout session linked to a plan workout
+    //    (to determine the next in sequence, regardless of when it was completed)
     const { data: lastSession, error: sessionError } = await supabase
       .from("workout_sessions")
       .select("plan_workout_id, ended_at")
       .eq("user_id", userId)
-      // .eq("plan_workout_id", activePlan.id) // This might be wrong if user did an ad-hoc workout
-      .not("plan_workout_id", "is", null) // Only consider sessions linked to *some* plan workout
-      .in("status", ["completed"]) // Only consider completed
+      .not("plan_workout_id", "is", null)
+      .eq("status", "completed") // Changed from 'in' to 'eq' for clarity, assuming only 'completed' matters here
       .order("ended_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -149,7 +189,7 @@ export const getNextWorkout = async (
     // 3. Get all plan workouts for the active plan, ordered by order_in_plan
     const { data: planWorkouts, error: planWorkoutsError } = await supabase
       .from("plan_workouts")
-      .select("id, name, order_in_plan, day_of_week, plan_id") // Select necessary fields including missing ones
+      .select("id, name, order_in_plan, day_of_week, plan_id")
       .eq("plan_id", activePlan.id)
       .order("order_in_plan", { ascending: true });
 
@@ -159,7 +199,7 @@ export const getNextWorkout = async (
     }
 
     if (!planWorkouts || planWorkouts.length === 0) {
-      return { message: `Active plan "${activePlan.name}" has no workouts defined.` };
+      return { completed: false, message: "no workouts in plan" }; // Indicate no workouts in the plan;
     }
 
     let nextWorkout: Tables<"plan_workouts"> | null = null;
@@ -172,8 +212,7 @@ export const getNextWorkout = async (
       const lastWorkoutIndex = planWorkouts.findIndex((pw) => pw.id === lastSession.plan_workout_id);
 
       if (lastWorkoutIndex === -1) {
-        // Last completed workout's plan_workout_id isn't in the current active plan (plan modified? different plan?)
-        // Default to the first workout of the *active* plan
+        // Last completed workout's plan_workout_id isn't in the current active plan
         fastify.log.warn(
           { userId, lastSessionPlanWorkoutId: lastSession.plan_workout_id, activePlanId: activePlan.id },
           `Last completed planned workout not found in current active plan workouts. Suggesting first workout of active plan.`
@@ -186,11 +225,10 @@ export const getNextWorkout = async (
       }
     }
 
-    // Optionally fetch full details here, or let frontend do it. Returning the PlanWorkout object for now.
-    return nextWorkout;
+    return { data: nextWorkout, completed: false };
   } catch (error: any) {
     fastify.log.error(error, `Unexpected error getting next workout for user ${userId}`);
-    throw error;
+    return { error };
   }
 };
 
@@ -650,7 +688,22 @@ export const finishWorkoutSession = async (
       fastify.log.info(`Awarded ${awardedXp} XP to user ${userId}. New total: ${newTotalXp}, Level: ${newLevel}`);
     }
 
-    // --- 5. Send Level Up Message (if applicable) ---
+    // --- 5. Update User Streak ---
+    try {
+      // Import is done at the top of the file
+      const { updateStreakOnWorkout } = await import("../streaks/streaks.service");
+      // Use the current date for the workout completion
+      await updateStreakOnWorkout(fastify, userId, new Date());
+      fastify.log.info(`Updated streak for user ${userId} after workout completion`);
+    } catch (streakError: any) {
+      fastify.log.error(
+        { error: streakError, userId, sessionId },
+        "Error updating user streak after workout completion"
+      );
+      // Non-fatal error, continue with session completion
+    }
+
+    // --- 6. Send Level Up Message (if applicable) ---
     if (levelUpOccurred) {
       // Run this asynchronously, don't block the response for the AI message
       sendLevelUpMessage(fastify, userId, newLevel, currentProfile.username).catch((err) => {
@@ -658,7 +711,7 @@ export const finishWorkoutSession = async (
       });
     }
 
-    // --- 6. Update Workout Session Status ---
+    // --- 7. Update Workout Session Status ---
     const sessionUpdatePayload: TablesUpdate<"workout_sessions"> = {
       status: "completed",
       ended_at: new Date().toISOString(),

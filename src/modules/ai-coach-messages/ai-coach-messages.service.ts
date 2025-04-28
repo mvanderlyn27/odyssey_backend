@@ -16,7 +16,8 @@ import {
   AiCoachChatResponse,
   // FunctionCallResult, // Removed as it's not directly used in the response/handling flow
   FunctionCallType,
-  UpdatedWorkoutPlanResponse, // Import the new response type
+  UpdatedWorkoutPlanResponse,
+  AiCoachSessionSummary, // Import the new response type
 } from "./ai-coach-messages.types";
 import { WorkoutPlan } from "../workout-plans/workout-plans.types";
 import { Exercise } from "../exercises/exercises.types";
@@ -547,4 +548,154 @@ export const getChatHistory = async (
   }
 
   return data || [];
+};
+
+/**
+ * Fetches all unique session IDs for a given user.
+ * @param fastify - Fastify instance.
+ * @param userId - The ID of the user.
+ * Fetches summaries for all chat sessions for a given user.
+ * @param fastify - Fastify instance.
+ * @param userId - The ID of the user.
+ * @returns A promise that resolves to an array of AiCoachSessionSummary objects or throws an error.
+ */
+export const getUserChatSessions = async (
+  fastify: FastifyInstance,
+  userId: string
+): Promise<AiCoachSessionSummary[]> => {
+  fastify.log.info(`Fetching chat session summaries for user: ${userId}`);
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+  const supabase = fastify.supabase;
+
+  // 1. Get distinct session IDs
+  // We fetch all messages first to easily get distinct IDs and potentially use created_at later
+  // Note: This could be inefficient for users with *many* messages across sessions.
+  // A more optimized approach might use a database function or view if performance becomes an issue.
+  const { data: distinctSessionsData, error: distinctSessionsError } = await supabase
+    .from("ai_coach_messages")
+    .select("session_id")
+    .eq("user_id", userId);
+  // Removed ordering here as we just need the distinct IDs first.
+
+  if (distinctSessionsError) {
+    fastify.log.error({ error: distinctSessionsError, userId }, "Error fetching session IDs for summary");
+    throw new Error(`Failed to fetch chat sessions: ${distinctSessionsError.message}`);
+  }
+
+  const uniqueSessionIds = Array.from(new Set(distinctSessionsData?.map((item) => item.session_id) || []));
+  fastify.log.info({ userId, count: uniqueSessionIds.length }, "Found unique session IDs");
+
+  if (uniqueSessionIds.length === 0) {
+    return []; // No sessions found
+  }
+
+  // 2. Fetch details for each session concurrently
+  const sessionDetailsPromises = uniqueSessionIds.map(async (sessionId) => {
+    try {
+      // Fetch last message timestamp
+      const { data: lastMsgData, error: lastMsgError } = await supabase
+        .from("ai_coach_messages")
+        .select("created_at")
+        .eq("user_id", userId)
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(); // Use maybeSingle to handle potential empty sessions gracefully
+
+      if (lastMsgError) {
+        fastify.log.warn(
+          { error: lastMsgError, userId, sessionId },
+          "Error fetching last message timestamp for session summary"
+        );
+        return null; // Skip this session on error
+      }
+
+      // Fetch first message content
+      const { data: firstMsgData, error: firstMsgError } = await supabase
+        .from("ai_coach_messages")
+        .select("content")
+        .eq("user_id", userId)
+        .eq("session_id", sessionId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(); // Use maybeSingle
+
+      if (firstMsgError) {
+        fastify.log.warn(
+          { error: firstMsgError, userId, sessionId },
+          "Error fetching first message content for session summary"
+        );
+        return null; // Skip this session on error
+      }
+
+      // Truncate preview - ensure content exists before substring
+      const previewContent = firstMsgData?.content;
+      const preview = previewContent
+        ? previewContent.substring(0, 50) + (previewContent.length > 50 ? "..." : "")
+        : "Chat started"; // Provide a default if first message has no content (unlikely but possible)
+
+      // Ensure last_message_at is defined, otherwise skip
+      if (!lastMsgData?.created_at) {
+        fastify.log.warn({ userId, sessionId }, "Session found but no last message timestamp could be retrieved.");
+        return null;
+      }
+
+      return {
+        session_id: sessionId,
+        last_message_at: lastMsgData.created_at, // Already checked it exists
+        first_message_preview: preview,
+      };
+    } catch (err: any) {
+      fastify.log.error({ error: err, userId, sessionId }, "Unexpected error fetching session details for summary");
+      return null; // Skip this session on unexpected error
+    }
+  });
+
+  const sessionDetailsResults = await Promise.all(sessionDetailsPromises);
+
+  // 3. Filter out nulls (errors or sessions without timestamps)
+  // Remove the explicit type predicate 'is AiCoachSessionSummary' as it causes issues.
+  // The non-null check is sufficient, and the resulting objects conform to the structure.
+  const validSummaries = sessionDetailsResults.filter((summary) => summary !== null);
+
+  // 4. Sort by last message date, descending (most recent first)
+  // The filter above ensures that 'a' and 'b' are not null and have 'last_message_at'.
+  validSummaries.sort((a, b) => {
+    const dateA = new Date(a.last_message_at).getTime(); // Non-null assertion '!' removed as filter guarantees it
+    const dateB = new Date(b.last_message_at).getTime(); // Non-null assertion '!' removed as filter guarantees it
+    return dateB - dateA;
+  });
+
+  fastify.log.info({ userId, count: validSummaries.length }, "Successfully fetched and processed session summaries");
+  // The type of validSummaries should now correctly be inferred as AiCoachSessionSummary[]
+  return validSummaries;
+};
+
+/**
+ * Deletes all messages associated with a specific chat session for a user.
+ * @param fastify - Fastify instance.
+ * @param userId - The ID of the user owning the session.
+ * @param sessionId - The ID of the session to delete.
+ * @returns A promise that resolves when the deletion is complete or throws an error.
+ */
+export const deleteChatSession = async (fastify: FastifyInstance, userId: string, sessionId: string): Promise<void> => {
+  fastify.log.info(`Deleting chat session: ${sessionId} for user: ${userId}`);
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+
+  const { error } = await fastify.supabase
+    .from("ai_coach_messages")
+    .delete()
+    .eq("user_id", userId)
+    .eq("session_id", sessionId);
+
+  if (error) {
+    fastify.log.error({ error, userId, sessionId }, "Error deleting chat session from Supabase");
+    throw new Error(`Failed to delete chat session: ${error.message}`);
+  }
+
+  fastify.log.info(`Successfully deleted chat session: ${sessionId} for user: ${userId}`);
 };

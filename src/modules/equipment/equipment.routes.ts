@@ -112,4 +112,4 @@ async function equipmentRoutes(fastify: FastifyInstance, options: FastifyPluginO
 }
 
 // Register the plugin without a prefix, prefixes are handled by caller (e.g., app.ts) or specific routes above
-export default fp(equipmentRoutes);
+export default equipmentRoutes;

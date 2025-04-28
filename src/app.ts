@@ -25,19 +25,10 @@ import { GeminiService } from "./services/geminiService"; // For mockServices ty
 import statusRoutes from "./routes/status";
 // Removed deprecated workout route imports
 
-// --- Import New Module Routes ---
-import profileRoutes from "./modules/profile/profile.routes";
-import onboardingRoutes from "./modules/onboarding/onboarding.routes"; // Import consolidated onboarding routes
-import exercisesModuleRoutes from "./modules/exercises/exercises.routes"; // Import new exercises module routes
-import workoutPlanRoutes from "./modules/workout-plans/workout-plans.routes"; // Import workout plan routes
-import workoutSessionRoutes from "./modules/workout-sessions/workout-sessions.routes"; // Import workout session routes
-import streakRoutes from "./modules/streaks/streaks.routes"; // Import streak routes
-import aiCoachRoutes from "./modules/ai-coach-messages/ai-coach-messages.routes"; // Import AI coach routes
-import statsRoutes from "./modules/stats/stats.routes"; // Import stats routes
-
 // Define a more specific type for logger options
 import { PinoLoggerOptions } from "fastify/types/logger";
 import { DestinationStream } from "pino";
+import fastifyAutoload from "@fastify/autoload";
 
 type LoggerOptions = PinoLoggerOptions | { level: string; transport: any } | { level: string; transports: any[] };
 
@@ -194,15 +185,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // Removed deprecated workout route registrations
 
   // --- Register New Module Routes ---
-  app.register(profileRoutes, { prefix: "/profile" });
-  app.register(exercisesModuleRoutes, { prefix: "/exercises" }); // Register exercises module
-  app.register(onboardingRoutes, { prefix: "/onboarding" }); // Register consolidated onboarding routes
-  app.register(workoutPlanRoutes, { prefix: "/workout-plans" }); // Register workout plan routes
-  app.register(workoutSessionRoutes, { prefix: "/workout-sessions" }); // Register workout session routes
-  app.register(streakRoutes, { prefix: "/streaks" }); // Register streak routes
-  app.register(aiCoachRoutes, { prefix: "/coach" }); // Register AI coach routes (prefix matches PRD)
-  app.register(statsRoutes, { prefix: "/stats" }); // Register stats routes
-
+  app.register(fastifyAutoload, {
+    dir: path.join(__dirname, "modules"),
+    options: { prefix: "/api" }, // Set a common prefix for all modules
+  });
   app.log.info("Explicitly registered all application routes.");
 
   return app;

@@ -178,4 +178,4 @@ async function exercisesRoutes(fastify: FastifyInstance, options: FastifyPluginO
   });
 }
 
-export default fp(exercisesRoutes);
+export default exercisesRoutes;
