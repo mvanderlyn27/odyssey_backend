@@ -59,7 +59,7 @@ export type DisplayWeightUnit = "kg" | "lb";
 // Interface for a workout plan set (as stored in DB)
 export interface PlanSet {
   id: string; // UUID
-  plan_exercise_id: string; // FK to plan_exercises
+  plan_exercise_id: string; // FK to workout_plan_day_exercises
   set_number: number;
   rep_min: number;
   rep_max: number;
@@ -183,7 +183,7 @@ export interface LogSetResponse {
 export interface WorkoutLogSet {
   id: string; // UUID
   log_id: string; // FK to workout_logs (Matches DB column and schema)
-  plan_exercise_id: string; // FK to plan_exercises
+  plan_exercise_id: string; // FK to workout_plan_day_exercises
   actual_exercise_library_id: string; // FK to exercises_library
   set_number: number;
   actual_reps: number;

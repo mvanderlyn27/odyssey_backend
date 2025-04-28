@@ -1,551 +1,936 @@
+Okay, thank you for providing the detailed type definitions! This allows for a much more accurate and complete API documentation outline.
+
+I have updated the outline below, integrating the specific types you provided.
+
+---
+
 # Aura Backend API Routes
 
 This document outlines the available API routes, grouped by module.
 
-**Note:** Input/Output structures are based on route definitions (`*.routes.ts`), service logic (`*.service.ts`), type definitions (`*.types.ts`), and inferred from database schemas where possible. Authentication (`bearerAuth`) is generally required unless otherwise specified. Type definitions refer to corresponding interfaces/types defined in the project. Structures marked with `(DB Schema)` are directly derived from database table definitions.
+**Note:** All routes are prefixed with `/api`. Input/Output structures are based on route definitions, provided types, and inferred from database schemas where possible. Authentication is generally required unless otherwise noted. Type definitions refer to corresponding interfaces/types defined in the project. Structures marked with `(DB Schema)` are directly derived from database table definitions.
 
 ---
 
-## AI Coach Messages (`/coach`)
+## AI Coach (`/api/ai-coach-messages`)
 
-*   **`POST /coach/chat`**
-    *   **Purpose:** Send a message from the user to the AI coach and get a response. Can optionally continue an existing session.
+```typescript
+// AiCoachMessage (DB Schema: ai_coach_messages)
+interface AiCoachMessage {
+  id: string; // UUID, Primary Key
+  user_id: string; // UUID, Foreign Key to profiles
+  session_id: string; // UUID
+  sender: "user" | "ai";
+  content: string;
+  created_at: string; // ISO 8601 Timestamp
+}
+
+// AiCoachChatResponse (Output for POST /chat)
+interface AiCoachChatResponse {
+  ai_message: AiCoachMessage;
+  // Directly include the possible data types returned by function calls
+  ai_function_response_data?: UpdatedWorkoutPlanResponse | { alternatives: Exercise[] }; // Based on FunctionCallType
+  session_id: string; // Return the session ID (new or existing)
+}
+
+// UpdatedWorkoutPlanResponse (Part of AiCoachChatResponse.ai_function_response_data)
+interface UpdatedWorkoutPlanResponse {
+  plan: WorkoutPlan; // See Workout Plans section for structure
+  text: string; // Text summary of the changes or the plan itself
+}
+
+// Exercise (Imported) - See Exercises section for structure
+// WorkoutPlan (Imported) - See Workout Plans section for structure
+```
+
+*   **`POST /api/ai-coach-messages/chat`**
+    *   **Purpose:** Send a message from the user to the AI coach and get a response, managing session state.
     *   **Authentication:** Required.
-    *   **Input:** `SendAiCoachMessageInput` (subset, excluding `user_id`)
-        ```typescript
-        {
-          message: string;
-          sessionId?: string; // UUID (Optional, to continue a session)
-        }
-        ```
-    *   **Output:** `AiCoachChatResponse`
-        ```typescript
-        // From ai-coach-messages.types.ts
-        {
-          ai_message: AiCoachMessage; // The AI's response message
-          session_id: string; // UUID (Either new or the one provided)
-          ai_function_response_data?: any; // Optional data if AI called a function
-        }
-        ```
-*   **`GET /coach/chat/{sessionId}`**
+    *   **Input:**
+        *   Body:
+            ```typescript
+            {
+              message: string;
+              sessionId?: string; // UUID (Optional: Provide to continue an existing session)
+            }
+            ```
+    *   **Output:**
+        *   `200 OK`: `AiCoachChatResponse` (Contains the AI's reply message, session ID, and potentially structured data if the AI triggered a function like modifying a plan or suggesting alternatives).
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Error during AI interaction or DB operation. `{ error: string; message?: string }`
+
+*   **`GET /api/ai-coach-messages/chat/{sessionId}`**
     *   **Purpose:** Retrieve the chat message history for a specific coaching session.
     *   **Authentication:** Required.
-    *   **Input:** `sessionId` (URL parameter, UUID)
-    *   **Output:** `AiCoachMessage[]`
-        ```typescript
-        // AiCoachMessage (DB Schema: ai_coach_messages)
-        {
-          id: string; // UUID, Primary Key
-          user_id: string; // UUID, Foreign Key to profiles
-          session_id: string; // UUID
-          sender: 'user' | 'ai';
-          content: string;
-          created_at: string; // ISO 8601 Timestamp
-          // Note: function_call and function_response fields exist in DB but might not be exposed directly here.
-        }[]
-        ```
+    *   **Input:**
+        *   URL Params: `sessionId` (UUID)
+        *   Query Params (Optional): `limit?: number`, `before_message_id?: string` (for pagination)
+    *   **Output:**
+        *   `200 OK`: `AiCoachMessage[]` (Sorted chronologically, newest first if using `before_message_id`)
+        *   `401 Unauthorized`: Authentication failed.
+        *   `404 Not Found`: Session not found or doesn't belong to user. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
 
 ---
 
-## Body Measurements (`/body-measurements`)
+## Body Measurements (`/api/body-measurements`)
 
-*   **`POST /`**
-    *   **Purpose:** Log a new body measurement entry (weight, body fat, etc.). At least one metric must be provided.
-    *   **Authentication:** Required.
-    *   **Input:** `Omit<LogBodyMeasurementInput, "user_id">`
-        ```typescript
-        // Based on body-measurements.types.ts -> LogBodyMeasurementInput
-        {
-          logged_at?: string; // ISO 8601 Timestamp (Defaults to now if omitted)
-          weight_kg?: number | null;
-          body_fat_percentage?: number | null;
-          other_metrics?: Record<string, number | string> | null; // JSONB for custom metrics
-        }
-        ```
-    *   **Output (201 Created):** `BodyMeasurement`
-        ```typescript
-        // BodyMeasurement (DB Schema: body_measurements)
-        {
-          id: string; // UUID, Primary Key
-          user_id: string; // UUID, Foreign Key to profiles
-          logged_at: string; // ISO 8601 Timestamp
-          weight_kg: number | null;
-          body_fat_percentage: number | null;
-          other_metrics: Record<string, number | string> | null; // JSONB
-        }
-        ```
-    *   **Output (400 Bad Request):** `{ error: string; message?: string }` (e.g., if no metrics provided)
-    *   **Output (401 Unauthorized):** `{ error: string }`
-    *   **Output (500 Internal Server Error):** `{ error: string; message?: string }`
-*   **`GET /:measurementId`**
-    *   **Purpose:** Get a specific body measurement entry by its ID.
-    *   **Authentication:** Required.
-    *   **Input:** `measurementId` (URL parameter, UUID)
-    *   **Output (200 OK):** `BodyMeasurement` (See structure above)
-    *   **Output (401 Unauthorized):** `{ error: string }`
-    *   **Output (404 Not Found):** `{ error: string; message?: string }`
-    *   **Output (500 Internal Server Error):** `{ error: string; message?: string }`
-*   **`PUT /:measurementId`**
-    *   **Purpose:** Update an existing body measurement entry. Only provided fields are updated.
-    *   **Authentication:** Required.
-    *   **Input:** `measurementId` (URL parameter, UUID), `UpdateBodyMeasurementInput` (Body)
-        ```typescript
-        // Based on body-measurements.types.ts -> UpdateBodyMeasurementInput
-        // All fields are optional. At least one must be provided.
-        {
-          logged_at?: string; // ISO 8601 Timestamp
-          weight_kg?: number | null;
-          body_fat_percentage?: number | null;
-          other_metrics?: Record<string, number | string> | null; // JSONB
-        }
-        ```
-    *   **Output (200 OK):** `BodyMeasurement` (Updated measurement - see structure above)
-    *   **Output (400 Bad Request):** `{ error: string; message?: string }` (e.g., if no fields provided)
-    *   **Output (401 Unauthorized):** `{ error: string }`
-    *   **Output (404 Not Found):** `{ error: string; message?: string }`
-    *   **Output (500 Internal Server Error):** `{ error: string; message?: string }`
-*   **`DELETE /:measurementId`**
-    *   **Purpose:** Delete a specific body measurement entry.
-    *   **Authentication:** Required.
-    *   **Input:** `measurementId` (URL parameter, UUID)
-    *   **Output (204 No Content):** (Successful deletion)
-    *   **Output (401 Unauthorized):** `{ error: string }`
-    *   **Output (404 Not Found):** `{ error: string; message?: string }`
-    *   **Output (500 Internal Server Error):** `{ error: string; message?: string }`
+```typescript
+// BodyMeasurement (DB Schema: body_measurements)
+interface BodyMeasurement {
+  id: string; // UUID, Primary Key
+  user_id: string; // UUID, Foreign Key to profiles
+  logged_at: string; // ISO 8601 Timestamp
+  weight_kg: number | null;
+  body_fat_percentage: number | null;
+  // Add other specific measurement fields as reflected in the DB schema (e.g., waist_cm)
+  other_metrics: Record<string, number | string> | null; // JSONB
+}
+```
 
----
-
-## Equipment (`/equipment`)
-
-*   **`GET /equipment`**
-    *   **Purpose:** List all available equipment types defined in the system.
-    *   **Authentication:** Required.
-    *   **Input:** `(None)`
-    *   **Output:** `Equipment[]`
-        ```typescript
-        // Equipment (DB Schema: equipment - Structure assumed, definition not provided in context)
-        {
-          id: string; // UUID, Primary Key
-          name: string;
-          // ... other potential fields like description, category, image_url etc.
-        }[]
-        ```
-*   **`GET /user-equipment`**
-    *   **Purpose:** Get the list of equipment the authenticated user owns/has access to.
-    *   **Authentication:** Required.
-    *   **Input:** `(None)`
-    *   **Output:** `Equipment[]` (See structure above)
-*   **`PUT /user-equipment`**
-    *   **Purpose:** Set or replace the list of equipment the authenticated user owns. This replaces all existing entries for the user.
+*   **`POST /api/body-measurements/`**
+    *   **Purpose:** Log a new body measurement entry (weight, body fat, etc.) for the authenticated user.
     *   **Authentication:** Required.
     *   **Input:**
-        ```typescript
-        {
-          equipment_ids: string[]; // Array of Equipment UUIDs the user owns
-        }
-        ```
+        *   Body: `Partial<Omit<BodyMeasurement, 'id' | 'user_id'>>` (Fields like `weight_kg`, `body_fat_percentage`, `logged_at` (optional), `other_metrics`)
     *   **Output:**
-        ```typescript
-        {
-          message: string; // e.g., "User equipment updated successfully"
-          count: number; // Number of equipment items linked to the user
-        }
-        ```
+        *   `201 Created`: `BodyMeasurement` (The newly created record)
+        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error during insertion. `{ error: string; message?: string }`
 
 ---
 
-## Exercises (`/exercises`)
+## Equipment (`/api/equipment`)
 
-*   **`GET /`**
+```typescript
+// Equipment (DB Schema: equipment - Assuming structure)
+interface Equipment {
+  id: string; // UUID, Primary Key
+  name: string;
+  description: string | null;
+  category: string | null; // e.g., 'barbell', 'dumbbell', 'machine', 'bodyweight'
+  image_url?: string | null;
+}
+```
+
+*   **`GET /api/equipment/`**
+    *   **Purpose:** List all available equipment types defined in the system.
+    *   **Authentication:** Required (Or potentially public).
+    *   **Input:** `(None)`
+    *   **Output:**
+        *   `200 OK`: `Equipment[]`
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`GET /api/equipment/user`**
+    *   **Purpose:** Get the list of equipment the authenticated user has indicated they own.
+    *   **Authentication:** Required.
+    *   **Input:** `(None)`
+    *   **Output:**
+        *   `200 OK`: `Equipment[]`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`PUT /api/equipment/user`**
+    *   **Purpose:** Set or replace the list of equipment the authenticated user owns.
+    *   **Authentication:** Required.
+    *   **Input:**
+        *   Body:
+            ```typescript
+            {
+              equipment_ids: string[]; // Array of Equipment UUIDs the user owns
+            }
+            ```
+    *   **Output:**
+        *   `200 OK`:
+            ```typescript
+            {
+              message: string; // e.g., "User equipment updated successfully."
+              count: number; // Number of equipment items now linked to the user
+            }
+            ```
+        *   `400 Bad Request`: Invalid input (e.g., non-existent UUIDs). `{ error: string; message?: string }`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error during transaction. `{ error: string; message?: string }`
+
+---
+
+## Exercises (`/api/exercises`)
+
+```typescript
+type PrimaryMuscleGroup =
+  | "chest" | "back" | "legs" | "shoulders" | "biceps"
+  | "triceps" | "abs" | "full_body" | "other";
+type ExerciseDifficulty = "beginner" | "intermediate" | "advanced";
+
+// Exercise (Based on exercises.types.ts)
+interface Exercise {
+  id: string; // UUID
+  name: string;
+  description: string | null;
+  primary_muscle_groups: PrimaryMuscleGroup[] | null;
+  secondary_muscle_groups: PrimaryMuscleGroup[] | null;
+  equipment_required: string[] | null; // Array of Equipment UUIDs
+  image_url: string | null;
+  difficulty: ExerciseDifficulty | null;
+}
+
+// CreateExerciseInput (Based on exercises.types.ts)
+interface CreateExerciseInput {
+  name: string;
+  description?: string | null;
+  primary_muscle_groups: PrimaryMuscleGroup[]; // Required for creation
+  secondary_muscle_groups?: PrimaryMuscleGroup[];
+  equipment_required_ids?: string[]; // Changed name to match type def
+  image_url?: string | null;
+  difficulty?: ExerciseDifficulty | null;
+}
+
+// UpdateExerciseInput (Based on exercises.types.ts)
+interface UpdateExerciseInput {
+  name?: string;
+  description?: string | null;
+  primary_muscle_groups?: PrimaryMuscleGroup[];
+  secondary_muscle_groups?: PrimaryMuscleGroup[];
+  equipment_required_ids?: string[]; // Changed name to match type def
+  image_url?: string | null;
+  difficulty?: ExerciseDifficulty | null;
+}
+
+// ListExercisesQuery (Based on exercises.types.ts)
+interface ListExercisesQuery {
+  search?: string;
+  primary_muscle_group?: PrimaryMuscleGroup; // Filter by one primary group
+  equipment_id?: string; // Filter by one equipment ID
+  difficulty?: ExerciseDifficulty;
+  limit?: number;
+  offset?: number;
+}
+```
+
+*   **`GET /api/exercises/`**
     *   **Purpose:** List exercises, optionally filtered by query parameters.
     *   **Authentication:** Required.
-    *   **Input (Query Parameters):**
-        *   `primary_muscle_group?: string`
-        *   `equipment_id?: string` (UUID, checks if exercise requires this equipment)
-        *   *(Other potential filters based on `listExercises` service)*
-    *   **Output:** `Exercise[]`
-        ```typescript
-        // Exercise (DB Schema: exercises - Structure based on service/types)
-        {
-          id: string; // UUID, Primary Key
-          name: string;
-          description: string | null;
-          instructions: string[] | null; // Array of instruction steps
-          primary_muscle_groups: string[] | null; // Array of muscle group names
-          secondary_muscle_groups: string[] | null; // Array of muscle group names
-          equipment_required: string[] | null; // Array of Equipment UUIDs
-          difficulty_level: 'beginner' | 'intermediate' | 'advanced' | null;
-          video_url: string | null;
-          thumbnail_url: string | null;
-          created_at: string; // ISO 8601 Timestamp
-          updated_at: string; // ISO 8601 Timestamp
-        }[]
-        ```
-*   **`GET /search`**
-    *   **Purpose:** Search for exercises based on query parameters.
+    *   **Input:**
+        *   Query Params: `ListExercisesQuery` (Optional fields: `search`, `primary_muscle_group`, `equipment_id`, `difficulty`, `limit`, `offset`)
+    *   **Output:**
+        *   `200 OK`: `Exercise[]`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`GET /api/exercises/search`**
+    *   **Purpose:** Search for exercises based on a search term (e.g., name). *Note: Functionality might overlap with `GET /exercises/?search=term`*.
     *   **Authentication:** Required.
-    *   **Input (Query Parameters):**
-        *   `name?: string` (Performs case-insensitive partial match)
-        *   *(Other potential search criteria based on `searchExercises` service)*
-    *   **Output:** `Exercise[]` (See structure above)
-*   **`GET /:exerciseId`**
+    *   **Input:**
+        *   Query Params: `query: string` (or use `search` from `ListExercisesQuery`), `limit`, `offset`, etc.
+    *   **Output:**
+        *   `200 OK`: `Exercise[]`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`GET /api/exercises/{exerciseId}`**
     *   **Purpose:** Get details for a specific exercise by its ID.
     *   **Authentication:** Required.
-    *   **Input:** `exerciseId` (URL parameter, UUID)
-    *   **Output:** `Exercise` (See structure above)
-*   **`GET /:exerciseId/alternatives`**
-    *   **Purpose:** Suggest alternative exercises for a given exercise, considering user's available equipment. Uses AI (Gemini).
+    *   **Input:**
+        *   URL Params: `exerciseId` (UUID)
+    *   **Output:**
+        *   `200 OK`: `Exercise`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `404 Not Found`: Exercise not found. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`GET /api/exercises/{exerciseId}/alternatives`**
+    *   **Purpose:** Suggest alternative exercises based on similar muscle groups, equipment, etc. (Logic likely internal, may use AI or predefined rules).
     *   **Authentication:** Required.
-    *   **Input:** `exerciseId` (URL parameter, UUID)
-    *   **Output:** `Exercise[]` (List of suggested alternative exercises - structure as above, potentially simplified based on AI response format)
-        *Note: The AI response format might be slightly different, but the service aims to return `Exercise`-like objects.*
-*   **`POST /`** *(Admin Only - Authorization Not Implemented in provided context)*
-    *   **Purpose:** Create a new exercise definition.
-    *   **Authentication:** Required (Admin role assumed).
-    *   **Input:** `Exercise` (Full exercise data, excluding `id`, `created_at`, `updated_at`)
-    *   **Output (201 Created):** `Exercise` (Created exercise - see structure above)
-*   **`PUT /:exerciseId`** *(Admin Only - Authorization Not Implemented in provided context)*
+    *   **Input:**
+        *   URL Params: `exerciseId` (UUID)
+        *   Query Params (Optional): `equipment_ids` (limit alternatives to user's available equipment)
+    *   **Output:**
+        *   `200 OK`: `Exercise[]` (List of alternative exercises)
+        *   `401 Unauthorized`: Authentication failed.
+        *   `404 Not Found`: Original exercise not found. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`: Error during suggestion logic or DB query. `{ error: string; message?: string }`
+
+*   **`POST /api/exercises/`** *(Admin Only)*
+    *   **Purpose:** Create a new exercise definition in the system.
+    *   **Authentication:** Required (Admin role check needed).
+    *   **Input:**
+        *   Body: `CreateExerciseInput`
+    *   **Output:**
+        *   `201 Created`: `Exercise` (The newly created exercise)
+        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `403 Forbidden`: User is not an admin.
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`PUT /api/exercises/{exerciseId}`** *(Admin Only)*
     *   **Purpose:** Update an existing exercise definition.
-    *   **Authentication:** Required (Admin role assumed).
-    *   **Input:** `exerciseId` (URL parameter, UUID), `Partial<Exercise>` (Body, subset of fields to update)
-    *   **Output:** `Exercise` (Updated exercise - see structure above)
-*   **`DELETE /:exerciseId`** *(Admin Only - Authorization Not Implemented in provided context)*
-    *   **Purpose:** Delete an exercise definition.
-    *   **Authentication:** Required (Admin role assumed).
-    *   **Input:** `exerciseId` (URL parameter, UUID)
-    *   **Output:** `204 No Content`
-*   **`GET /health`**
-    *   **Purpose:** Health check for the exercises module.
-    *   **Authentication:** Not Required.
+    *   **Authentication:** Required (Admin role check needed).
+    *   **Input:**
+        *   URL Params: `exerciseId` (UUID)
+        *   Body: `UpdateExerciseInput` (Partial fields to update)
+    *   **Output:**
+        *   `200 OK`: `Exercise` (The updated exercise)
+        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `403 Forbidden`: User is not an admin.
+        *   `404 Not Found`: Exercise not found. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`DELETE /api/exercises/{exerciseId}`** *(Admin Only)*
+    *   **Purpose:** Delete an exercise definition from the system.
+    *   **Authentication:** Required (Admin role check needed).
+    *   **Input:**
+        *   URL Params: `exerciseId` (UUID)
+    *   **Output:**
+        *   `204 No Content`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `403 Forbidden`: User is not an admin.
+        *   `404 Not Found`: Exercise not found. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`GET /api/exercises/health`**
+    *   **Purpose:** Basic health check endpoint for the exercises module.
+    *   **Authentication:** None (Public).
     *   **Input:** `(None)`
-    *   **Output:** `{ status: "OK", module: "exercises" }`
+    *   **Output:**
+        *   `200 OK`: `{ status: "OK", module: "exercises" }`
 
 ---
 
-## Onboarding (`/onboarding`)
+## Onboarding (`/api/onboarding`)
 
-*   **`POST /complete`**
-    *   **Purpose:** Mark the authenticated user's onboarding process as complete. Updates `profiles.onboarding_complete` to `true`.
+*   **`POST /api/onboarding/complete`**
+    *   **Purpose:** Mark the authenticated user's onboarding process as complete.
     *   **Authentication:** Required.
     *   **Input:** `(None)`
     *   **Output:**
-        ```typescript
-        {
-          message: string; // e.g., "Onboarding marked as complete."
-          profile: Profile; // The user's updated profile (see Profile structure below)
-        }
-        ```
-
-*(Note: Goal setting (`POST /goals`) and equipment selection (`PUT /equipment/user-equipment`) are typically part of the onboarding flow but are handled by their respective modules).*
+        *   `200 OK`:
+            ```typescript
+            {
+              message: string; // e.g., "Onboarding marked as complete."
+              profile: Profile; // Updated user profile, see Profile section for structure
+            }
+            ```
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error updating profile. `{ error: string; message?: string }`
 
 ---
 
-## Profile (`/profile`)
+## Profile (`/api/profile`)
 
-*   **`GET /`**
-    *   **Purpose:** Get the authenticated user's profile details.
+```typescript
+// Profile (DB Schema: profiles - Simplified Example)
+interface Profile {
+  id: string; // UUID, Primary Key (matches auth.users.id)
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null;
+  onboarding_complete: boolean;
+  created_at: string; // ISO 8601 Timestamp
+  updated_at: string; // ISO 8601 Timestamp
+  experience_points: number;
+  level: number;
+  preferred_unit: 'metric' | 'imperial';
+  height_cm: number | null;
+  current_goal_id: string | null; // UUID, Foreign Key to user_goals
+  subscription_status: 'free' | 'trial' | 'active' | 'canceled' | 'past_due';
+}
+```
+
+*   **`GET /api/profile/`**
+    *   **Purpose:** Get the profile information for the currently authenticated user.
     *   **Authentication:** Required.
     *   **Input:** `(None)`
-    *   **Output:** `Profile`
-        ```typescript
-        // Profile (DB Schema: profiles)
-        {
-          id: string; // UUID, Primary Key (matches auth.users.id)
-          username: string | null;
-          full_name: string | null;
-          avatar_url: string | null;
-          onboarding_complete: boolean;
-          created_at: string; // ISO 8601 Timestamp
-          updated_at: string; // ISO 8601 Timestamp
-          experience_points: number;
-          level: number;
-          preferred_unit: 'metric' | 'imperial';
-          height_cm: number | null;
-          current_goal_id: string | null; // UUID, Foreign Key to user_goals
-          subscription_status: 'free' | 'trial' | 'active' | 'canceled'; // Enum based on DB
-        }
-        ```
-*   **`PUT /`**
-    *   **Purpose:** Update the authenticated user's profile. Only provided fields are updated.
+    *   **Output:**
+        *   `200 OK`: `Profile`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `404 Not Found`: Profile record missing. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`PUT /api/profile/`**
+    *   **Purpose:** Update the profile information for the currently authenticated user.
     *   **Authentication:** Required.
-    *   **Input:** `Partial<Profile>` (Subset of mutable fields from Profile above)
-        ```typescript
-        // Example Input
-        {
-          username?: string;
-          full_name?: string;
-          avatar_url?: string; // Should likely involve an upload step elsewhere
-          preferred_unit?: 'metric' | 'imperial';
-          height_cm?: number | null;
-        }
-        ```
-    *   **Output:** `Profile` (Updated profile - see structure above)
+    *   **Input:**
+        *   Body: `Partial<Profile>` (Only provide fields to update)
+    *   **Output:**
+        *   `200 OK`: `Profile` (The updated profile)
+        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error during update. `{ error: string; message?: string }`
 
 ---
 
-## Stats (`/stats`)
+## Stats (`/api/stats`)
 
-*Note: Output structures are based on `stats.types.ts` and route schemas.*
+```typescript
+type TimePeriod = "day" | "week" | "month" | "year" | "all";
 
-*   **`GET /exercise/:exerciseId`**
-    *   **Purpose:** Get performance statistics for a specific exercise over a time period, optionally grouped.
+// ExerciseStats (Based on stats.types.ts)
+interface ExerciseStats {
+  total_reps: number;
+  total_weight_lifted: number; // Consider units (kg assumed)
+  max_weight_lifted: number; // Consider units (kg assumed)
+  grouped_stats: Record<
+    string, // Group key (e.g., 'YYYY-MM-DD', 'YYYY-WW', 'YYYY-MM', 'YYYY', 'all')
+    {
+      total_reps: number;
+      total_weight_lifted: number;
+      max_weight_lifted: number;
+    }
+  >;
+}
+
+// SessionExerciseStat (Based on stats.types.ts)
+interface SessionExerciseStat {
+  exercise_name: string;
+  total_reps: number;
+  total_weight_lifted: number;
+  max_weight_lifted: number;
+  is_personal_record: boolean; // Calculated field
+}
+
+// SessionStats (Based on stats.types.ts)
+interface SessionStats {
+  session_id: string;
+  user_id: string;
+  total_reps: number;
+  total_weight_lifted: number;
+  max_weight_lifted_overall: number;
+  exercises: Record<string, SessionExerciseStat>; // Keyed by exercise_id
+}
+
+// TopExerciseStat (Based on stats.types.ts)
+interface TopExerciseStat {
+  exercise_id: string;
+  name: string; // Exercise name
+  max_weight?: number; // Used for top_exercises_by_weight
+  count?: number; // Used for top_exercises_by_frequency
+}
+
+// UserStats (Based on stats.types.ts)
+interface UserStats {
+  total_workouts: number;
+  total_weight_lifted: number; // Overall sum
+  top_exercises_by_weight: TopExerciseStat[]; // Based on max weight logged
+  top_exercises_by_frequency: TopExerciseStat[]; // Based on number of times logged
+  grouped_workouts: Record<string, number>; // Group key (e.g., 'YYYY-MM') -> workout count
+}
+
+// MuscleGroupStat (Based on stats.types.ts)
+interface MuscleGroupStat {
+  name: string | null; // Name of the muscle group
+  last_trained: string | null; // ISO timestampz
+  muscle_ranking: string | null; // Calculated rank (e.g., "Novice", "Intermediate")
+}
+
+// BodyStats (Based on stats.types.ts)
+interface BodyStats {
+  muscle_group_stats: Record<string, MuscleGroupStat>; // Keyed by muscle group ID or name
+}
+
+// MuscleStats (Based on stats.types.ts)
+interface MuscleStats {
+  muscle_group_id: string; // ID or name identifying the group
+  name: string | null; // Name of the muscle group
+  last_trained: string | null; // ISO timestampz
+  muscle_ranking: string | null; // Calculated rank based on performance
+}
+```
+
+*   **`GET /api/stats/exercise/{exerciseId}`**
+    *   **Purpose:** Get performance statistics for a specific exercise for the user.
     *   **Authentication:** Required.
     *   **Input:**
-        *   `exerciseId` (URL parameter, UUID)
-        *   `timePeriod` (Query parameter: 'day', 'week', 'month', 'year', 'all')
-        *   `grouping` (Query parameter: 'day', 'week', 'month', 'year')
-    *   **Output (200 OK):** `ExerciseStats`
-        ```typescript
-        // From stats.types.ts -> ExerciseStats
-        {
-          total_reps: number;
-          total_weight_lifted: number; // Sum of (reps * weight) for all sets
-          max_weight_lifted: number; // Highest weight lifted in a single rep/set
-          grouped_stats: {
-            [groupKey: string]: { // groupKey format depends on 'grouping' (e.g., 'YYYY-MM-DD')
-              total_reps: number;
-              total_weight_lifted: number;
-              max_weight_lifted: number;
-            };
-          };
-        }
-        ```
-    *   **Output (Error):** `ErrorResponse` (`401`, `404`, `500`)
-*   **`GET /session/:sessionId`**
-    *   **Purpose:** Get statistics for a specific workout session, including performance per exercise and PR checks.
-    *   **Authentication:** Required (Checks ownership).
-    *   **Input:** `sessionId` (URL parameter, UUID)
-    *   **Output (200 OK):** `SessionStats`
-        ```typescript
-        // From stats.types.ts -> SessionStats
-        {
-          session_id: string; // UUID
-          user_id: string; // UUID
-          total_reps: number; // Total reps across all exercises in the session
-          total_weight_lifted: number; // Total volume (sum of reps * weight)
-          max_weight_lifted_overall: number; // Max weight lifted in any set during the session
-          exercises: {
-            [exerciseId: string]: { // Key is Exercise UUID
-              exercise_name: string;
-              total_reps: number;
-              total_weight_lifted: number;
-              max_weight_lifted: number; // Max weight for this exercise in this session
-              is_personal_record: boolean; // True if max_weight_lifted is the user's all-time best for this exercise
-            };
-          };
-        }
-        ```
-    *   **Output (Error):** `ErrorResponse` (`401`, `403`, `404`, `500`)
-*   **`GET /user`**
-    *   **Purpose:** Get overall user statistics aggregated over a time period, optionally grouped.
-    *   **Authentication:** Required.
-    *   **Input (Query Parameters):**
-        *   `timePeriod` ('day', 'week', 'month', 'year', 'all')
-        *   `grouping` ('day', 'week', 'month', 'year')
-    *   **Output (200 OK):** `UserStats`
-        ```typescript
-        // From stats.types.ts -> UserStats
-        {
-          total_workouts: number;
-          total_weight_lifted: number; // Total volume across all workouts in period
-          top_exercises_by_weight: { exercise_id: string; exercise_name: string; max_weight: number; }[]; // Top N exercises by max weight lifted
-          top_exercises_by_frequency: { exercise_id: string; exercise_name: string; count: number; }[]; // Top N exercises by number of times performed
-          grouped_workouts: {
-            [groupKey: string]: { // groupKey format depends on 'grouping'
-              count: number; // Number of workouts in this group
-              total_weight_lifted: number; // Total volume in this group
-            };
-          };
-        }
-        ```
-    *   **Output (Error):** `ErrorResponse` (`401`, `500`)
-*   **`GET /body`**
-    *   **Purpose:** Get body-level statistics, currently focused on muscle group training frequency/volume.
-    *   **Authentication:** Required.
-    *   **Input:** `(None)`
-    *   **Output (200 OK):** `BodyStats`
-        ```typescript
-        // From stats.types.ts -> BodyStats
-        {
-          muscle_group_stats: {
-            [muscleGroupId: string]: { // Key is Muscle Group ID/Name
-              name: string;
-              total_volume: number; // e.g., total weight lifted targeting this muscle
-              workout_count: number; // Number of workouts hitting this muscle
-              last_trained: string | null; // ISO 8601 Timestamp
-            };
-          };
-        }
-        ```
-    *   **Output (Error):** `ErrorResponse` (`401`, `500`)
-*   **`GET /muscle/:muscleId`**
-    *   **Purpose:** Get statistics for a specific muscle group over a time period.
+        *   URL Params: `exerciseId` (UUID)
+        *   Query Params (Optional): `timePeriod?: TimePeriod`, `grouping?: string` (e.g., "daily", "weekly")
+    *   **Output:**
+        *   `200 OK`: `ExerciseStats`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `404 Not Found`: Exercise not found or no stats available. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`: Error calculating stats. `{ error: string; message?: string }`
+
+*   **`GET /api/stats/session/{sessionId}`**
+    *   **Purpose:** Get aggregated statistics for a completed workout session.
     *   **Authentication:** Required.
     *   **Input:**
-        *   `muscleId` (URL parameter, likely string name or UUID)
-        *   `timePeriod` (Query parameter: 'day', 'week', 'month', 'year', 'all')
-    *   **Output (200 OK):** `MuscleStats`
-        ```typescript
-        // From stats.types.ts -> MuscleStats
-        {
-          muscle_group_id: string; // ID used in the query
-          name: string; // Name of the muscle group
-          last_trained: string | null; // ISO 8601 Timestamp
-          muscle_ranking: { // Ranking compared to other muscle groups for the user
-            rank: number;
-            total_groups: number;
-            metric: 'volume' | 'frequency'; // The metric used for ranking
-          } | null; // May be null if insufficient data
-          // Potentially add volume/frequency data for the period here too
-        }
-        ```
-    *   **Output (Error):** `ErrorResponse` (`401`, `404`, `500`)
+        *   URL Params: `sessionId` (UUID)
+    *   **Output:**
+        *   `200 OK`: `SessionStats`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `404 Not Found`: Session not found or doesn't belong to user. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`: Error calculating stats. `{ error: string; message?: string }`
+
+*   **`GET /api/stats/user`**
+    *   **Purpose:** Get overall user performance statistics.
+    *   **Authentication:** Required.
+    *   **Input:**
+        *   Query Params (Optional): `timePeriod?: TimePeriod`, `grouping?: string`
+    *   **Output:**
+        *   `200 OK`: `UserStats`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Error calculating stats. `{ error: string; message?: string }`
+
+*   **`GET /api/stats/body`**
+    *   **Purpose:** Get statistics related to body measurements and muscle groups.
+    *   **Authentication:** Required.
+    *   **Input:**
+        *   Query Params (Optional): `timePeriod?: TimePeriod` (might apply to trends not shown in `BodyStats` example)
+    *   **Output:**
+        *   `200 OK`: `BodyStats`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Error calculating stats. `{ error: string; message?: string }`
+
+*   **`GET /api/stats/muscle/{muscleGroupName}`**
+    *   **Purpose:** Get performance statistics aggregated by primary muscle group.
+    *   **Authentication:** Required.
+    *   **Input:**
+        *   URL Params: `muscleGroupName` (string, e.g., "Chest", "Legs")
+        *   Query Params (Optional): `timePeriod?: TimePeriod`
+    *   **Output:**
+        *   `200 OK`: `MuscleStats`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `404 Not Found`: Invalid muscle group name or no stats available. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`: Error calculating stats. `{ error: string; message?: string }`
 
 ---
 
-## Workout Sessions (`/workouts`)
+## Streaks (`/api/streaks`)
 
-*Note: Output structures for session and logged sets are inferred based on service function names and typical API responses. More specific types should be defined in `workout-sessions.types.ts`.*
+```typescript
+// UserStreakResponse (Based on streaks.types.ts)
+interface UserStreakResponse {
+  current_streak: number;
+  longest_streak: number;
+  last_streak_activity_date: string | null; // YYYY-MM-DD format
+  streak_broken_at: string | null; // ISO 8601 Timestamp
+  streak_recovered_at: string | null; // ISO 8601 Timestamp
+  days_until_expiry: number | null; // Calculated field
+}
 
-*   **`GET /workouts/next`**
-    *   **Purpose:** Get the next suggested workout for the authenticated user based on their active plan or history.
+// RecoverStreakInput (Based on streaks.types.ts)
+interface RecoverStreakInput {
+  activity_date?: string; // YYYY-MM-DD (Defaults to current date)
+  streak_value?: number; // Value to restore (Defaults logic handled server-side)
+  is_paid_recovery?: boolean; // Affects tracking field
+}
+```
+
+*   **`GET /api/streaks/me`**
+    *   **Purpose:** Get the current workout streak status for the authenticated user.
     *   **Authentication:** Required.
     *   **Input:** `(None)`
-    *   **Output (200 OK):**
-        ```typescript
-        {
-          data: PlanWorkout | null; // The next workout details (structure from plan_workouts/plan_workout_exercises) or null if none
-          completed: boolean; // Indicates if all workouts in the current plan are completed
-          message: string; // e.g., "Next workout retrieved", "Plan complete"
-        }
-        ```
-        *Note: `PlanWorkout` structure needs definition, likely joining `plan_workouts` and `plan_workout_exercises`.*
-    *   **Output (401 Unauthorized):** `{ error: string }`
-    *   **Output (404 Not Found):** `{ error: string }` (e.g., "No workout found")
-    *   **Output (500 Internal Server Error):** `{ error: string; message?: string }`
-*   **`POST /workouts/start`**
-    *   **Purpose:** Start a new workout session, optionally linked to a specific planned workout.
-    *   **Authentication:** Required.
-    *   **Input:** `StartSessionBody` (Optional)
-        ```typescript
-        {
-          plan_workout_id?: string; // UUID (Optional, links session to a planned workout)
-        }
-        ```
-    *   **Output (201 Created):** `WorkoutSession` (Created session details)
-        ```typescript
-        // WorkoutSession (DB Schema: workout_sessions - Partial)
-        {
-          id: string; // UUID, Primary Key
-          user_id: string; // UUID
-          plan_workout_id: string | null; // UUID or null
-          started_at: string; // ISO 8601 Timestamp
-          status: 'started';
-          // ... other fields like ended_at, notes, overall_feeling will be null/default initially
-        }
-        ```
-    *   **Output (401 Unauthorized):** `{ error: string }`
-    *   **Output (500 Internal Server Error):** `{ error: string; message?: string }`
-*   **`POST /workouts/{sessionId}/log`**
-    *   **Purpose:** Log a completed set for an exercise within an active workout session.
+    *   **Output:**
+        *   `200 OK`: `UserStreakResponse`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `404 Not Found`: Streak record not found. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`POST /api/streaks/recover`** *(Potential - Requires clear rules/logic)*
+    *   **Purpose:** Allow a user to recover a recently broken streak.
     *   **Authentication:** Required.
     *   **Input:**
-        *   `sessionId` (URL parameter, UUID)
-        *   `LogSetBody` (Body)
-            ```typescript
-            // Based on workout-sessions.routes.ts -> LogSetBody
-            // TODO: Define more specific type based on session_exercises table
-            {
-              exercise_id: string; // UUID of the exercise performed
-              plan_workout_exercise_id?: string; // UUID (Optional, links to the planned exercise set)
-              set_order: number; // The order of this set for the exercise in this session (e.g., 1, 2, 3)
-              logged_reps: number;
-              logged_weight_kg: number;
-              difficulty_rating?: number; // Optional (1-10)
-              notes?: string; // Optional
-            }
-            ```
-    *   **Output (201 Created):** `SessionExercise` (Logged set details)
-        ```typescript
-        // SessionExercise (DB Schema: session_exercises - Partial)
-        {
-          id: string; // UUID, Primary Key of the logged set
-          workout_session_id: string; // UUID
-          exercise_id: string; // UUID
-          plan_workout_exercise_id: string | null; // UUID or null
-          set_order: number;
-          logged_reps: number;
-          logged_weight_kg: number;
-          logged_at: string; // ISO 8601 Timestamp
-          difficulty_rating: number | null;
-          notes: string | null;
-          // ... other fields like was_successful_for_progression
-        }
-        ```
-    *   **Output (401 Unauthorized):** `{ error: string }`
-    *   **Output (404 Not Found):** If `sessionId` is invalid or doesn't belong to the user.
-    *   **Output (500 Internal Server Error):** `{ error: string; message?: string }`
-*   **`PUT /workouts/{sessionId}/exercises/{sessionExerciseId}`**
-    *   **Purpose:** Update the details of a previously logged exercise set.
+        *   Body: `RecoverStreakInput` (Optional fields)
+    *   **Output:**
+        *   `200 OK`: `UserStreakResponse` (Updated streak status)
+        *   `400 Bad Request`: Recovery not possible. `{ error: string; message?: string }`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Error during recovery logic or DB update. `{ error: string; message?: string }`
+
+---
+
+## User Goals (`/api/goals`)
+
+```typescript
+// GoalType Enum (Example - Define in user-goals.types.ts)
+type GoalType = 'lose_weight' | 'gain_muscle' | 'maintain' | 'improve_strength' | 'improve_endurance' | 'general_fitness';
+
+// UserGoal (DB Schema: user_goals - Simplified Example)
+interface UserGoal {
+  id: string; // UUID, Primary Key
+  user_id: string; // UUID, Foreign Key to profiles
+  goal_type: GoalType;
+  target_weight_kg: number | null;
+  target_body_fat_percentage: number | null;
+  target_date: string | null; // ISO 8601 Date
+  is_active: boolean;
+  created_at: string; // ISO 8601 Timestamp
+}
+
+// CreateUserGoalInput (Derived from UserGoal)
+interface CreateUserGoalInput {
+  goal_type: GoalType;
+  target_weight_kg?: number | null;
+  target_body_fat_percentage?: number | null;
+  target_date?: string | null; // ISO 8601 Date
+}
+```
+
+*   **`POST /api/goals`**
+    *   **Purpose:** Create a new primary fitness goal for the user or update the existing active goal. Sets `profiles.current_goal_id`.
     *   **Authentication:** Required.
     *   **Input:**
-        *   `sessionId` (URL parameter, UUID)
-        *   `sessionExerciseId` (URL parameter, UUID of the logged set)
-        *   `UpdateSetBody` (Body)
-            ```typescript
-            // Based on workout-sessions.routes.ts -> UpdateSetBody
-            // TODO: Define more specific type
-            // All fields are optional. At least one must be provided.
-            {
-              logged_reps?: number;
-              logged_weight_kg?: number;
-              difficulty_rating?: number | null;
-              notes?: string | null;
-              // Add other updatable fields from session_exercises if needed
-            }
-            ```
-    *   **Output (200 OK):** `SessionExercise` (Updated logged set details - see structure above)
-    *   **Output (400 Bad Request):** If no update fields are provided.
-    *   **Output (401 Unauthorized):** `{ error: string }`
-    *   **Output (404 Not Found):** If `sessionId` or `sessionExerciseId` is invalid or doesn't belong to the user.
-    *   **Output (500 Internal Server Error):** `{ error: string; message?: string }`
-*   **`DELETE /workouts/{sessionId}/exercises/{sessionExerciseId}`**
-    *   **Purpose:** Delete a previously logged exercise set.
+        *   Body: `CreateUserGoalInput`
+    *   **Output:**
+        *   `201 Created` (or `200 OK` if updating): `UserGoal` (The created or updated active goal)
+        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`GET /api/goals/current`**
+    *   **Purpose:** Get the user's currently active goal.
+    *   **Authentication:** Required.
+    *   **Input:** `(None)`
+    *   **Output:**
+        *   `200 OK`: `UserGoal | null` (The active goal or null if none is set)
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`GET /api/goals/history`**
+    *   **Purpose:** Get a history of the user's past goals.
     *   **Authentication:** Required.
     *   **Input:**
-        *   `sessionId` (URL parameter, UUID)
-        *   `sessionExerciseId` (URL parameter, UUID of the logged set)
-    *   **Output (204 No Content):** (Successful deletion)
-    *   **Output (401 Unauthorized):** `{ error: string }`
-    *   **Output (404 Not Found):** If `sessionId` or `sessionExerciseId` is invalid or doesn't belong to the user.
-    *   **Output (500 Internal Server Error):** `{ error: string; message?: string }`
-*   **`POST /workouts/{sessionId}/finish`**
-    *   **Purpose:** Mark a workout session as completed. Updates status, potentially triggers progression logic, and awards XP.
+        *   Query Params (Optional): `limit`, `offset`
+    *   **Output:**
+        *   `200 OK`: `UserGoal[]`
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+---
+
+## Workout Plans (`/api/workout-plans`)
+
+*Refer to the `workout-plans.types.ts` definitions provided earlier for `WorkoutPlan`, `PlanWorkout`, `PlanWorkoutExercise`, `CreateWorkoutPlanInput`, `UpdateWorkoutPlanInput`, `GeneratePlanInput`, `ImportPlanInput`, `UpdatePlanWorkoutExerciseInput`, `WorkoutPlanDetails`, `GoalType`, `PlanType`, `PlanCreator`.*
+
+*   **`GET /api/workout-plans/`**
+    *   **Purpose:** Retrieves a list of workout plans associated with the user.
     *   **Authentication:** Required.
-    *   **Input:**
-        *   `sessionId` (URL parameter, UUID)
-        *   `FinishSessionBody` (Body, Optional)
-            ```typescript
-            // Based on workout-sessions.routes.ts -> FinishSessionBody
-            // TODO: Define more specific type
-            {
-              notes?: string;
-              overall_feeling?: "easy" | "moderate" | "hard" | "very_hard";
-            }
-            ```
-    *   **Output (200 OK):** `WorkoutSessionCompletionResult` (Structure TBD - might include the updated session, XP awarded, level changes, etc.)
-        ```typescript
-        // Example structure (Needs definition)
-        {
-          session: WorkoutSession; // Updated session with status 'completed', ended_at, notes, feeling
-          xp_awarded: number;
-          new_level: number | null; // If level up occurred
-          progression_updates: any; // Details about any progression applied
-          message: string; // e.g., "Workout session completed successfully."
-        }
-        ```
-    *   **Output (401 Unauthorized):** `{ error: string }`
-    *   **Output (404 Not Found):** If `sessionId` is invalid or doesn't belong to the user.
-    *   **Output (500 Internal Server Error):** `{ error: string; message?: string }`
+    *   **Input:** `(None)`
+    *   **Output:**
+        *   `200 OK`: `WorkoutPlan[]` (List of basic plan details)
+        *   `401 Unauthorized`: Authentication failed.
+        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+
+*   **`POST /api/workout-plans/`**
+    *   **Purpose:** Creates a new workout plan shell for the user.
+    *   **Authentication:** Required.
+    *   **Input:** Body: `CreateWorkoutPlanInput` (`name` required)
+    *   **Output:**
+        *   `201 Created`: `WorkoutPlan` (The new plan)
+        *   `400 Bad Request`: Invalid input. `{ error: string; message?: string }`
+        *   `401 Unauthorized`.
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`GET /api/workout-plans/{planId}`**
+    *   **Purpose:** Retrieves the detailed structure of a specific plan.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID)
+    *   **Output:**
+        *   `200 OK`: `WorkoutPlanDetails` (Full structure with workouts/exercises)
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`PUT /api/workout-plans/{planId}`**
+    *   **Purpose:** Updates top-level details of a plan.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID), Body: `UpdateWorkoutPlanInput` (Partial)
+    *   **Output:**
+        *   `200 OK`: `WorkoutPlan` (Updated plan details)
+        *   `400 Bad Request`. `{ error: string; message?: string }`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`POST /api/workout-plans/{planId}/activate`**
+    *   **Purpose:** Sets a plan as the user's active plan.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID)
+    *   **Output:**
+        *   `200 OK`: `{ message: string }`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`POST /api/workout-plans/generate`**
+    *   **Purpose:** Generates a new plan using AI.
+    *   **Authentication:** Required.
+    *   **Input:** Body: `GeneratePlanInput`
+    *   **Output:**
+        *   `201 Created`: `WorkoutPlan` (Base details)
+        *   `400 Bad Request`. `{ error: string; message?: string }`
+        *   `401 Unauthorized`.
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`POST /api/workout-plans/import`**
+    *   **Purpose:** Imports a plan from text/image using AI.
+    *   **Authentication:** Required.
+    *   **Input:** Body: `ImportPlanInput`
+    *   **Output:**
+        *   `201 Created`: `WorkoutPlan` (Base details)
+        *   `400 Bad Request`. `{ error: string; message?: string }`
+        *   `401 Unauthorized`.
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`PUT /api/workout-plans/day-exercises/{planDayExerciseId}`**
+    *   **Purpose:** Updates details of a specific exercise within a workout plan day.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planDayExerciseId` (UUID), Body: `UpdateWorkoutPlanDayExerciseInput` (Partial)
+    *   **Output:**
+        *   `200 OK`: `WorkoutPlanDayExercise` (Updated exercise details)
+        *   `400 Bad Request`. `{ error: string; message?: string }`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`DELETE /api/workout-plans/{planId}`**
+    *   **Purpose:** Deletes a plan and its associated data.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID)
+    *   **Output:**
+        *   `204 No Content`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+### Workout Plan Days (`/api/workout-plans/{planId}/days`)
+
+*   **`POST /api/workout-plans/{planId}/days`**
+    *   **Purpose:** Adds a new workout day to a specific plan.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID), Body: `AddWorkoutPlanDayInput` (`name`, `order_in_plan` required)
+    *   **Output:**
+        *   `201 Created`: `WorkoutPlanDay` (The new day)
+        *   `400 Bad Request`. `{ error: string; message?: string }`
+        *   `401 Unauthorized`.
+        *   `404 Not Found` (Plan not found or user unauthorized). `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`GET /api/workout-plans/{planId}/days`**
+    *   **Purpose:** Lists all workout days for a specific plan.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID)
+    *   **Output:**
+        *   `200 OK`: `WorkoutPlanDay[]`
+        *   `401 Unauthorized`.
+        *   `500 Internal Server Error`. `{ error: string; message?: string }` (Could also be 404 if plan ownership check fails)
+
+*   **`GET /api/workout-plans/{planId}/days/{dayId}`**
+    *   **Purpose:** Retrieves details of a specific workout day.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID)
+    *   **Output:**
+        *   `200 OK`: `WorkoutPlanDay`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`PUT /api/workout-plans/{planId}/days/{dayId}`**
+    *   **Purpose:** Updates details of a specific workout day.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID), Body: `Partial<AddWorkoutPlanDayInput>`
+    *   **Output:**
+        *   `200 OK`: `WorkoutPlanDay` (Updated day details)
+        *   `400 Bad Request`. `{ error: string; message?: string }`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`DELETE /api/workout-plans/{planId}/days/{dayId}`**
+    *   **Purpose:** Deletes a specific workout day (and its exercises via cascade if configured).
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID)
+    *   **Output:**
+        *   `204 No Content`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+### Workout Plan Day Exercises (`/api/workout-plans/{planId}/days/{dayId}/exercises`)
+
+*   **`POST /api/workout-plans/{planId}/days/{dayId}/exercises`**
+    *   **Purpose:** Adds an exercise to a specific workout day.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID), Body: `AddWorkoutPlanDayExerciseInput` (`exercise_id`, `order_in_workout`, `target_sets`, `target_reps` required)
+    *   **Output:**
+        *   `201 Created`: `WorkoutPlanDayExercise` (The new exercise entry)
+        *   `400 Bad Request`. `{ error: string; message?: string }`
+        *   `401 Unauthorized`.
+        *   `404 Not Found` (Plan day not found or user unauthorized). `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`GET /api/workout-plans/{planId}/days/{dayId}/exercises`**
+    *   **Purpose:** Lists all exercises for a specific workout day, including exercise details.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID)
+    *   **Output:**
+        *   `200 OK`: `(WorkoutPlanDayExercise & { exercises: Exercise | null })[]`
+        *   `401 Unauthorized`.
+        *   `404 Not Found` (Plan day not found or user unauthorized). `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`GET /api/workout-plans/{planId}/days/{dayId}/exercises/{exerciseId}`**
+    *   **Purpose:** Retrieves details of a specific exercise entry within a workout day.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID), `exerciseId` (UUID of the *workout_plan_day_exercise* record)
+    *   **Output:**
+        *   `200 OK`: `WorkoutPlanDayExercise & { exercises: Exercise | null }`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`DELETE /api/workout-plans/{planId}/days/{dayId}/exercises/{exerciseId}`**
+    *   **Purpose:** Deletes a specific exercise entry from a workout day.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID), `exerciseId` (UUID of the *workout_plan_day_exercise* record)
+    *   **Output:**
+        *   `204 No Content`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+---
+
+## Workout Sessions (`/api/workout-sessions`)
+
+```typescript
+// WorkoutSession (DB Schema: workout_sessions - Simplified Example)
+interface WorkoutSession {
+  id: string; // UUID
+  user_id: string; // UUID
+  plan_workout_id: string | null; // UUID
+  started_at: string; // ISO 8601 Timestamp
+  ended_at: string | null; // ISO 8601 Timestamp
+  status: 'started' | 'paused' | 'completed' | 'skipped';
+  notes: string | null;
+  overall_feeling: 'easy' | 'moderate' | 'hard' | 'very_hard' | null;
+}
+
+// SessionExercise (DB Schema: session_exercises - Simplified Example)
+interface SessionExercise {
+  id: string; // UUID
+  workout_session_id: string; // UUID
+  exercise_id: string; // UUID
+  plan_workout_exercise_id: string | null; // UUID
+  set_order: number;
+  logged_reps: number;
+  logged_weight_kg: number;
+  logged_at: string; // ISO 8601 Timestamp
+  difficulty_rating: number | null; // 1-10
+  notes: string | null;
+  was_successful_for_progression: boolean | null;
+}
+
+// StartSessionInput (Define in workout-sessions.types.ts)
+interface StartSessionInput {
+  plan_workout_id?: string | null; // UUID
+}
+
+// LogSetInput (Define in workout-sessions.types.ts)
+interface LogSetInput {
+  exercise_id: string; // UUID
+  plan_workout_exercise_id?: string | null; // UUID
+  set_order: number;
+  logged_reps: number;
+  logged_weight_kg: number;
+  difficulty_rating?: number | null;
+  notes?: string | null;
+}
+
+// UpdateSetInput (Define in workout-sessions.types.ts)
+interface UpdateSetInput {
+  logged_reps?: number;
+  logged_weight_kg?: number;
+  difficulty_rating?: number | null;
+  notes?: string | null;
+}
+
+// FinishSessionInput (Define in workout-sessions.types.ts)
+interface FinishSessionInput {
+  notes?: string | null;
+  overall_feeling?: 'easy' | 'moderate' | 'hard' | 'very_hard' | null;
+}
+
+// NextWorkoutResponse (Define in workout-sessions.types.ts)
+interface NextWorkoutResponse {
+  data: (PlanWorkout & { exercises: PlanWorkoutExercise[] }) | null; // PlanWorkout, PlanWorkoutExercise from workout-plans.types.ts
+  message: string;
+}
+
+// WorkoutSessionCompletionResult (Define in workout-sessions.types.ts)
+interface WorkoutSessionCompletionResult {
+  session: WorkoutSession; // Updated session
+  xp_awarded: number;
+  new_level: number | null; // User's new level if changed
+  progression_updates?: any; // Info about updated weight suggestions
+  message: string;
+}
+```
+
+*   **`GET /api/workout-sessions/next`**
+    *   **Purpose:** Suggest the next workout session based on the user's active plan.
+    *   **Authentication:** Required.
+    *   **Input:** `(None)`
+    *   **Output:**
+        *   `200 OK`: `NextWorkoutResponse`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`: `{ message: string }` (e.g., "No active plan found", "Plan completed")
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`POST /api/workout-sessions/start`**
+    *   **Purpose:** Start a new workout session.
+    *   **Authentication:** Required.
+    *   **Input:** Body: `StartSessionInput` (Optional)
+    *   **Output:**
+        *   `201 Created`: `WorkoutSession` (Status 'started')
+        *   `401 Unauthorized`.
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`GET /api/workout-sessions/live/{sessionId}`** *(Not Implemented)*
+    *   **Purpose:** (Future use - Real-time updates).
+    *   **Input:** URL Params: `sessionId` (UUID)
+    *   **Output:** `501 Not Implemented`
+
+*   **`POST /api/workout-sessions/{sessionId}/log`**
+    *   **Purpose:** Log a completed set within a session.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `sessionId` (UUID), Body: `LogSetInput`
+    *   **Output:**
+        *   `201 Created`: `SessionExercise` (Logged set details)
+        *   `400 Bad Request`. `{ error: string; message?: string }`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }` (Session invalid/not started)
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`PUT /api/workout-sessions/{sessionId}/exercises/{sessionExerciseId}`**
+    *   **Purpose:** Update a previously logged set.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `sessionId` (UUID), `sessionExerciseId` (UUID), Body: `UpdateSetInput` (Partial)
+    *   **Output:**
+        *   `200 OK`: `SessionExercise` (Updated set details)
+        *   `400 Bad Request`. `{ error: string; message?: string }`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`DELETE /api/workout-sessions/{sessionId}/exercises/{sessionExerciseId}`**
+    *   **Purpose:** Delete a previously logged set.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `sessionId` (UUID), `sessionExerciseId` (UUID)
+    *   **Output:**
+        *   `204 No Content`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }`
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`POST /api/workout-sessions/{sessionId}/finish`**
+    *   **Purpose:** Mark a workout session as completed.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `sessionId` (UUID), Body: `FinishSessionInput` (Optional)
+    *   **Output:**
+        *   `200 OK`: `WorkoutSessionCompletionResult`
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }` (Session invalid/not started)
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
 
 ---

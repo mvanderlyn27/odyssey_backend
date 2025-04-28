@@ -1,6 +1,12 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
-import { WorkoutPlan, PlanType, ImportPlanInput, GeneratePlanInput } from "./workout-plans.types"; // Import necessary types
+import {
+  WorkoutPlan,
+  PlanType,
+  ImportPlanInput,
+  GeneratePlanInput,
+  UpdateWorkoutPlanDayExerciseInput, // Import the renamed type
+} from "./workout-plans.types"; // Import necessary types
 import { GoalType } from "../user-goals/user-goals.types"; // Assuming GoalType is needed
 import {
   listWorkoutPlans,
@@ -10,8 +16,21 @@ import {
   deleteWorkoutPlan,
   activateWorkoutPlan,
   generateWorkoutPlan,
-  importWorkoutPlan, // Import the importWorkoutPlan service
+  importWorkoutPlan,
+  updateWorkoutPlanDayExercise, // Use the renamed function name here
+  // Import workout plan day service functions
+  createWorkoutPlanDay,
+  listWorkoutPlanDays,
+  getWorkoutPlanDay,
+  updateWorkoutPlanDay,
+  deleteWorkoutPlanDay,
+  // Import workout plan day exercise service functions
+  createWorkoutPlanDayExercise,
+  listWorkoutPlanDayExercises,
+  getWorkoutPlanDayExercise,
+  deleteWorkoutPlanDayExercise,
 } from "./workout-plans.service";
+import { AddWorkoutPlanDayInput, AddWorkoutPlanDayExerciseInput } from "./workout-plans.types"; // Import input types
 
 // Define types for request parameters, body, etc.
 
@@ -45,6 +64,35 @@ interface DeleteWorkoutPlanRequest extends FastifyRequest<{ Params: { planId: st
 interface GenerateWorkoutPlanRequest extends FastifyRequest<{ Body: GeneratePlanInput }> {}
 
 interface ImportWorkoutPlanRequest extends FastifyRequest<{ Body: ImportPlanInput }> {}
+
+// --- Workout Plan Day Request/Response Types ---
+interface PlanDayParams {
+  planId: string;
+  dayId: string;
+}
+interface PlanIdParams {
+  planId: string;
+}
+
+interface CreatePlanDayRequest extends FastifyRequest<{ Params: PlanIdParams; Body: AddWorkoutPlanDayInput }> {}
+interface ListPlanDaysRequest extends FastifyRequest<{ Params: PlanIdParams }> {}
+interface GetPlanDayRequest extends FastifyRequest<{ Params: PlanDayParams }> {}
+interface UpdatePlanDayRequest
+  extends FastifyRequest<{ Params: PlanDayParams; Body: Partial<AddWorkoutPlanDayInput> }> {} // Use Partial for updates
+interface DeletePlanDayRequest extends FastifyRequest<{ Params: PlanDayParams }> {}
+// --- End Workout Plan Day Request/Response Types ---
+
+// --- Workout Plan Day Exercise Request/Response Types ---
+interface PlanDayExerciseParams extends PlanDayParams {
+  exerciseId: string;
+}
+
+interface CreatePlanDayExerciseRequest
+  extends FastifyRequest<{ Params: PlanDayParams; Body: AddWorkoutPlanDayExerciseInput }> {}
+interface ListPlanDayExercisesRequest extends FastifyRequest<{ Params: PlanDayParams }> {}
+interface GetPlanDayExerciseRequest extends FastifyRequest<{ Params: PlanDayExerciseParams }> {}
+interface DeletePlanDayExerciseRequest extends FastifyRequest<{ Params: PlanDayExerciseParams }> {}
+// --- End Workout Plan Day Exercise Request/Response Types ---
 
 /**
  * Encapsulates the routes for workout plan management.
@@ -492,46 +540,623 @@ async function workoutPlanRoutes(fastify: FastifyInstance, opts: FastifyPluginOp
     }
   );
 
-  // --- PUT /plans/exercises/{planExerciseId} --- (Update specific exercise in a plan)
-  // TODO: Define schema for request body (updated exercise details) and response
-  fastify.put<{ Params: { planExerciseId: string }; Body: any }>( // Replace 'any' with specific type
-    "/exercises/:planExerciseId",
+  // --- PUT /plans/day-exercises/{planDayExerciseId} --- (Update specific exercise in a plan day)
+  // Using the renamed type UpdateWorkoutPlanDayExerciseInput
+  fastify.put<{ Params: { planDayExerciseId: string }; Body: UpdateWorkoutPlanDayExerciseInput }>(
+    "/day-exercises/:planDayExerciseId", // Updated path segment
     {
       preHandler: [fastify.authenticate],
       schema: {
         tags: ["Workout Plans"],
-        summary: "Update details of a specific exercise within a workout plan",
+        summary: "Update details of a specific exercise within a workout plan day", // Updated summary
         security: [{ bearerAuth: [] }],
         params: {
           type: "object",
-          required: ["planExerciseId"],
+          required: ["planDayExerciseId"],
           properties: {
-            planExerciseId: { type: "string", format: "uuid", description: "ID of the plan_workout_exercise record" },
+            planDayExerciseId: {
+              type: "string",
+              format: "uuid",
+              description: "ID of the workout_plan_day_exercise record",
+            }, // Updated description
           },
         },
-        // TODO: Add request body schema (e.g., target_sets, target_reps)
-        // TODO: Add response schema (likely the updated plan_workout_exercise record)
+        body: {
+          // Added request body schema based on UpdateWorkoutPlanDayExerciseInput
+          type: "object",
+          minProperties: 1,
+          properties: {
+            target_sets: { type: "integer" },
+            target_reps: { type: "string" },
+            target_rest_seconds: { type: ["integer", "null"] },
+            current_suggested_weight_kg: { type: ["number", "null"] },
+            on_success_weight_increase_kg: { type: ["number", "null"] },
+          },
+        },
+        response: {
+          // Added response schema
+          200: {
+            description: "Plan day exercise updated successfully",
+            // Define properties based on WorkoutPlanDayExercise type
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              workout_plan_day_id: { type: "string", format: "uuid" },
+              exercise_id: { type: "string", format: "uuid" },
+              order_in_workout: { type: "integer" },
+              target_sets: { type: "integer" },
+              target_reps: { type: "string" },
+              target_rest_seconds: { type: ["integer", "null"] },
+              current_suggested_weight_kg: { type: ["number", "null"] },
+              on_success_weight_increase_kg: { type: ["number", "null"] },
+            },
+          },
+          // Add 400, 401, 404, 500
+        },
       },
     },
-    async (request: FastifyRequest<{ Params: { planExerciseId: string }; Body: any }>, reply: FastifyReply) => {
+    async (
+      request: FastifyRequest<{ Params: { planDayExerciseId: string }; Body: UpdateWorkoutPlanDayExerciseInput }>,
+      reply: FastifyReply
+    ) => {
       const userId = request.user?.id;
-      const { planExerciseId } = request.params;
+      const { planDayExerciseId } = request.params; // Renamed parameter
       const updateData = request.body;
 
       if (!userId) {
         return reply.code(401).send({ error: "Unauthorized" });
       }
       try {
-        // TODO: Implement updatePlanExercise service function
-        // const updatedExercise = await updatePlanExercise(fastify, userId, planExerciseId, updateData);
-        // return reply.send(updatedExercise);
-        return reply.code(501).send({ message: "Updating plan exercise not implemented yet." });
+        const updatedExercise = await updateWorkoutPlanDayExercise(fastify, userId, planDayExerciseId, updateData); // Corrected function call
+        return reply.send(updatedExercise);
+        // return reply.code(501).send({ message: "Updating plan exercise not implemented yet." }); // Original line removed
       } catch (error: any) {
-        fastify.log.error(error, `Failed to update plan exercise ${planExerciseId}`);
+        fastify.log.error(error, `Failed to update plan day exercise ${planDayExerciseId}`); // Updated log message
         return reply.code(500).send({ error: "Internal Server Error", message: error.message });
       }
     }
   );
+
+  // --- Workout Plan Days CRUD ---
+
+  // POST /workout-plans/:planId/days (Create a new day in a plan)
+  fastify.post<{ Params: PlanIdParams; Body: AddWorkoutPlanDayInput }>(
+    "/:planId/days",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        tags: ["Workout Plans"],
+        summary: "Add a workout day to a specific plan",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["planId"],
+          properties: { planId: { type: "string", format: "uuid" } },
+        },
+        body: {
+          type: "object",
+          required: ["name", "order_in_plan"],
+          properties: {
+            name: { type: "string" },
+            day_of_week: { type: ["integer", "null"], minimum: 1, maximum: 7 },
+            order_in_plan: { type: "integer", minimum: 1 },
+            // plan_id is from the URL param, not body
+          },
+        },
+        response: {
+          201: {
+            description: "Workout day created successfully",
+            // Define properties based on WorkoutPlanDay type
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              plan_id: { type: "string", format: "uuid" },
+              name: { type: "string" },
+              day_of_week: { type: ["integer", "null"] },
+              order_in_plan: { type: "integer" },
+            },
+          },
+          // Add 400, 401, 404, 500
+        },
+      },
+    },
+    async (request: CreatePlanDayRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { planId } = request.params;
+      // Ensure plan_id from body matches param if included, or just use param
+      const dayData = { ...request.body, plan_id: planId };
+
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        const newDay = await createWorkoutPlanDay(fastify, userId, dayData);
+        return reply.code(201).send(newDay);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed to create workout day for plan ${planId}`);
+        // Handle specific errors like "Workout plan not found or user unauthorized."
+        if (error.message.includes("unauthorized")) {
+          return reply.code(404).send({ error: "Not Found", message: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
+
+  // GET /workout-plans/:planId/days (List days for a specific plan)
+  fastify.get<{ Params: PlanIdParams }>(
+    "/:planId/days",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        tags: ["Workout Plans"],
+        summary: "List workout days for a specific plan",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["planId"],
+          properties: { planId: { type: "string", format: "uuid" } },
+        },
+        response: {
+          200: {
+            description: "List of workout days",
+            type: "array",
+            items: {
+              // Reuse properties from POST response
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                plan_id: { type: "string", format: "uuid" },
+                name: { type: "string" },
+                day_of_week: { type: ["integer", "null"] },
+                order_in_plan: { type: "integer" },
+              },
+            },
+          },
+          // Add 401, 404, 500
+        },
+      },
+    },
+    async (request: ListPlanDaysRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { planId } = request.params;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        const days = await listWorkoutPlanDays(fastify, userId, planId);
+        return reply.send(days);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed to list workout days for plan ${planId}`);
+        // Handle specific errors if needed (e.g., plan not found)
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
+
+  // GET /workout-plans/:planId/days/:dayId (Get a specific day)
+  fastify.get<{ Params: PlanDayParams }>(
+    "/:planId/days/:dayId",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        tags: ["Workout Plans"],
+        summary: "Get details of a specific workout day",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["planId", "dayId"],
+          properties: {
+            planId: { type: "string", format: "uuid" },
+            dayId: { type: "string", format: "uuid" },
+          },
+        },
+        response: {
+          200: {
+            description: "Details of the workout day",
+            // Reuse properties from POST response
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              plan_id: { type: "string", format: "uuid" },
+              name: { type: "string" },
+              day_of_week: { type: ["integer", "null"] },
+              order_in_plan: { type: "integer" },
+            },
+          },
+          // Add 401, 404, 500
+        },
+      },
+    },
+    async (request: GetPlanDayRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { planId, dayId } = request.params; // planId might not be strictly needed by service if dayId is unique, but good for context/auth
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        // The service function getWorkoutPlanDay handles ownership check
+        const day = await getWorkoutPlanDay(fastify, userId, dayId);
+        return reply.send(day);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed to get workout day ${dayId}`);
+        if (error.message.includes("not found or user unauthorized")) {
+          return reply.code(404).send({ error: "Not Found", message: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
+
+  // PUT /workout-plans/:planId/days/:dayId (Update a specific day)
+  fastify.put<{ Params: PlanDayParams; Body: Partial<AddWorkoutPlanDayInput> }>(
+    "/:planId/days/:dayId",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        tags: ["Workout Plans"],
+        summary: "Update a specific workout day",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["planId", "dayId"],
+          properties: {
+            planId: { type: "string", format: "uuid" },
+            dayId: { type: "string", format: "uuid" },
+          },
+        },
+        body: {
+          type: "object",
+          minProperties: 1,
+          properties: {
+            name: { type: "string" },
+            day_of_week: { type: ["integer", "null"], minimum: 1, maximum: 7 },
+            order_in_plan: { type: "integer", minimum: 1 },
+          },
+        },
+        response: {
+          200: {
+            description: "Workout day updated successfully",
+            // Reuse properties from POST response
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              plan_id: { type: "string", format: "uuid" },
+              name: { type: "string" },
+              day_of_week: { type: ["integer", "null"] },
+              order_in_plan: { type: "integer" },
+            },
+          },
+          // Add 400, 401, 404, 500
+        },
+      },
+    },
+    async (request: UpdatePlanDayRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { dayId } = request.params;
+      const updateData = request.body;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        const updatedDay = await updateWorkoutPlanDay(fastify, userId, dayId, updateData);
+        return reply.send(updatedDay);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed to update workout day ${dayId}`);
+        if (error.message.includes("not found or user unauthorized")) {
+          return reply.code(404).send({ error: "Not Found", message: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
+
+  // DELETE /workout-plans/:planId/days/:dayId (Delete a specific day)
+  fastify.delete<{ Params: PlanDayParams }>(
+    "/:planId/days/:dayId",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        tags: ["Workout Plans"],
+        summary: "Delete a specific workout day",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["planId", "dayId"],
+          properties: {
+            planId: { type: "string", format: "uuid" },
+            dayId: { type: "string", format: "uuid" },
+          },
+        },
+        response: {
+          204: {
+            description: "Workout day deleted successfully",
+            type: "null",
+          },
+          // Add 401, 404, 500
+        },
+      },
+    },
+    async (request: DeletePlanDayRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { dayId } = request.params;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        await deleteWorkoutPlanDay(fastify, userId, dayId);
+        return reply.code(204).send();
+      } catch (error: any) {
+        fastify.log.error(error, `Failed to delete workout day ${dayId}`);
+        if (error.message.includes("not found or user unauthorized")) {
+          return reply.code(404).send({ error: "Not Found", message: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
+
+  // --- End Workout Plan Days CRUD ---
+
+  // --- Workout Plan Day Exercises CRUD ---
+
+  // POST /workout-plans/:planId/days/:dayId/exercises (Add exercise to a day)
+  fastify.post<{ Params: PlanDayParams; Body: AddWorkoutPlanDayExerciseInput }>(
+    "/:planId/days/:dayId/exercises",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        tags: ["Workout Plans"],
+        summary: "Add an exercise to a specific workout day",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["planId", "dayId"],
+          properties: {
+            planId: { type: "string", format: "uuid" },
+            dayId: { type: "string", format: "uuid" },
+          },
+        },
+        body: {
+          type: "object",
+          required: ["exercise_id", "order_in_workout", "target_sets", "target_reps"],
+          properties: {
+            exercise_id: { type: "string", format: "uuid" },
+            order_in_workout: { type: "integer", minimum: 1 },
+            target_sets: { type: "integer", minimum: 1 },
+            target_reps: { type: "string" },
+            target_rest_seconds: { type: ["integer", "null"], minimum: 0 },
+            current_suggested_weight_kg: { type: ["number", "null"] },
+            on_success_weight_increase_kg: { type: ["number", "null"] },
+            // workout_plan_day_id is from the URL param, not body
+          },
+        },
+        response: {
+          201: {
+            description: "Exercise added successfully",
+            // Define properties based on WorkoutPlanDayExercise type
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              workout_plan_day_id: { type: "string", format: "uuid" },
+              exercise_id: { type: "string", format: "uuid" },
+              order_in_workout: { type: "integer" },
+              target_sets: { type: "integer" },
+              target_reps: { type: "string" },
+              target_rest_seconds: { type: ["integer", "null"] },
+              current_suggested_weight_kg: { type: ["number", "null"] },
+              on_success_weight_increase_kg: { type: ["number", "null"] },
+            },
+          },
+          // Add 400, 401, 404, 500
+        },
+      },
+    },
+    async (request: CreatePlanDayExerciseRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { dayId } = request.params;
+      const exerciseData = { ...request.body, workout_plan_day_id: dayId };
+
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        const newExercise = await createWorkoutPlanDayExercise(fastify, userId, exerciseData);
+        return reply.code(201).send(newExercise);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed to add exercise to workout day ${dayId}`);
+        if (error.message.includes("unauthorized")) {
+          return reply.code(404).send({ error: "Not Found", message: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
+
+  // GET /workout-plans/:planId/days/:dayId/exercises (List exercises for a day)
+  fastify.get<{ Params: PlanDayParams }>(
+    "/:planId/days/:dayId/exercises",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        tags: ["Workout Plans"],
+        summary: "List exercises for a specific workout day",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["planId", "dayId"],
+          properties: {
+            planId: { type: "string", format: "uuid" },
+            dayId: { type: "string", format: "uuid" },
+          },
+        },
+        response: {
+          200: {
+            description: "List of exercises for the day",
+            type: "array",
+            items: {
+              // Reuse properties from POST response, plus nested exercise details
+              type: "object",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                workout_plan_day_id: { type: "string", format: "uuid" },
+                exercise_id: { type: "string", format: "uuid" },
+                order_in_workout: { type: "integer" },
+                target_sets: { type: "integer" },
+                target_reps: { type: "string" },
+                target_rest_seconds: { type: ["integer", "null"] },
+                current_suggested_weight_kg: { type: ["number", "null"] },
+                on_success_weight_increase_kg: { type: ["number", "null"] },
+                exercises: {
+                  // Assuming 'exercises' table structure from database.ts
+                  type: ["object", "null"],
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    name: { type: "string" },
+                    description: { type: ["string", "null"] },
+                    // Add other relevant exercise fields
+                  },
+                },
+              },
+            },
+          },
+          // Add 401, 404, 500
+        },
+      },
+    },
+    async (request: ListPlanDayExercisesRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { dayId } = request.params;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        const exercises = await listWorkoutPlanDayExercises(fastify, userId, dayId);
+        return reply.send(exercises);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed to list exercises for workout day ${dayId}`);
+        if (error.message.includes("unauthorized")) {
+          return reply.code(404).send({ error: "Not Found", message: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
+
+  // GET /workout-plans/:planId/days/:dayId/exercises/:exerciseId (Get specific exercise)
+  fastify.get<{ Params: PlanDayExerciseParams }>(
+    "/:planId/days/:dayId/exercises/:exerciseId",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        tags: ["Workout Plans"],
+        summary: "Get details of a specific exercise within a workout day",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["planId", "dayId", "exerciseId"],
+          properties: {
+            planId: { type: "string", format: "uuid" },
+            dayId: { type: "string", format: "uuid" },
+            exerciseId: { type: "string", format: "uuid" },
+          },
+        },
+        response: {
+          200: {
+            description: "Details of the specific exercise",
+            // Reuse properties from list response item
+            type: "object",
+            properties: {
+              id: { type: "string", format: "uuid" },
+              workout_plan_day_id: { type: "string", format: "uuid" },
+              exercise_id: { type: "string", format: "uuid" },
+              order_in_workout: { type: "integer" },
+              target_sets: { type: "integer" },
+              target_reps: { type: "string" },
+              target_rest_seconds: { type: ["integer", "null"] },
+              current_suggested_weight_kg: { type: ["number", "null"] },
+              on_success_weight_increase_kg: { type: ["number", "null"] },
+              exercises: {
+                type: ["object", "null"],
+                properties: {
+                  id: { type: "string", format: "uuid" },
+                  name: { type: "string" },
+                  description: { type: ["string", "null"] },
+                  // Add other relevant exercise fields
+                },
+              },
+            },
+          },
+          // Add 401, 404, 500
+        },
+      },
+    },
+    async (request: GetPlanDayExerciseRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { exerciseId } = request.params;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        const exercise = await getWorkoutPlanDayExercise(fastify, userId, exerciseId);
+        return reply.send(exercise);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed to get workout day exercise ${exerciseId}`);
+        if (error.message.includes("unauthorized")) {
+          return reply.code(404).send({ error: "Not Found", message: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
+
+  // DELETE /workout-plans/:planId/days/:dayId/exercises/:exerciseId (Delete specific exercise)
+  fastify.delete<{ Params: PlanDayExerciseParams }>(
+    "/:planId/days/:dayId/exercises/:exerciseId",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        tags: ["Workout Plans"],
+        summary: "Delete a specific exercise from a workout day",
+        security: [{ bearerAuth: [] }],
+        params: {
+          type: "object",
+          required: ["planId", "dayId", "exerciseId"],
+          properties: {
+            planId: { type: "string", format: "uuid" },
+            dayId: { type: "string", format: "uuid" },
+            exerciseId: { type: "string", format: "uuid" },
+          },
+        },
+        response: {
+          204: {
+            description: "Exercise deleted successfully",
+            type: "null",
+          },
+          // Add 401, 404, 500
+        },
+      },
+    },
+    async (request: DeletePlanDayExerciseRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { exerciseId } = request.params;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized" });
+      }
+      try {
+        await deleteWorkoutPlanDayExercise(fastify, userId, exerciseId);
+        return reply.code(204).send();
+      } catch (error: any) {
+        fastify.log.error(error, `Failed to delete workout day exercise ${exerciseId}`);
+        if (error.message.includes("unauthorized")) {
+          return reply.code(404).send({ error: "Not Found", message: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+      }
+    }
+  );
+
+  // --- End Workout Plan Day Exercises CRUD ---
 
   // --- DELETE /workout-plans/:planId --- (Delete a plan)
   fastify.delete<{ Params: { planId: string } }>(

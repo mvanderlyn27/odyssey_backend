@@ -116,7 +116,7 @@ export const getNextWorkout = async (
   fastify: FastifyInstance,
   userId: string
 ): Promise<{
-  data?: Tables<"plan_workouts"> | Tables<"workout_sessions">;
+  data?: Tables<"workout_plan_days"> | Tables<"workout_sessions">;
   completed?: boolean;
   message?: string;
   error?: Error;
@@ -188,7 +188,7 @@ export const getNextWorkout = async (
 
     // 3. Get all plan workouts for the active plan, ordered by order_in_plan
     const { data: planWorkouts, error: planWorkoutsError } = await supabase
-      .from("plan_workouts")
+      .from("workout_plan_days")
       .select("id, name, order_in_plan, day_of_week, plan_id")
       .eq("plan_id", activePlan.id)
       .order("order_in_plan", { ascending: true });
@@ -202,7 +202,7 @@ export const getNextWorkout = async (
       return { completed: false, message: "no workouts in plan" }; // Indicate no workouts in the plan;
     }
 
-    let nextWorkout: Tables<"plan_workouts"> | null = null;
+    let nextWorkout: Tables<"workout_plan_days"> | null = null;
 
     if (!lastSession || !lastSession.plan_workout_id) {
       // No previous *planned* sessions, return the first workout of the active plan

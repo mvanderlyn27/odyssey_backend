@@ -34,7 +34,7 @@ plan_days (Sequence of workout days in the plan)
 
     name (Text, optional)
 
-plan_exercises (Links an exercise to a plan day)
+workout_plan_day_exercises (Links an exercise to a plan day)
 
     id (PK, UUID)
 
@@ -48,7 +48,7 @@ plan_sets (Defines set structure and current target weight)
 
     id (PK, UUID)
 
-    plan_exercise_id (FK to plan_exercises, UUID)
+    plan_exercise_id (FK to workout_plan_day_exercises, UUID)
 
     set_number (Integer)
 
@@ -88,7 +88,7 @@ workout_log_sets (Log of actual performance per set)
 
     log_id (FK to workout_logs, UUID)
 
-    plan_exercise_id (FK to plan_exercises, UUID) - Link to the intended exercise slot.
+    plan_exercise_id (FK to workout_plan_day_exercises, UUID) - Link to the intended exercise slot.
 
     actual_exercise_library_id (FK to exercises_library, UUID) - Exercise actually performed.
 
@@ -151,7 +151,7 @@ workout_log_sets (Log of actual performance per set)
 
         Output: 201 Created with basic plan details (id, name).
 
-        Usage: Get the possible exercies from the backend that have required_equipment contained in the user's available_equipment, Pass this info along with other input info of user preferences to Gemini generation, parse the response, populate workout_plans, plan_days, plan_exercises, plan_sets. Sets initial current_target_weight (based on user input, or gemini estimates) and weight_progression_amount in base units (KG). Deactivates previous plan.
+        Usage: Get the possible exercies from the backend that have required_equipment contained in the user's available_equipment, Pass this info along with other input info of user preferences to Gemini generation, parse the response, populate workout_plans, plan_days, workout_plan_day_exercises, plan_sets. Sets initial current_target_weight (based on user input, or gemini estimates) and weight_progression_amount in base units (KG). Deactivates previous plan.
 
     GET /workouts/plans/active
 
@@ -171,7 +171,7 @@ workout_log_sets (Log of actual performance per set)
 
             Array of plan_days (id, day_number, name, isCompleted boolean, lastCompletionDate optional).
 
-            Each day contains an array of plan_exercises (id, display_order, exercise_name).
+            Each day contains an array of workout_plan_day_exercises (id, display_order, exercise_name).
 
             Each exercise contains an array of plan_sets (id, set_number, rep_min, rep_max, current_target_weight (converted to user's preferred unit), weight_unit (user's preferred unit)).
 

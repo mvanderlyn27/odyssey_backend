@@ -30,8 +30,9 @@ export interface WorkoutPlan {
 
 /**
  * Represents a specific workout day within a plan (e.g., "Day 1: Push").
+ * Renamed from PlanWorkout
  */
-export interface PlanWorkout {
+export interface WorkoutPlanDay {
   id: string; // UUID
   plan_id: string; // UUID FK to workout_plans
   name: string; // e.g., "Push Day", "Workout A"
@@ -40,11 +41,12 @@ export interface PlanWorkout {
 }
 
 /**
- * Represents a specific exercise within a specific plan workout.
+ * Represents a specific exercise within a specific plan workout day.
+ * Renamed from PlanWorkoutExercise
  */
-export interface PlanWorkoutExercise {
+export interface WorkoutPlanDayExercise {
   id: string; // UUID
-  plan_workout_id: string; // UUID FK to plan_workouts
+  workout_plan_day_id: string; // UUID FK to workout_plan_days (previously plan_workout_id)
   exercise_id: string; // UUID FK to exercises
   order_in_workout: number;
   target_sets: number;
@@ -82,8 +84,9 @@ export interface UpdateWorkoutPlanInput {
 
 /**
  * Input for adding a workout day to a plan.
+ * Renamed from AddPlanWorkoutInput
  */
-export interface AddPlanWorkoutInput {
+export interface AddWorkoutPlanDayInput {
   plan_id: string;
   name: string;
   day_of_week?: number | null;
@@ -91,10 +94,11 @@ export interface AddPlanWorkoutInput {
 }
 
 /**
- * Input for adding an exercise to a plan workout.
+ * Input for adding an exercise to a plan workout day.
+ * Renamed from AddPlanWorkoutExerciseInput
  */
-export interface AddPlanWorkoutExerciseInput {
-  plan_workout_id: string;
+export interface AddWorkoutPlanDayExerciseInput {
+  workout_plan_day_id: string; // Renamed from plan_workout_id
   exercise_id: string;
   order_in_workout: number;
   target_sets: number;
@@ -105,9 +109,10 @@ export interface AddPlanWorkoutExerciseInput {
 }
 
 /**
- * Input for updating a specific exercise within a plan workout.
+ * Input for updating a specific exercise within a plan workout day.
+ * Renamed from UpdatePlanWorkoutExerciseInput
  */
-export interface UpdatePlanWorkoutExerciseInput {
+export interface UpdateWorkoutPlanDayExerciseInput {
   target_sets?: number;
   target_reps?: string;
   target_rest_seconds?: number | null;
@@ -145,7 +150,9 @@ export interface ImportPlanInput {
  * Represents the detailed structure of a workout plan for retrieval.
  */
 export interface WorkoutPlanDetails extends WorkoutPlan {
-  workouts: (PlanWorkout & {
-    exercises: (PlanWorkoutExercise & { exercise: Exercise })[];
+  // Renamed 'workouts' to 'days'
+  days: (WorkoutPlanDay & {
+    // Renamed 'exercises' to 'day_exercises'
+    day_exercises: (WorkoutPlanDayExercise & { exercise: Exercise })[];
   })[];
 }

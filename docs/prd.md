@@ -78,7 +78,7 @@ Okay, let's break down a backend plan for your fitness app using Supabase, Fasti
     *   `is_active` (boolean, default: false) // User's currently selected plan
     *   `created_at` (timestampz, default: now())
 
-*   **`plan_workouts` (Defines workouts within a plan, e.g., "Day 1: Push")**
+*   **`workout_plan_days` (Defines workouts within a plan, e.g., "Day 1: Push")**
     *   `id` (UUID, PK, default: uuid_generate_v4())
     *   `plan_id` (UUID, FK to `workout_plans`, not null)
     *   `name` (text, not null) // e.g., "Push Day", "Workout A"
@@ -87,7 +87,7 @@ Okay, let's break down a backend plan for your fitness app using Supabase, Fasti
 
 *   **`plan_workout_exercises` (Specific exercises in a specific plan workout)**
     *   `id` (UUID, PK, default: uuid_generate_v4())
-    *   `plan_workout_id` (UUID, FK to `plan_workouts`, not null)
+    *   `plan_workout_id` (UUID, FK to `workout_plan_days`, not null)
     *   `exercise_id` (UUID, FK to `exercises`, not null)
     *   `order_in_workout` (integer, not null)
     *   `target_sets` (integer, not null)
@@ -99,7 +99,7 @@ Okay, let's break down a backend plan for your fitness app using Supabase, Fasti
 *   **`workout_sessions` (Actual logged workouts)**
     *   `id` (UUID, PK, default: uuid_generate_v4())
     *   `user_id` (UUID, FK to `profiles`, not null)
-    *   `plan_workout_id` (UUID, FK to `plan_workouts`, nullable) // Link if following a plan
+    *   `plan_workout_id` (UUID, FK to `workout_plan_days`, nullable) // Link if following a plan
     *   `started_at` (timestampz, default: now())
     *   `ended_at` (timestampz, nullable)
     *   `status` (enum: 'started', 'paused', 'completed', 'skipped', default: 'started')
@@ -164,11 +164,11 @@ Okay, let's break down a backend plan for your fitness app using Supabase, Fasti
 *   **Workout Plans:**
     *   `GET /plans` (List user's plans)
     *   `POST /plans` (Create a new custom plan shell)
-    *   `GET /plans/{planId}` (Get details of a specific plan, including its `plan_workouts` and `plan_workout_exercises`)
+    *   `GET /plans/{planId}` (Get details of a specific plan, including its `workout_plan_days` and `plan_workout_exercises`)
     *   `PUT /plans/{planId}` (Update plan details)
     *   `DELETE /plans/{planId}`
     *   `POST /plans/{planId}/activate` (Set `is_active` = true for this plan, false for others)
-    *   `POST /plans/generate` (Premium) (Takes user prefs, calls Gemini, creates `workout_plans`, `plan_workouts`, `plan_workout_exercises`)
+    *   `POST /plans/generate` (Premium) (Takes user prefs, calls Gemini, creates `workout_plans`, `workout_plan_days`, `plan_workout_exercises`)
     *   `POST /plans/import` (Premium) (Takes text/image data, calls Gemini for parsing, creates plan structure)
     *   `PUT /plans/exercises/{planExerciseId}` (Modify a specific exercise within a plan - sets/reps/etc.)
 *   **Workout Tracking:**
