@@ -31,3 +31,13 @@ export interface FinishSessionBody {
 export type WorkoutSessionWithExercises = Tables<"workout_sessions"> & {
   session_exercises: Tables<"session_exercises">[];
 };
+
+/**
+ * Represents a detailed workout session including the session info,
+ * logged exercises for that session, and the details of each exercise.
+ */
+export type WorkoutSessionDetails = Tables<"workout_sessions"> & {
+  session_exercises: (Tables<"session_exercises"> & {
+    exercises: Tables<"exercises"> | null; // Include full exercise details
+  })[];
+};

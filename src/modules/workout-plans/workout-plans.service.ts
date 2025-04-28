@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+
 import {
   WorkoutPlan,
   PlanType,
@@ -13,6 +14,7 @@ import {
   ImportPlanInput,
   UpdateWorkoutPlanDayExerciseInput, // Renamed from UpdatePlanWorkoutExerciseInput
   WorkoutPlanDetails, // Import the missing type
+  WorkoutPlanDayDetails, // Import the new type
 } from "./workout-plans.types"; // Import necessary types
 import { GoalType } from "../user-goals/user-goals.types";
 import { exercisePlanSchema } from "../../types/geminiSchemas/exercisePlanSchema";
@@ -354,42 +356,64 @@ export const getWorkoutPlanDay = async (
   fastify: FastifyInstance,
   userId: string,
   planDayId: string
-): Promise<DbWorkoutPlanDay> => {
-  fastify.log.info(`Getting workout plan day ${planDayId} for user ${userId}`);
+): Promise<WorkoutPlanDayDetails> => {
+  // Updated return type
+  fastify.log.info(`Getting workout plan day details ${planDayId} for user ${userId}`); // Updated log message
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
   const supabase = fastify.supabase;
 
   try {
-    // Join through workout_plans to verify ownership
-    const { data: day, error } = await supabase
+    // Join through workout_plans to verify ownership and fetch nested exercises
+    const { data: dayDetails, error } = await supabase
       .from("workout_plan_days")
       .select(
         `
         *,
-        workout_plans!inner ( user_id )
+        workout_plans!inner ( user_id ),
+        workout_plan_day_exercises (
+          *,
+          exercises (*)
+        )
       `
       )
       .eq("id", planDayId)
       .eq("workout_plans.user_id", userId)
+      .order("order_in_workout", { referencedTable: "workout_plan_day_exercises", ascending: true }) // Order nested exercises
       .single();
 
     if (error) {
-      fastify.log.error({ error, planDayId, userId }, "Error getting workout plan day");
-      throw new Error(`Failed to get workout plan day: ${error.message}`);
+      fastify.log.error({ error, planDayId, userId }, "Error getting workout plan day details");
+      throw new Error(`Failed to get workout plan day details: ${error.message}`);
     }
 
-    if (!day) {
+    if (!dayDetails) {
       throw new Error(`Workout plan day ${planDayId} not found or user unauthorized.`);
     }
 
-    // We don't need to return the nested workout_plans data
-    const { workout_plans, ...rest } = day as any; // Type assertion needed because of join
+    // Map the data to the WorkoutPlanDayDetails structure
+    // The nested select already structures most of it correctly.
+    // We just need to rename workout_plan_day_exercises to day_exercises
+    // and remove the intermediate workout_plans join data.
 
-    return rest as DbWorkoutPlanDay;
+    const { workout_plans, workout_plan_day_exercises, ...restOfDay } = dayDetails as any;
+
+    // Explicitly type the mapped exercises to ensure compatibility
+    const mappedExercises = (workout_plan_day_exercises || []).map((pwde: any) => ({
+      ...(pwde as DbWorkoutPlanDayExercise), // Spread the exercise details
+      exercise: pwde.exercises, // Assign the nested exercise object
+    }));
+
+    const finalDetails: WorkoutPlanDayDetails = {
+      ...(restOfDay as DbWorkoutPlanDay), // Cast the rest to the base type
+      day_exercises: mappedExercises, // Assign the correctly typed array
+    };
+
+    return finalDetails;
+    /* Removed duplicate code block causing syntax errors */
   } catch (error: any) {
-    fastify.log.error(error, `Unexpected error getting workout plan day ${planDayId}`);
+    fastify.log.error(error, `Unexpected error getting workout plan day details ${planDayId}`);
     throw error; // Re-throw
   }
 };
@@ -923,25 +947,24 @@ export const importWorkoutPlan = async (
       throw new Error("No content provided for import. Please provide either text or an image.");
     }
 
+    // Fetch all exercises from the library
+    const { data: allExercises, error: exercisesError } = await supabase.from("exercises").select("id, name");
+
+    if (exercisesError || !allExercises || allExercises.length === 0) {
+      fastify.log.error({ error: exercisesError, userId }, "Failed to fetch exercises from database.");
+      throw new Error("Could not retrieve exercise library for plan generation.");
+    }
+
+    const allExercisesString = allExercises.map((ex) => `- ${ex.name} (ID: ${ex.id})`).join("\n");
+
     // 2. Prepare the prompt for Gemini
     const prompt = `
       Extract and structure a workout plan from the following content:
       ${contentToProcess}
+      **Available Exercises (Use these exact IDs for 'exerciseLibraryId'):**
+      ${allExercisesString}
       
-      Please format the workout plan with the following details:
-      - Plan name (use "${plan_name || "Imported Workout Plan"}" if not specified)
-      - Plan type (full_body, split, upper_lower, push_pull_legs, or other)
-      - Goal type (${goal_type || "general fitness"} if not specified in the content)
-      - Days per week
-      - For each workout day:
-        - Name of the workout
-        - Day of the week (1-7, where 1 is Monday)
-        - Exercises with:
-          - Exercise name (match to our exercise library if possible)
-          - Sets
-          - Reps
-          - Rest time in seconds
-      
+
       Structure the output as a complete workout plan that can be saved to our database.
     `;
 
@@ -1062,6 +1085,40 @@ export const updateWorkoutPlanDayExercise = async (
   } catch (error: any) {
     fastify.log.error(error, `Unexpected error updating plan day exercise ${planDayExerciseId}`); // Renamed log message
     throw error;
+  }
+};
+
+/**
+ * Fetches the currently active workout plan for a user.
+ * @param fastify - Fastify instance.
+ * @param userId - The ID of the user.
+ * @returns The active workout plan or null if none is active.
+ */
+export const getActiveWorkoutPlan = async (fastify: FastifyInstance, userId: string): Promise<DbWorkoutPlan | null> => {
+  // Return type allows null
+  fastify.log.info(`Fetching active workout plan for user: ${userId}`);
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+  const supabase = fastify.supabase;
+
+  try {
+    const { data: activePlan, error } = await supabase
+      .from("workout_plans")
+      .select("*") // Select desired columns
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .maybeSingle(); // Expect zero or one result
+
+    if (error) {
+      fastify.log.error({ error, userId }, "Error fetching active workout plan from Supabase");
+      throw new Error("Failed to fetch active workout plan");
+    }
+
+    return activePlan; // Return the plan or null
+  } catch (err: any) {
+    fastify.log.error(err, "Unexpected error fetching active workout plan");
+    throw new Error("An unexpected error occurred while fetching the active plan.");
   }
 };
 

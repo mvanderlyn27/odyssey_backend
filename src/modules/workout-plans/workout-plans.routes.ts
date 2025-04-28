@@ -18,6 +18,7 @@ import {
   generateWorkoutPlan,
   importWorkoutPlan,
   updateWorkoutPlanDayExercise, // Use the renamed function name here
+  getActiveWorkoutPlan, // Import the new service function
   // Import workout plan day service functions
   createWorkoutPlanDay,
   listWorkoutPlanDays,
@@ -100,6 +101,71 @@ interface DeletePlanDayExerciseRequest extends FastifyRequest<{ Params: PlanDayE
  * @param opts Options passed to the plugin.
  */
 async function workoutPlanRoutes(fastify: FastifyInstance, opts: FastifyPluginOptions): Promise<void> {
+  // --- GET /workout-plans/active --- (Get the active plan)
+  fastify.get(
+    // No type parameters needed for request if no params/query/body
+    "/active",
+    {
+      preHandler: [fastify.authenticate], // Requires authentication
+      schema: {
+        tags: ["Workout Plans"],
+        summary: "Get the user's currently active workout plan",
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: {
+            description: "The user's active workout plan or null",
+            // Define the schema allowing null or the plan object
+            // Reusing properties from the GET /:planId response schema
+            nullable: true, // Allow the response to be null
+            type: ["object", "null"],
+            properties: {
+              id: { type: "string", format: "uuid" },
+              name: { type: "string" },
+              description: { type: ["string", "null"] },
+              goal_type: { type: ["string", "null"], enum: Object.values(GoalType) },
+              plan_type: {
+                type: ["string", "null"],
+                enum: ["full_body", "split", "upper_lower", "push_pull_legs", "other"],
+              },
+              days_per_week: { type: ["integer", "null"] },
+              created_by: { type: "string", enum: ["user", "ai", "coach", "template"] },
+              is_active: { type: "boolean" }, // Should always be true here
+              created_at: { type: "string", format: "date-time" },
+              user_id: { type: "string", format: "uuid" },
+              // Include other relevant fields from WorkoutPlan
+            },
+          },
+          401: {
+            description: "Unauthorized",
+            type: "object",
+            properties: { error: { type: "string" }, message: { type: "string" } },
+          },
+          500: {
+            description: "Internal Server Error",
+            type: "object",
+            properties: { error: { type: "string" }, message: { type: "string" } },
+          },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User ID not found on request" });
+      }
+
+      fastify.log.info(`Fetching active workout plan for user: ${userId}`);
+      try {
+        const activePlan = await getActiveWorkoutPlan(fastify, userId);
+        // Send the plan object or null directly
+        return reply.send(activePlan);
+      } catch (err: any) {
+        fastify.log.error(err, "Unexpected error fetching active workout plan");
+        return reply.code(500).send({ error: "Internal Server Error", message: err.message });
+      }
+    }
+  );
+
   // --- GET /workout-plans --- (List user's plans)
   fastify.get<{ Querystring: {} }>(
     "/",
@@ -755,8 +821,8 @@ async function workoutPlanRoutes(fastify: FastifyInstance, opts: FastifyPluginOp
         },
         response: {
           200: {
-            description: "Details of the workout day",
-            // Reuse properties from POST response
+            description: "Details of the workout day including exercises",
+            // Schema based on WorkoutPlanDayDetails type
             type: "object",
             properties: {
               id: { type: "string", format: "uuid" },
@@ -764,9 +830,55 @@ async function workoutPlanRoutes(fastify: FastifyInstance, opts: FastifyPluginOp
               name: { type: "string" },
               day_of_week: { type: ["integer", "null"] },
               order_in_plan: { type: "integer" },
+              day_exercises: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string", format: "uuid" },
+                    workout_plan_day_id: { type: "string", format: "uuid" },
+                    exercise_id: { type: "string", format: "uuid" },
+                    order_in_workout: { type: "integer" },
+                    target_sets: { type: "integer" },
+                    target_reps_min: { type: "number" },
+                    target_reps_max: { type: ["number", "null"] },
+                    target_rest_seconds: { type: ["integer", "null"] },
+                    current_suggested_weight_kg: { type: ["number", "null"] },
+                    on_success_weight_increase_kg: { type: ["number", "null"] },
+                    exercise: {
+                      // Nested exercise details from Exercise type
+                      type: ["object", "null"], // Assuming exercise can be null if deleted? Check service logic.
+                      properties: {
+                        id: { type: "string", format: "uuid" },
+                        name: { type: "string" },
+                        description: { type: ["string", "null"] },
+                        category: { type: ["string", "null"] },
+                        target_muscles: { type: ["array", "null"], items: { type: "string" } },
+                        instructions: { type: ["string", "null"] },
+                        video_url: { type: ["string", "null"] },
+                        // Add other relevant fields from 'exercises' table/type
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
-          // Add 401, 404, 500
+          401: {
+            description: "Unauthorized",
+            type: "object",
+            properties: { error: { type: "string" }, message: { type: "string" } },
+          },
+          404: {
+            description: "Workout plan day not found",
+            type: "object",
+            properties: { error: { type: "string" }, message: { type: "string" } },
+          },
+          500: {
+            description: "Internal Server Error",
+            type: "object",
+            properties: { error: { type: "string" }, message: { type: "string" } },
+          },
         },
       },
     },

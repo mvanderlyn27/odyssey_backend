@@ -160,3 +160,10 @@ export interface WorkoutPlanDetails extends WorkoutPlan {
     day_exercises: (WorkoutPlanDayExercise & { exercise: Exercise })[];
   })[];
 }
+
+/**
+ * Represents the detailed structure of a workout plan day for retrieval.
+ */
+export interface WorkoutPlanDayDetails extends WorkoutPlanDay {
+  day_exercises: (WorkoutPlanDayExercise & { exercise: Exercise })[];
+}

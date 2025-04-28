@@ -720,7 +720,7 @@ interface CreateUserGoalInput {
     *   **Authentication:** Required.
     *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID)
     *   **Output:**
-        *   `200 OK`: `WorkoutPlanDay`
+        *   `200 OK`: `WorkoutPlanDayDetails` (Includes day info and nested `day_exercises` with `exercise` details)
         *   `401 Unauthorized`.
         *   `404 Not Found`. `{ error: string; message?: string }`
         *   `500 Internal Server Error`. `{ error: string; message?: string }`
@@ -884,6 +884,16 @@ interface WorkoutSessionCompletionResult {
     *   **Output:**
         *   `201 Created`: `WorkoutSession` (Status 'started')
         *   `401 Unauthorized`.
+        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+
+*   **`GET /api/workout-sessions/{sessionId}`**
+    *   **Purpose:** Get details for a specific workout session, including logged exercises and their details.
+    *   **Authentication:** Required.
+    *   **Input:** URL Params: `sessionId` (UUID)
+    *   **Output:**
+        *   `200 OK`: `WorkoutSessionDetails` (Includes session info, `session_exercises`, and nested `exercise` details)
+        *   `401 Unauthorized`.
+        *   `404 Not Found`. `{ error: string; message?: string }` (Session not found or unauthorized)
         *   `500 Internal Server Error`. `{ error: string; message?: string }`
 
 *   **`GET /api/workout-sessions/live/{sessionId}`** *(Not Implemented)*

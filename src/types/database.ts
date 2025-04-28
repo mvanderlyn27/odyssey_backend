@@ -585,35 +585,35 @@ export type Database = {
           id: string
           notes: string | null
           overall_feeling: string | null
-          plan_workout_id: string | null
           started_at: string
           status: string | null
           user_id: string
+          workout_plan_day_id: string | null
         }
         Insert: {
           ended_at?: string | null
           id?: string
           notes?: string | null
           overall_feeling?: string | null
-          plan_workout_id?: string | null
           started_at?: string
           status?: string | null
           user_id: string
+          workout_plan_day_id?: string | null
         }
         Update: {
           ended_at?: string | null
           id?: string
           notes?: string | null
           overall_feeling?: string | null
-          plan_workout_id?: string | null
           started_at?: string
           status?: string | null
           user_id?: string
+          workout_plan_day_id?: string | null
         }
         Relationships: [
           {
             foreignKeyName: "workout_sessions_plan_workout_id_fkey"
-            columns: ["plan_workout_id"]
+            columns: ["workout_plan_day_id"]
             isOneToOne: false
             referencedRelation: "workout_plan_days"
             referencedColumns: ["id"]
