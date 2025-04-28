@@ -50,7 +50,8 @@ export interface WorkoutPlanDayExercise {
   exercise_id: string; // UUID FK to exercises
   order_in_workout: number;
   target_sets: number;
-  target_reps: string; // e.g., "8-12", "5", "AMRAP"
+  target_reps_min: number; //min reps to hit
+  target_reps_max: number; //max reps to hit
   target_rest_seconds: number | null;
   current_suggested_weight_kg: number | null; // Used for progression
   on_success_weight_increase_kg: number | null; // Used for progression
@@ -102,7 +103,8 @@ export interface AddWorkoutPlanDayExerciseInput {
   exercise_id: string;
   order_in_workout: number;
   target_sets: number;
-  target_reps: string;
+  target_reps_min: number;
+  target_reps_max: number;
   target_rest_seconds?: number | null;
   current_suggested_weight_kg?: number | null;
   on_success_weight_increase_kg?: number | null;
@@ -114,7 +116,8 @@ export interface AddWorkoutPlanDayExerciseInput {
  */
 export interface UpdateWorkoutPlanDayExerciseInput {
   target_sets?: number;
-  target_reps?: string;
+  target_reps_min: number;
+  target_reps_max: number;
   target_rest_seconds?: number | null;
   current_suggested_weight_kg?: number | null;
   on_success_weight_increase_kg?: number | null;
@@ -128,6 +131,7 @@ export interface GeneratePlanInput {
   user_id: string; // To fetch user goals, equipment, etc.
   goal_type?: GoalType; // Override user's current goal if needed
   days_per_week: number;
+  approximate_workout_minutes: number;
   experience_level: "beginner" | "intermediate" | "advanced";
   available_equipment_ids: string[];
   preferred_plan_type?: PlanType;

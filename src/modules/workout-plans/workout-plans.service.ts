@@ -542,7 +542,8 @@ export const createWorkoutPlanDayExercise = async (
         exercise_id: exerciseData.exercise_id,
         order_in_workout: exerciseData.order_in_workout,
         target_sets: exerciseData.target_sets,
-        target_reps: exerciseData.target_reps,
+        target_reps_min: exerciseData.target_reps_min,
+        target_reps_max: exerciseData.target_reps_max,
         target_rest_seconds: exerciseData.target_rest_seconds ?? null,
         current_suggested_weight_kg: exerciseData.current_suggested_weight_kg ?? null,
         on_success_weight_increase_kg: exerciseData.on_success_weight_increase_kg ?? null,
@@ -771,62 +772,110 @@ export const generateWorkoutPlan = async (
   const supabase = fastify.supabase;
   const gemini = fastify.gemini;
 
-  // Placeholder: Fetch context (profile, goal, equipment names) - Implement actual fetching
-  const userLevel = "intermediate"; // Example placeholder
-  const userGoal = preferences.goal_type || "general fitness"; // Example placeholder
-  const equipmentList =
-    preferences.available_equipment_ids.length > 0 ? preferences.available_equipment_ids.join(", ") : "none"; // Example placeholder
-  const { data: availableEquipmentNames } = await supabase
-    .from("equipment")
-    .select("name")
-    .in("id", preferences.available_equipment_ids);
-  const { data: possibleExercises } = await supabase.from("exercises").select("id, name, equipment_required");
-
-  // Construct a detailed prompt
-  const prompt = `
-    Generate a personalized workout plan for a user with the following details:
-    - Goal: ${userGoal}
-    - Experience Level: ${preferences.experience_level}
-    - Days Per Week: ${preferences.days_per_week}
-    - Available Equipment: ${availableEquipmentNames}
-    - All Exercises: ${possibleExercises}
-    ${preferences.preferred_plan_type ? `- Preferred Plan Type: ${preferences.preferred_plan_type}` : ""}
-    - Other Preferences: [Consider adding more from GeneratePlanInput if available]
-    - Goal: [User Goal from goalData]
-    - Available Equipment IDs: [List of equipment IDs from equipmentData]
-    - Experience Level: [User Level from profileData]
-
-    Structure the output according to the provided JSON schema. Ensure exerciseLibraryId refers to valid UUIDs from the exercise library.
-    Provide a plan name, description, and detailed daily workouts including exercises, sets, rep ranges, and rest times.
-    Ensure exerciseLibraryId refers to valid UUIDs from the exercise library (if applicable, otherwise just use names).
-  `;
-  // Note: The prompt needs refinement based on exactly how exerciseLibraryId mapping works or if only names are used.
-
   try {
-    // Cast the imported schema to the expected type for Gemini
-    const geminiSchema: Schema = exercisePlanSchema as Schema;
+    // 1. Fetch Context
+    const userGoal = preferences.goal_type || "general fitness"; // Use provided or default
 
+    // Fetch available equipment names
+    let equipmentNamesString = "Bodyweight only";
+    if (preferences.available_equipment_ids && preferences.available_equipment_ids.length > 0) {
+      const { data: equipmentData, error: equipmentError } = await supabase
+        .from("equipment")
+        .select("name")
+        .in("id", preferences.available_equipment_ids);
+
+      if (equipmentError) {
+        fastify.log.warn({ error: equipmentError, userId }, "Could not fetch equipment names, proceeding without.");
+      } else if (equipmentData && equipmentData.length > 0) {
+        equipmentNamesString = equipmentData.map((eq) => eq.name).join(", ");
+      }
+    }
+
+    // Fetch all exercises from the library
+    const { data: allExercises, error: exercisesError } = await supabase.from("exercises").select("id, name");
+
+    if (exercisesError || !allExercises || allExercises.length === 0) {
+      fastify.log.error({ error: exercisesError, userId }, "Failed to fetch exercises from database.");
+      throw new Error("Could not retrieve exercise library for plan generation.");
+    }
+
+    const allExercisesString = allExercises.map((ex) => `- ${ex.name} (ID: ${ex.id})`).join("\n");
+
+    // 2. Construct Refined Prompt
+    const prompt = `
+Generate a personalized workout plan based on the following user details and available resources. Structure the output strictly according to the provided JSON schema.
+
+**User Preferences:**
+- Goal: ${userGoal}
+- Experience Level: ${preferences.experience_level}
+- Days Per Week: ${preferences.days_per_week}
+- Approxiate Workout Time Length (minutes): ${preferences.approximate_workout_minutes}
+${preferences.preferred_plan_type ? `- Preferred Plan Type: ${preferences.preferred_plan_type}` : ""}
+- Available Equipment: ${equipmentNamesString}
+
+**Available Exercises (Use these exact IDs for 'exerciseLibraryId'):**
+${allExercisesString}
+
+**Instructions:**
+- Create a plan named appropriately for the user's goal (e.g., "Beginner Strength Plan", "Intermediate Hypertrophy Split").
+- Provide a brief description of the plan's focus.
+- Specify the plan duration in weeks (e.g., 4, 8, 12).
+- Structure the plan into ${preferences.days_per_week} daily workouts per week.
+- For each daily workout:
+    - Assign a day identifier (e.g., "Day 1", "Day 2", "Monday").
+    - Specify the workout focus (e.g., "Upper Body", "Push", "Full Body", "Legs & Core").
+    - List the exercises for the day.
+    - For each exercise:
+        - Use the exact 'exerciseLibraryId' (UUID) from the 'Available Exercises' list above. Ensure this ID exists in the list.
+        - Specify the number of sets.
+        - Specify the minimum (repMin) and maximum (repMax) target repetitions (e.g., repMin: 8, repMax: 12).
+        - Specify the rest time in seconds (restSeconds). Use null if rest is not applicable or variable.
+        - Add brief optional notes on form or execution if relevant.
+- Ensure the output conforms precisely to the provided JSON schema. Do not add any extra text before or after the JSON object.
+`;
+
+    // 3. Call Gemini
+    const geminiSchema: Schema = exercisePlanSchema as Schema;
     const model = gemini.getGenerativeModel({
-      model: process.env.GEMINI_MODEL_NAME!, // Or your preferred model
+      model: process.env.GEMINI_MODEL_NAME!,
       generationConfig: { responseMimeType: "application/json", responseSchema: geminiSchema },
     });
 
+    fastify.log.info(`Generating plan for user ${userId} with prompt...`); // Log before call
     const result = await model.generateContent(prompt);
     const response = result.response;
-    const planJson = JSON.parse(response.text()); // Parse the JSON string response
 
-    fastify.log.info("Received generated plan from Gemini:", planJson);
+    // Basic validation of response structure before parsing
+    if (!response || !response.text) {
+      fastify.log.error({ response, userId }, "Invalid or empty response received from Gemini.");
+      throw new Error("Received invalid response from AI model.");
+    }
 
-    // --- Save the generated plan to Supabase within a transaction ---
-    // This requires a Supabase RPC function to handle inserting into multiple tables atomically.
-    // Example RPC function call (assuming function name 'create_generated_plan'):
+    const planJsonText = response.text();
+    fastify.log.info(`Received raw response text from Gemini for user ${userId}: ${planJsonText}`);
+
+    let generatedPlanData: any;
+    try {
+      generatedPlanData = JSON.parse(planJsonText);
+    } catch (parseError: any) {
+      fastify.log.error(
+        { error: parseError, rawResponse: planJsonText, userId },
+        "Failed to parse JSON response from Gemini."
+      );
+      throw new Error(`Failed to parse AI model response: ${parseError.message}`);
+    }
+
+    fastify.log.info(`Parsed generated plan from Gemini for user ${userId}:`, generatedPlanData);
+
+    // 5. Save the generated plan to Supabase via RPC
+    fastify.log.info(`Calling create_generated_plan RPC for user ${userId}...`);
     const { data: createdPlanData, error: rpcError } = await supabase.rpc("create_generated_plan", {
       user_id_input: userId,
-      plan_data: planJson, // Pass the entire parsed JSON object
+      plan_data: generatedPlanData, // Pass the transformed data
     });
 
     if (rpcError) {
-      fastify.log.error({ error: rpcError, userId, planJson }, "Error saving generated plan via RPC");
+      fastify.log.error({ error: rpcError, userId, generatedPlanData }, "Error saving generated plan via RPC");
       throw new Error(`Failed to save generated plan: ${rpcError.message}`);
     }
 
@@ -926,77 +975,14 @@ export const importWorkoutPlan = async (
     const response = result.response;
     const planJson = JSON.parse(response.text());
 
-    fastify.log.info("Received extracted plan from Gemini:", planJson);
-
-    // 4. Validate the extracted plan structure
-    if (!planJson.name || !planJson.workouts || !Array.isArray(planJson.workouts)) {
-      throw new Error("Invalid plan structure extracted from content");
-    }
-
-    // 5. Map exercise names to IDs from our database
-    const exerciseNames = planJson.workouts.flatMap((workout: { exercises: { name: string }[] }) =>
-      workout.exercises.map((exercise) => exercise.name.toLowerCase())
-    );
-
-    const { data: exercisesData } = await supabase.from("exercises").select("id, name").in("name", exerciseNames);
-
-    // Create a mapping of exercise names to IDs
-    const exerciseNameToId = new Map();
-    if (exercisesData) {
-      exercisesData.forEach((exercise) => {
-        exerciseNameToId.set(exercise.name.toLowerCase(), exercise.id);
-      });
-    }
-
-    // 6. Save the plan to the database using a transaction via RPC
-    const planData = {
-      name: planJson.name,
-      description: planJson.description || `Imported on ${new Date().toLocaleDateString()}`,
-      goal_type: goal_type || planJson.goal_type || "general fitness",
-      plan_type: planJson.plan_type || "other",
-      days_per_week: planJson.days_per_week || planJson.workouts.length,
-      created_by: "ai", // Mark as AI-imported
-      source_description: "Imported from " + (image_content ? "image" : "text"),
-      is_active: false, // Default to inactive
-      workouts: planJson.workouts.map(
-        (
-          workout: {
-            name: string;
-            day_of_week?: number;
-            exercises: Array<{ name: string; sets?: number; reps?: string; rest_seconds?: number }>;
-          },
-          index: number
-        ) => ({
-          name: workout.name,
-          day_of_week: workout.day_of_week || index + 1,
-          order_in_plan: index + 1,
-          exercises: workout.exercises.map((exercise, exIndex) => {
-            const exerciseId = exerciseNameToId.get(exercise.name.toLowerCase());
-            if (!exerciseId) {
-              fastify.log.warn(`Exercise not found in database: ${exercise.name}`);
-            }
-
-            return {
-              exercise_id: exerciseId || null, // Will need to handle missing exercises
-              exercise_name: exercise.name, // Keep the name for reference
-              order_in_workout: exIndex + 1,
-              target_sets: exercise.sets || 3,
-              target_reps: exercise.reps || "8-12",
-              target_rest_seconds: exercise.rest_seconds || 60,
-            };
-          }),
-        })
-      ),
-    };
-
     // Call the RPC function to create the plan with all related records
     const { data: createdPlanData, error: rpcError } = await supabase.rpc("create_imported_plan", {
       user_id_input: userId,
-      plan_data: planData,
+      plan_data: planJson,
     });
 
     if (rpcError) {
-      fastify.log.error({ error: rpcError, userId, planData }, "Error saving imported plan via RPC");
+      fastify.log.error({ error: rpcError, userId, planJson }, "Error saving imported plan via RPC");
       throw new Error(`Failed to save imported plan: ${rpcError.message}`);
     }
 
