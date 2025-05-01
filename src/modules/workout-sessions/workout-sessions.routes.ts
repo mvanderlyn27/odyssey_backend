@@ -8,6 +8,7 @@ import {
   logWorkoutSet, // Added missing service function
   updateLoggedSet, // Added missing service function
   deleteLoggedSet, // Added missing service function
+  getNextWorkout, // Added for the new route
   // Removed imports for functions not exported: list, cancel, pause, resume, addExercise, updateSessionExercise, deleteSessionExercise
 } from "./workout-sessions.service";
 // Import TypeBox schemas and types
@@ -23,6 +24,7 @@ import {
   type UpdateSetBody, // Renamed from UpdateSessionExerciseBody
   WorkoutSessionSchema, // Import as value for use in response schema
   type WorkoutSession, // For skip response type
+  type GetNextWorkoutResponse, // Added for the new route
   // Schemas will be referenced by $id
 } from "../../schemas/workoutSessionsSchemas";
 // Import common schema types
@@ -324,6 +326,42 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
 
   // Removed routes for cancel, pause, resume, addExerciseToSession, updateSessionExercise, deleteSessionExercise
   // as corresponding service functions were not found/exported.
+
+  // --- GET /next --- (Get next workout state) - Added route
+  fastify.get<{ Reply: GetNextWorkoutResponse | ErrorResponse }>("/next", {
+    preHandler: [fastify.authenticate],
+    schema: {
+      description: "Gets the user's current workout state or suggests the next workout.",
+      tags: ["Workout Sessions"],
+      summary: "Get next workout",
+      security: [{ bearerAuth: [] }],
+      response: {
+        200: { $ref: "GetNextWorkoutResponseSchema#" },
+        401: { $ref: "ErrorResponseSchema#" },
+        500: { $ref: "ErrorResponseSchema#" },
+      },
+    },
+    handler: async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
+      try {
+        const nextWorkoutState = await getNextWorkout(fastify, userId);
+        // Check if the service function indicated an internal error
+        if (nextWorkoutState.status === "error") {
+          return reply.code(500).send({ error: "Internal Server Error", message: nextWorkoutState.message });
+        }
+        return reply.send(nextWorkoutState);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed getting next workout state for user ID: ${userId}`);
+        // Catch unexpected errors from the service function itself
+        return reply
+          .code(500)
+          .send({ error: "Internal Server Error", message: "Failed to determine next workout state." });
+      }
+    },
+  });
 }
 
 export default workoutSessionRoutes;

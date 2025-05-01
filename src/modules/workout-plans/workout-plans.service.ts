@@ -11,13 +11,14 @@ import {
   UpdateWorkoutPlanDayExerciseBody,
   WorkoutPlanDayDetails,
   WorkoutPlanDayExercise,
+  WorkoutPlanDayExerciseDetails, // <-- Add missing import
   WorkoutPlanDetails,
   // Added imports for Day and Day Exercise CRUD types
   CreateWorkoutPlanDayBody,
   WorkoutPlanDay,
   UpdateWorkoutPlanDayBody,
   CreateWorkoutPlanDayExerciseBody,
-} from "@/schemas/workoutPlansSchemas";
+} from "@/schemas/workoutPlansSchemas"; // Ensure path is correct if using aliases
 
 // Type Aliases using renamed tables
 type DbWorkoutPlan = Tables<"workout_plans">;
@@ -143,13 +144,16 @@ export const getWorkoutPlanDetails = async (
   fastify: FastifyInstance,
   planId: string
 ): Promise<WorkoutPlanDetails | Error> => {
-  fastify.log.info(`Fetching details for workout plan ${planId}`);
+  fastify.log.info(`---> Entering getWorkoutPlanDetails for plan ${planId}`); // <-- Add Entry Log
+
   if (!fastify.supabase) {
+    fastify.log.error("Supabase client not available in getWorkoutPlanDetails"); // <-- Log specific error
     return new Error("Supabase client not available");
   }
   const supabase = fastify.supabase;
 
   try {
+    fastify.log.info(`---> About to query Supabase for plan ${planId}`); // <-- Add Before DB Log
     const { data, error } = await supabase
       .from("workout_plans")
       .select(
@@ -167,32 +171,73 @@ export const getWorkoutPlanDetails = async (
       .eq("id", planId)
       .single(); // Expect exactly one plan
 
+    fastify.log.info({ data, error }, `<--- Supabase query completed for plan ${planId}`); // <-- Add After DB Log (log data & error)
+
     if (error) {
-      fastify.log.error({ error, planId }, "Error fetching workout plan details");
+      fastify.log.error({ error, planId }, "Error fetching workout plan details from Supabase"); // <-- Log specific error
       return new Error(`Failed to fetch details for plan ${planId}: ${error.message}`);
     }
 
     if (!data) {
+      fastify.log.warn({ planId }, "Workout plan data not found after query"); // <-- Log specific condition
       return new Error(`Workout plan with ID ${planId} not found.`);
     }
 
-    // Map the data to the WorkoutPlanDetails structure using renamed fields
+    // Map the data explicitly to the WorkoutPlanDetails structure
     const planDetails: WorkoutPlanDetails = {
-      ...data, // Spread the top-level plan fields
-      days: (data.workout_plan_days || []).map((pwd: any) => ({
-        // Renamed workouts -> days, workout_plan_days -> workout_plan_days
-        ...pwd, // Spread the workout_plan_day fields
-        day_exercises: (pwd.workout_plan_day_exercises || []).map((pwde: any) => ({
-          // Renamed exercises -> day_exercises, plan_workout_exercises -> workout_plan_day_exercises
-          ...pwde, // Spread the workout_plan_day_exercise fields
-          exercise: pwde.exercises, // Assign the nested exercise object
-        })),
-      })),
+      // Explicitly map top-level plan fields from 'data'
+      id: data.id,
+      user_id: data.user_id,
+      name: data.name,
+      description: data.description,
+      goal_type: data.goal_type,
+      plan_type: data.plan_type,
+      days_per_week: data.days_per_week,
+      created_by: data.created_by,
+      source_description: data.source_description,
+      is_active: data.is_active,
+      created_at: data.created_at,
+      approximate_workout_minutes: data.approximate_workout_minutes,
+      recommended_week_duration: data.recommended_week_duration,
+      start_date: data.start_date,
+      // Map the nested days
+      days: (data.workout_plan_days || []).map(
+        (pwd: any): WorkoutPlanDayDetails => ({
+          // Explicitly map day fields from 'pwd'
+          id: pwd.id,
+          plan_id: pwd.plan_id,
+          name: pwd.name,
+          day_of_week: pwd.day_of_week,
+          order_in_plan: pwd.order_in_plan,
+          focus: pwd.focus,
+          // Map the nested exercises for the day
+          day_exercises: (pwd.workout_plan_day_exercises || []).map(
+            (pwde: any): WorkoutPlanDayExerciseDetails => ({
+              // Explicitly map day exercise fields from 'pwde'
+              id: pwde.id,
+              workout_plan_day_id: pwde.workout_plan_day_id,
+              exercise_id: pwde.exercise_id,
+              order_in_workout: pwde.order_in_workout,
+              target_sets: pwde.target_sets,
+              target_reps_min: pwde.target_reps_min,
+              target_reps_max: pwde.target_reps_max,
+              target_rest_seconds: pwde.target_rest_seconds,
+              current_suggested_weight_kg: pwde.current_suggested_weight_kg,
+              on_success_weight_increase_kg: pwde.on_success_weight_increase_kg,
+              // Assign the nested exercise object correctly
+              exercise: pwde.exercises, // Use the 'exercises' object fetched by Supabase
+            })
+          ),
+        })
+      ),
     };
+
+    // Log the final constructed object
+    fastify.log.info({ planDetails }, "Constructed planDetails object before return");
 
     return planDetails;
   } catch (err: any) {
-    fastify.log.error(err, `Unexpected error fetching details for plan ${planId}`);
+    fastify.log.error(err, `Unexpected error in getWorkoutPlanDetails catch block for plan ${planId}`); // <-- Log specific catch block error
     return new Error("An unexpected error occurred while fetching plan details.");
   }
 };
@@ -407,7 +452,7 @@ export const getWorkoutPlanDay = async (
     }));
 
     const finalDetails: WorkoutPlanDayDetails = {
-      ...(restOfDay as DbWorkoutPlanDay), // Cast the rest to the base type
+      ...(restOfDay as WorkoutPlanDayDetails), // Cast the rest to the base type
       day_exercises: mappedExercises, // Corrected property name to match schema
     };
 
@@ -693,8 +738,8 @@ export const getWorkoutPlanDayExercise = async (
 
     // We don't need to return the nested ownership data
     const { workout_plan_days, ...rest } = exercise as any;
-
-    return rest as DbWorkoutPlanDayExercise & { exercises: Tables<"exercises"> | null };
+    fastify.log.info(JSON.stringify(rest, null, 2));
+    return rest as WorkoutPlanDayExercise & { exercises: Tables<"exercises"> | null };
   } catch (error: any) {
     fastify.log.error(error, `Unexpected error getting workout plan day exercise ${planDayExerciseId}`);
     throw error; // Re-throw
@@ -1094,11 +1139,14 @@ export const updateWorkoutPlanDayExercise = async (
  * Fetches the currently active workout plan for a user.
  * @param fastify - Fastify instance.
  * @param userId - The ID of the user.
- * @returns The active workout plan or null if none is active.
+ * @returns The detailed active workout plan or null if none is active or details fail to load.
  */
-export const getActiveWorkoutPlan = async (fastify: FastifyInstance, userId: string): Promise<DbWorkoutPlan | null> => {
-  // Return type allows null
-  fastify.log.info(`Fetching active workout plan for user: ${userId}`);
+export const getActiveWorkoutPlan = async (
+  fastify: FastifyInstance,
+  userId: string
+): Promise<WorkoutPlanDetails | null> => {
+  // Return type updated to reflect potential null return
+  fastify.log.info(`Fetching active workout plan details for user: ${userId}`); // Updated log message
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
@@ -1117,9 +1165,27 @@ export const getActiveWorkoutPlan = async (fastify: FastifyInstance, userId: str
       throw new Error("Failed to fetch active workout plan");
     }
 
-    return activePlan; // Return the plan or null
+    // If no active plan is found, return null immediately
+    if (!activePlan) {
+      fastify.log.info(`No active workout plan found for user: ${userId}`);
+      return null;
+    }
+
+    // Now fetch the full details for the active plan
+    const fullPlan = await getWorkoutPlanDetails(fastify, activePlan.id);
+
+    // Check if getWorkoutPlanDetails returned an error
+    if (fullPlan instanceof Error) {
+      fastify.log.error(fullPlan, `Failed to get details for active plan ${activePlan.id}`);
+      // Depending on desired behavior, you might throw or return null.
+      // Returning null aligns with the function signature indicating details might not be available.
+      return null;
+    }
+
+    return fullPlan; // Return the detailed plan
   } catch (err: any) {
-    fastify.log.error(err, "Unexpected error fetching active workout plan");
+    // Catch errors from the initial fetch or unexpected errors during detail fetch
+    fastify.log.error(err, `Unexpected error fetching active workout plan details for user: ${userId}`);
     throw new Error("An unexpected error occurred while fetching the active plan.");
   }
 };

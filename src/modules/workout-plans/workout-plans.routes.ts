@@ -15,6 +15,7 @@ import {
   getWorkoutPlanDay,
   updateWorkoutPlanDay,
   deleteWorkoutPlanDay,
+  getActiveWorkoutPlan, // Added for the new route
   // Plan Day Exercise CRUD
   createWorkoutPlanDayExercise,
   listWorkoutPlanDayExercises,
@@ -56,6 +57,8 @@ import {
   type UpdateWorkoutPlanDayExerciseParams,
   type UpdateWorkoutPlanDayExerciseBody,
   type DeleteWorkoutPlanDayExerciseParams,
+  // No specific schema needed for GET /active request, but need WorkoutPlan for response
+  WorkoutPlanSchema, // Ensure WorkoutPlanSchema is imported if not already implicitly available via refs
 } from "../../schemas/workoutPlansSchemas";
 // Import common schema types
 import { type UuidParams, type ErrorResponse, type MessageResponse } from "../../schemas/commonSchemas";
@@ -97,7 +100,76 @@ async function workoutPlanRoutes(fastify: FastifyInstance, options: FastifyPlugi
     },
   });
 
-  // POST /workout-plans/ (Create a new plan shell)
+  // GET /workout-plans/active (Get the active plan)
+  fastify.get<{ Reply: WorkoutPlan | ErrorResponse }>("/active", {
+    preHandler: [fastify.authenticate],
+    schema: {
+      description: "Retrieves the user's currently active workout plan.",
+      tags: ["Workout Plans"],
+      summary: "Get active plan",
+      security: [{ bearerAuth: [] }],
+      response: {
+        200: { $ref: "WorkoutPlanSchema#" }, // Use the existing WorkoutPlan schema
+        401: { $ref: "ErrorResponseSchema#" },
+        404: { $ref: "ErrorResponseSchema#" }, // For when no active plan exists
+        500: { $ref: "ErrorResponseSchema#" },
+      },
+    },
+    handler: async (request: FastifyRequest, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
+      try {
+        const activePlan = await getActiveWorkoutPlan(fastify, userId);
+        if (!activePlan) {
+          return reply.code(404).send({ error: "Not Found", message: "No active workout plan found." });
+        }
+        return reply.send(activePlan);
+      } catch (error: any) {
+        fastify.log.error(error, "Failed getting active workout plan");
+        return reply.code(500).send({ error: "Internal Server Error", message: "Failed to retrieve active plan." });
+      }
+    },
+  });
+
+  // POST /workout-plans/{id}/activate (Activate a plan)
+  fastify.post<{ Params: GetWorkoutPlanParams; Reply: MessageResponse | ErrorResponse }>("/:id/activate", {
+    preHandler: [fastify.authenticate],
+    schema: {
+      description: "Sets a plan as the user's active plan.", // Restored description
+      tags: ["Workout Plans"],
+      summary: "Activate plan", // Restored summary
+      security: [{ bearerAuth: [] }],
+      params: { $ref: "UuidParamsSchema#" }, // Restored params schema
+      response: {
+        200: { $ref: "MessageResponseSchema#" }, // Restored response schema
+        401: { $ref: "ErrorResponseSchema#" },
+        404: { $ref: "ErrorResponseSchema#" },
+        500: { $ref: "ErrorResponseSchema#" },
+      },
+    },
+    handler: async (request: FastifyRequest<{ Params: GetWorkoutPlanParams }>, reply: FastifyReply) => {
+      // Restored handler signature
+      const userId = request.user?.id;
+      const { id: planId } = request.params; // Restored param extraction
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
+      try {
+        await activateWorkoutPlan(fastify, userId, planId); // Restored service call
+        return reply.send({ message: "Workout plan activated successfully." }); // Restored success response
+      } catch (error: any) {
+        fastify.log.error(error, `Failed activating workout plan ID: ${planId}`); // Restored log message
+        if (error.message.includes("not found") || error.message.includes("unauthorized")) {
+          return reply.code(404).send({ error: "Not Found or Unauthorized", message: error.message }); // Restored error handling
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: "Failed to activate plan." }); // Restored error handling
+      }
+    },
+  });
+
+  // POST /workout-plans/ (Create a new plan shell) // This was the route that got duplicated into /activate
   fastify.post<{ Body: CreateWorkoutPlanBody; Reply: WorkoutPlan | ErrorResponse }>("/", {
     preHandler: [fastify.authenticate],
     schema: {
@@ -208,41 +280,6 @@ async function workoutPlanRoutes(fastify: FastifyInstance, options: FastifyPlugi
       },
     }
   );
-
-  // POST /workout-plans/{id}/activate (Activate a plan)
-  fastify.post<{ Params: GetWorkoutPlanParams; Reply: MessageResponse | ErrorResponse }>("/:id/activate", {
-    preHandler: [fastify.authenticate],
-    schema: {
-      description: "Sets a plan as the user's active plan.",
-      tags: ["Workout Plans"],
-      summary: "Activate plan",
-      security: [{ bearerAuth: [] }],
-      params: { $ref: "UuidParamsSchema#" }, // Uses common UuidParamsSchema
-      response: {
-        200: { $ref: "MessageResponseSchema#" },
-        401: { $ref: "ErrorResponseSchema#" },
-        404: { $ref: "ErrorResponseSchema#" },
-        500: { $ref: "ErrorResponseSchema#" },
-      },
-    },
-    handler: async (request: FastifyRequest<{ Params: GetWorkoutPlanParams }>, reply: FastifyReply) => {
-      const userId = request.user?.id;
-      const { id: planId } = request.params;
-      if (!userId) {
-        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
-      }
-      try {
-        await activateWorkoutPlan(fastify, userId, planId);
-        return reply.send({ message: "Workout plan activated successfully." });
-      } catch (error: any) {
-        fastify.log.error(error, `Failed activating workout plan ID: ${planId}`);
-        if (error.message.includes("not found") || error.message.includes("unauthorized")) {
-          return reply.code(404).send({ error: "Not Found or Unauthorized", message: error.message });
-        }
-        return reply.code(500).send({ error: "Internal Server Error", message: "Failed to activate plan." });
-      }
-    },
-  });
 
   // POST /workout-plans/generate (Generate plan via AI)
   fastify.post<{ Body: GeneratePlanBody; Reply: WorkoutPlan | ErrorResponse }>("/generate", {

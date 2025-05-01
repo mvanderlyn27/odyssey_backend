@@ -168,6 +168,32 @@ export type UpdateSetBody = Static<typeof UpdateSetBodySchema>;
 // Params use SessionExerciseParamsSchema
 // Response is 204 No Content
 
+// GET /workout-sessions/next
+const GetNextWorkoutStatusEnum = Type.Union(
+  [
+    Type.Literal("started"),
+    Type.Literal("paused"),
+    Type.Literal("completed"),
+    Type.Literal("skipped"),
+    Type.Literal("pending"),
+    Type.Literal("no_plan"),
+    Type.Literal("no_workouts"),
+    Type.Literal("error"),
+  ],
+  { $id: "GetNextWorkoutStatusEnum", description: "Possible states for the next workout" }
+);
+
+export const GetNextWorkoutResponseSchema = Type.Object(
+  {
+    current_session_id: Type.Optional(Type.String({ format: "uuid" })),
+    workout_plan_day_id: Type.Optional(Type.String({ format: "uuid" })),
+    status: GetNextWorkoutStatusEnum,
+    message: Type.String(),
+  },
+  { $id: "GetNextWorkoutResponseSchema", description: "Response for the get next workout endpoint" }
+);
+export type GetNextWorkoutResponse = Static<typeof GetNextWorkoutResponseSchema>;
+
 // --- Registration ---
 export function registerWorkoutSessionsSchemas(instance: any) {
   // instance.addSchema(SessionStatusEnum);
@@ -182,4 +208,5 @@ export function registerWorkoutSessionsSchemas(instance: any) {
   instance.addSchema(LogSetParamsSchema);
   instance.addSchema(LogSetBodySchema);
   instance.addSchema(UpdateSetBodySchema);
+  instance.addSchema(GetNextWorkoutResponseSchema); // Register the new schema
 }
