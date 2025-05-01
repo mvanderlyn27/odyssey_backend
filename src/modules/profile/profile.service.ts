@@ -1,5 +1,8 @@
 import { FastifyInstance } from "fastify";
-import { Profile, UpdateProfileInput } from "./profile.types";
+// Import types generated from schemas
+import { type Profile, type UpdateProfileBody } from "../../schemas/profileSchemas";
+// Import DB types for Supabase interaction if needed
+import { TablesUpdate } from "../../types/database";
 
 export const getProfile = async (fastify: FastifyInstance, userId: string): Promise<Profile> => {
   fastify.log.info(`Fetching profile for user: ${userId}`);
@@ -34,15 +37,19 @@ export const getProfile = async (fastify: FastifyInstance, userId: string): Prom
     height_cm: data.height_cm,
     current_goal_id: data.current_goal_id,
     subscription_status: data.subscription_status,
+    admin: data.admin, // Add admin mapping
   };
 
   return profile;
 };
 
+// Define DB update type alias
+type ProfileUpdate = TablesUpdate<"profiles">;
+
 export const updateProfile = async (
   fastify: FastifyInstance,
   userId: string,
-  updateData: UpdateProfileInput
+  updateData: UpdateProfileBody // Use schema type for input
 ): Promise<Profile> => {
   fastify.log.info(`Updating profile for user: ${userId} with data:`, updateData);
   if (!fastify.supabase) {
@@ -55,9 +62,10 @@ export const updateProfile = async (
     updated_at: new Date().toISOString(),
   };
 
+  // Ensure the data being sent matches the DB update type
   const { data, error } = await fastify.supabase
     .from("profiles")
-    .update(dataToUpdate)
+    .update(dataToUpdate as ProfileUpdate) // Cast to DB update type
     .eq("id", userId)
     .select()
     .single();
@@ -88,6 +96,7 @@ export const updateProfile = async (
     height_cm: data.height_cm,
     current_goal_id: data.current_goal_id,
     subscription_status: data.subscription_status,
+    admin: data.admin, // Add admin mapping
   };
 
   return updatedProfile;

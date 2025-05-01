@@ -1,21 +1,12 @@
 import { FastifyInstance } from "fastify";
-import { Exercise, AlternativeExerciseSuggestion } from "./exercises.types"; // Import necessary types
-import { Tables } from "../../types/database";
+// Import types generated from schemas
+import { type Exercise, type ListExercisesQuery, type SearchExercisesQuery } from "../../schemas/exercisesSchemas";
+import { type Equipment } from "../../schemas/equipmentSchemas"; // Import Equipment from its schema
+import { Tables, TablesInsert, TablesUpdate } from "../../types/database"; // Import DB helpers
 import { alternativesSchema } from "../../types/geminiSchemas/alternativesSchema"; // Import the schema for structured response
 import { FunctionDeclarationsTool, Part, Content, FunctionDeclarationSchema, SchemaType } from "@google/generative-ai"; // Import Gemini types
-import { Equipment } from "../equipment/equipment.types";
 
-// Define interfaces for query parameters if needed for list/search
-interface ListExercisesQuery {
-  primary_muscle_group?: string;
-  equipment_id?: string;
-  // Add other potential filters
-}
-
-interface SearchExercisesQuery {
-  name?: string;
-  // Add other search criteria
-}
+// Removed local query interfaces as they are imported from schemas now
 
 export const listExercises = async (fastify: FastifyInstance, query: ListExercisesQuery): Promise<Exercise[]> => {
   fastify.log.info("Listing exercises with query:", query);
@@ -41,10 +32,12 @@ export const listExercises = async (fastify: FastifyInstance, query: ListExercis
     throw new Error(`Failed to list exercises: ${error.message}`);
   }
 
-  return data || [];
+  // Cast data to Exercise[] if Supabase client doesn't infer it perfectly
+  return (data as Exercise[]) || [];
 };
 
-export const getExerciseById = async (fastify: FastifyInstance, exerciseId: string): Promise<Exercise> => {
+export const getExerciseById = async (fastify: FastifyInstance, exerciseId: string): Promise<Exercise | null> => {
+  // Return null if not found
   fastify.log.info(`Fetching exercise with ID: ${exerciseId}`);
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
@@ -54,17 +47,19 @@ export const getExerciseById = async (fastify: FastifyInstance, exerciseId: stri
 
   if (error) {
     fastify.log.error({ error, exerciseId }, "Error fetching exercise by ID from Supabase");
+    // Handle specific 'not found' error code from Supabase (e.g., PGRST116)
+    if (error.code === "PGRST116") {
+      fastify.log.info(`Exercise not found with ID: ${exerciseId}`);
+      return null; // Return null instead of throwing for not found
+    }
     throw new Error(`Failed to fetch exercise ${exerciseId}: ${error.message}`);
   }
 
-  if (!data) {
-    throw new Error(`Exercise not found with ID: ${exerciseId}`);
-  }
-
-  return data;
+  // No need to check !data again if single() is used and error is handled
+  return data as Exercise; // Cast data to Exercise
 };
 
-// Helper to get user equipment names
+// Helper to get user equipment (returns Equipment[] based on schema type)
 export async function getUserEquipment(fastify: FastifyInstance, userId: string): Promise<Equipment[]> {
   const { supabase, log } = fastify; // Destructure log as well
   if (!supabase) {
@@ -84,10 +79,11 @@ export async function getUserEquipment(fastify: FastifyInstance, userId: string)
       return []; // Return empty list on error
     }
 
-    // Safely map and filter the results
+    // Safely map and filter the results, ensuring the nested object matches the Equipment type
     const equipmentList: Equipment[] = (data || [])
       .map((item) => item.equipment) // Extract the nested equipment object
-      .filter((eq): eq is Equipment => eq !== null); // Type guard to filter out nulls and ensure correct type
+      .filter((eq): eq is Tables<"equipment"> => eq !== null) // Ensure it's not null
+      .map((eq) => eq as Equipment); // Cast to the schema-derived Equipment type
 
     return equipmentList;
   } catch (err: any) {
@@ -106,7 +102,11 @@ export const suggestAlternatives = async (
   if (!fastify.gemini) throw new Error("Gemini client not available");
 
   // 1. Fetch original exercise details
-  const originalExercise = await getExerciseById(fastify, exerciseId); // Reuse existing function
+  const originalExercise = await getExerciseById(fastify, exerciseId);
+  if (!originalExercise) {
+    // Handle case where original exercise is not found
+    throw new Error(`Original exercise not found with ID: ${exerciseId}`);
+  }
 
   // 2. Fetch user's equipment
   const userEquipmentNames = (await getUserEquipment(fastify, userId)).map((eq) => eq.name);
@@ -152,11 +152,12 @@ export const suggestAlternatives = async (
     let suggestions: Exercise[];
     try {
       const parsedJson = JSON.parse(responseText);
-      // Validate against the expected structure (basic check)
+      // Validate against the expected structure (basic check) - assuming alternativesSchema defines { alternatives: Exercise[] }
       if (!parsedJson || !Array.isArray(parsedJson.alternatives)) {
         throw new Error("Parsed JSON does not match expected alternatives schema.");
       }
-      suggestions = parsedJson;
+      // Cast the parsed alternatives to Exercise[]
+      suggestions = parsedJson.alternatives as Exercise[];
     } catch (parseError: any) {
       fastify.log.error({ error: parseError, responseText }, "Failed to parse Gemini JSON response for alternatives");
       throw new Error(`Failed to parse AI response: ${parseError.message}`);
@@ -193,15 +194,21 @@ export const searchExercises = async (fastify: FastifyInstance, query: SearchExe
     throw new Error(`Failed to search exercises: ${error.message}`);
   }
 
-  return data || [];
+  // Cast data to Exercise[]
+  return (data as Exercise[]) || [];
 };
 
 // --- Admin/Protected Operations ---
 // Note: Authorization checks (e.g., is user admin?) are needed here for production.
 
+// Use CreateExerciseBody type from schema for input, map to DB insert type
+import { type CreateExerciseBody } from "../../schemas/exercisesSchemas";
+// Use correct DB helper type
+type ExerciseInsert = TablesInsert<"exercises">;
+
 export const createExercise = async (
   fastify: FastifyInstance,
-  exerciseData: Omit<Exercise, "id" | "created_at">
+  exerciseData: CreateExerciseBody // Use schema type for input
 ): Promise<Exercise> => {
   fastify.log.info("Creating a new exercise:", exerciseData);
   if (!fastify.supabase) {
@@ -209,11 +216,20 @@ export const createExercise = async (
   }
   // Authorization check needed
 
-  const { data, error } = await fastify.supabase
-    .from("exercises")
-    .insert(exerciseData as any)
-    .select()
-    .single(); // Use 'as any' or define specific insert type if needed
+  // Map CreateExerciseBody to the database insert type
+  const exerciseToInsert: ExerciseInsert = {
+    ...exerciseData,
+    // Ensure equipment_required is handled correctly (schema uses it)
+    equipment_required: exerciseData.equipment_required ?? [], // Default to empty array if null/undefined
+    // Ensure optional fields default to null if not provided and DB allows null
+    description: exerciseData.description ?? null,
+    secondary_muscle_groups: exerciseData.secondary_muscle_groups ?? null,
+    image_url: exerciseData.image_url ?? null,
+    difficulty: exerciseData.difficulty ?? null,
+    // created_at and updated_at are handled by DB defaults/triggers
+  };
+
+  const { data, error } = await fastify.supabase.from("exercises").insert(exerciseToInsert).select().single();
 
   if (error) {
     fastify.log.error({ error, exerciseData }, "Error creating exercise in Supabase");
@@ -222,13 +238,19 @@ export const createExercise = async (
   if (!data) {
     throw new Error("Failed to retrieve created exercise.");
   }
-  return data;
+  return data as Exercise; // Cast to schema type
 };
+
+// Use UpdateExerciseBody type from schema for input, map to DB update type
+import { type UpdateExerciseBody } from "../../schemas/exercisesSchemas";
+// Use correct DB helper type
+// import { TablesUpdate } from "../../types/database"; // Already imported above
+type ExerciseUpdate = TablesUpdate<"exercises">;
 
 export const updateExercise = async (
   fastify: FastifyInstance,
   exerciseId: string,
-  updateData: Partial<Omit<Exercise, "id" | "created_at">>
+  updateData: UpdateExerciseBody // Use schema type for input
 ): Promise<Exercise> => {
   fastify.log.info(`Updating exercise with ID: ${exerciseId} with data:`, updateData);
   if (!fastify.supabase) {
@@ -236,9 +258,38 @@ export const updateExercise = async (
   }
   // Authorization check needed
 
+  // Map UpdateExerciseBody to the database update type
+  // Only include fields present in updateData
+  const exerciseToUpdate: ExerciseUpdate = {};
+  if (updateData.name !== undefined) exerciseToUpdate.name = updateData.name;
+  // Ensure null is passed if description is explicitly set to null in the update
+  if (updateData.description !== undefined) exerciseToUpdate.description = updateData.description;
+  if (updateData.primary_muscle_groups !== undefined)
+    exerciseToUpdate.primary_muscle_groups = updateData.primary_muscle_groups;
+  if (updateData.secondary_muscle_groups !== undefined)
+    exerciseToUpdate.secondary_muscle_groups = updateData.secondary_muscle_groups;
+  // Handle potential null for equipment_required based on updated DB type
+  if (updateData.equipment_required !== undefined) exerciseToUpdate.equipment_required = updateData.equipment_required;
+  if (updateData.image_url !== undefined) exerciseToUpdate.image_url = updateData.image_url;
+  // Handle potential null for difficulty based on updated DB type
+  if (updateData.difficulty !== undefined) exerciseToUpdate.difficulty = updateData.difficulty;
+  // Ensure updated_at is handled by DB trigger or set manually if needed
+  // exerciseToUpdate.updated_at = new Date().toISOString();
+
+  // Check if there's anything to update
+  if (Object.keys(exerciseToUpdate).length === 0) {
+    // Optionally return the existing exercise or throw an error
+    fastify.log.warn(`Update called for exercise ${exerciseId} with no changes.`);
+    // Fetch and return current data to mimic successful update with no change
+    const currentExercise = await getExerciseById(fastify, exerciseId);
+    if (!currentExercise) throw new Error(`Exercise not found with ID: ${exerciseId}`);
+    return currentExercise;
+    // Or throw: throw new Error("No fields provided for update.");
+  }
+
   const { data, error } = await fastify.supabase
     .from("exercises")
-    .update(updateData)
+    .update(exerciseToUpdate)
     .eq("id", exerciseId)
     .select()
     .single();
@@ -248,9 +299,10 @@ export const updateExercise = async (
     throw new Error(`Failed to update exercise ${exerciseId}: ${error.message}`);
   }
   if (!data) {
+    // This case might happen if RLS prevents update but doesn't error immediately
     throw new Error(`Exercise not found or failed to retrieve after update: ${exerciseId}`);
   }
-  return data;
+  return data as Exercise; // Cast to schema type
 };
 
 export const deleteExercise = async (fastify: FastifyInstance, exerciseId: string): Promise<void> => {

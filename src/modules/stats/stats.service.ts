@@ -1,16 +1,35 @@
 import { FastifyInstance } from "fastify";
 import { PostgrestError } from "@supabase/supabase-js";
+// Import types generated from schemas
 import {
-  ExerciseStats,
-  SessionStats,
-  UserStats,
-  BodyStats,
-  MuscleStats,
-  TimePeriod,
-  MuscleRanking,
-} from "./stats.types";
+  type ExerciseStats,
+  type SessionStats,
+  type UserStats,
+  type BodyStats,
+  type MuscleStats,
+  type TimePeriod, // Now importing the exported static type
+  type Grouping, // Import Grouping type as well
+} from "../../schemas/statsSchemas";
 import { Tables } from "../../types/database";
 import { sub, formatISO, startOfDay, startOfWeek, startOfMonth, startOfYear } from "date-fns";
+
+// Keep internal type definition if needed for logic
+interface MuscleRanking {
+  rank: string;
+  required_weight_kg: number;
+}
+
+// Keep internal type definition if needed for logic
+interface MuscleRanking {
+  rank: string;
+  required_weight_kg: number;
+}
+
+// Keep internal type definition if needed for logic
+interface MuscleRanking {
+  rank: string;
+  required_weight_kg: number;
+}
 
 // Type Aliases
 type SessionExercise = Tables<"session_exercises">;
@@ -25,6 +44,8 @@ type WorkoutSession = Tables<"workout_sessions">;
  * @returns The ISO string of the start date, or null for 'all'.
  */
 function getStartDate(timePeriod: TimePeriod): string | null {
+  // Type annotation is now correct
+  // Use imported enum type
   const now = new Date();
   switch (timePeriod) {
     case "day":
@@ -48,6 +69,8 @@ function getStartDate(timePeriod: TimePeriod): string | null {
  * @returns The formatted group key (e.g., 'YYYY-MM-DD', 'YYYY-WW', 'YYYY-MM', 'YYYY').
  */
 function getGroupKey(dateString: string, grouping: TimePeriod): string {
+  // Type annotation is now correct
+  // Use imported enum type
   const date = new Date(dateString);
   switch (grouping) {
     case "day":
@@ -80,9 +103,11 @@ export const getExerciseStats = async (
   fastify: FastifyInstance,
   userId: string,
   exerciseId: string,
-  timePeriod: TimePeriod,
-  grouping: TimePeriod
+  timePeriod: TimePeriod, // Use imported enum type
+  grouping: TimePeriod // Use imported enum type
 ): Promise<ExerciseStats> => {
+  // Use imported schema type
+  // Use imported schema type
   const { supabase } = fastify;
   if (!supabase) {
     throw new Error("Supabase client not initialized");
@@ -177,6 +202,8 @@ export const getExerciseStats = async (
  * @returns {Promise<SessionStats>} The calculated session statistics.
  */
 export const getSessionStats = async (fastify: FastifyInstance, sessionId: string): Promise<SessionStats> => {
+  // Use imported schema type
+  // Use imported schema type
   const { supabase } = fastify;
   if (!supabase) {
     throw new Error("Supabase client not initialized");
@@ -315,9 +342,11 @@ export const getSessionStats = async (fastify: FastifyInstance, sessionId: strin
 export const getUserStats = async (
   fastify: FastifyInstance,
   userId: string,
-  timePeriod: TimePeriod,
-  grouping: TimePeriod
+  timePeriod: TimePeriod, // Use imported enum type
+  grouping: TimePeriod // Use imported enum type
 ): Promise<UserStats> => {
+  // Use imported schema type
+  // Use imported schema type
   const { supabase } = fastify;
   if (!supabase) {
     throw new Error("Supabase client not initialized");
@@ -423,6 +452,8 @@ export const getUserStats = async (
  * @returns {Promise<BodyStats>} The calculated body statistics.
  */
 export const getBodyStats = async (fastify: FastifyInstance, userId: string): Promise<BodyStats> => {
+  // Use imported schema type
+  // Use imported schema type
   const { supabase } = fastify;
   if (!supabase) {
     throw new Error("Supabase client not initialized");
@@ -486,8 +517,10 @@ export const getMuscleStats = async (
   fastify: FastifyInstance,
   userId: string,
   muscleId: string,
-  timePeriod: TimePeriod
+  timePeriod: TimePeriod // Use imported enum type
 ): Promise<MuscleStats> => {
+  // Use imported schema type
+  // Use imported schema type
   const { supabase } = fastify;
   if (!supabase) {
     throw new Error("Supabase client not initialized");

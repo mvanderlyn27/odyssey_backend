@@ -1,28 +1,29 @@
 import { FastifyInstance } from "fastify";
 
-import {
-  WorkoutPlan,
-  PlanType,
-  PlanCreator,
-  WorkoutPlanDay, // Renamed from PlanWorkout
-  WorkoutPlanDayExercise, // Renamed from PlanWorkoutExercise
-  CreateWorkoutPlanInput, // Use defined type
-  UpdateWorkoutPlanInput, // Use defined type
-  AddWorkoutPlanDayInput, // Added for creating days
-  AddWorkoutPlanDayExerciseInput, // Added for creating day exercises
-  GeneratePlanInput,
-  ImportPlanInput,
-  UpdateWorkoutPlanDayExerciseInput, // Renamed from UpdatePlanWorkoutExerciseInput
-  WorkoutPlanDetails, // Import the missing type
-  WorkoutPlanDayDetails, // Import the new type
-} from "./workout-plans.types"; // Import necessary types
-import { GoalType } from "../user-goals/user-goals.types";
 import { exercisePlanSchema } from "../../types/geminiSchemas/exercisePlanSchema";
 import { FunctionDeclarationSchema, Schema, SchemaType } from "@google/generative-ai";
 import { Tables, TablesInsert, TablesUpdate } from "../../types/database"; // Import DB types
+import {
+  CreateWorkoutPlanBody,
+  GeneratePlanBody,
+  ImportPlanBody,
+  UpdateWorkoutPlanBody,
+  UpdateWorkoutPlanDayExerciseBody,
+  WorkoutPlanDayDetails,
+  WorkoutPlanDayExercise,
+  WorkoutPlanDetails,
+  // Added imports for Day and Day Exercise CRUD types
+  CreateWorkoutPlanDayBody,
+  WorkoutPlanDay,
+  UpdateWorkoutPlanDayBody,
+  CreateWorkoutPlanDayExerciseBody,
+} from "@/schemas/workoutPlansSchemas";
 
 // Type Aliases using renamed tables
 type DbWorkoutPlan = Tables<"workout_plans">;
+// Intermediate types for service function inputs combining route params and body
+type CreateWorkoutPlanDayInput = CreateWorkoutPlanDayBody & { plan_id: string };
+type CreateWorkoutPlanDayExerciseInput = CreateWorkoutPlanDayExerciseBody & { workout_plan_day_id: string };
 type DbWorkoutPlanInsert = TablesInsert<"workout_plans">;
 type DbWorkoutPlanDay = Tables<"workout_plan_days">; // Renamed from DbPlanWorkout
 type DbWorkoutPlanDayExercise = Tables<"workout_plan_day_exercises">; // Renamed from DbPlanWorkoutExercise
@@ -55,7 +56,7 @@ export const listWorkoutPlans = async (fastify: FastifyInstance, userId: string)
 export const createWorkoutPlan = async (
   fastify: FastifyInstance,
   userId: string,
-  planData: CreateWorkoutPlanInput // Use imported type
+  planData: CreateWorkoutPlanBody // Use imported type
 ): Promise<DbWorkoutPlan> => {
   // Add return type
   fastify.log.info(`Creating workout plan for user: ${userId} with data:`, planData);
@@ -200,7 +201,7 @@ export const updateWorkoutPlan = async (
   fastify: FastifyInstance,
   userId: string,
   planId: string,
-  updateData: UpdateWorkoutPlanInput // Use imported type
+  updateData: UpdateWorkoutPlanBody // Use imported type
 ): Promise<DbWorkoutPlan> => {
   // Add return type
   fastify.log.info(`Updating workout plan ${planId} for user: ${userId} with data:`, updateData);
@@ -245,7 +246,7 @@ export const updateWorkoutPlan = async (
 export const createWorkoutPlanDay = async (
   fastify: FastifyInstance,
   userId: string,
-  dayData: AddWorkoutPlanDayInput
+  dayData: CreateWorkoutPlanDayInput // Use combined input type
 ): Promise<DbWorkoutPlanDay> => {
   fastify.log.info(`Creating workout plan day for plan ${dayData.plan_id} by user ${userId}`, dayData);
   if (!fastify.supabase) {
@@ -302,7 +303,7 @@ export const listWorkoutPlanDays = async (
   fastify: FastifyInstance,
   userId: string,
   planId: string
-): Promise<DbWorkoutPlanDay[]> => {
+): Promise<WorkoutPlanDay[]> => {
   fastify.log.info(`Listing workout plan days for plan ${planId} by user ${userId}`);
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
@@ -407,7 +408,7 @@ export const getWorkoutPlanDay = async (
 
     const finalDetails: WorkoutPlanDayDetails = {
       ...(restOfDay as DbWorkoutPlanDay), // Cast the rest to the base type
-      day_exercises: mappedExercises, // Assign the correctly typed array
+      day_exercises: mappedExercises, // Corrected property name to match schema
     };
 
     return finalDetails;
@@ -426,7 +427,7 @@ export const updateWorkoutPlanDay = async (
   fastify: FastifyInstance,
   userId: string,
   planDayId: string,
-  updateData: Partial<Omit<DbWorkoutPlanDay, "id" | "plan_id">> // Allow updating name, day_of_week, order_in_plan
+  updateData: UpdateWorkoutPlanDayBody // Allow updating name, day_of_week, order_in_plan
 ): Promise<DbWorkoutPlanDay> => {
   fastify.log.info(`Updating workout plan day ${planDayId} for user ${userId}`, updateData);
   if (!fastify.supabase) {
@@ -530,7 +531,7 @@ export const deleteWorkoutPlanDay = async (
 export const createWorkoutPlanDayExercise = async (
   fastify: FastifyInstance,
   userId: string,
-  exerciseData: AddWorkoutPlanDayExerciseInput
+  exerciseData: CreateWorkoutPlanDayExerciseInput // Use combined input type
 ): Promise<DbWorkoutPlanDayExercise> => {
   fastify.log.info(
     `Creating workout plan day exercise for day ${exerciseData.workout_plan_day_id} by user ${userId}`,
@@ -599,7 +600,7 @@ export const listWorkoutPlanDayExercises = async (
   fastify: FastifyInstance,
   userId: string,
   planDayId: string
-): Promise<(DbWorkoutPlanDayExercise & { exercises: Tables<"exercises"> | null })[]> => {
+): Promise<WorkoutPlanDayDetails> => {
   // Return type includes nested exercise
   fastify.log.info(`Listing workout plan day exercises for day ${planDayId} by user ${userId}`);
   if (!fastify.supabase) {
@@ -655,7 +656,7 @@ export const getWorkoutPlanDayExercise = async (
   fastify: FastifyInstance,
   userId: string,
   planDayExerciseId: string
-): Promise<DbWorkoutPlanDayExercise & { exercises: Tables<"exercises"> | null }> => {
+): Promise<WorkoutPlanDayExercise> => {
   fastify.log.info(`Getting workout plan day exercise ${planDayExerciseId} for user ${userId}`);
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
@@ -785,7 +786,7 @@ export const activateWorkoutPlan = async (fastify: FastifyInstance, userId: stri
 export const generateWorkoutPlan = async (
   fastify: FastifyInstance,
   userId: string,
-  preferences: GeneratePlanInput // Use specific input type
+  preferences: GeneratePlanBody // Use specific input type
 ): Promise<DbWorkoutPlan> => {
   // Return DbWorkoutPlan as the RPC result mapping is complex
   fastify.log.info(`Generating workout plan for user: ${userId} with preferences:`, preferences);
@@ -922,7 +923,7 @@ ${allExercisesString}
 export const importWorkoutPlan = async (
   fastify: FastifyInstance,
   userId: string,
-  importData: ImportPlanInput
+  importData: ImportPlanBody
 ): Promise<DbWorkoutPlan> => {
   fastify.log.info(`Importing workout plan for user: ${userId}`);
   if (!fastify.supabase) throw new Error("Supabase client not available");
@@ -1026,7 +1027,7 @@ export const updateWorkoutPlanDayExercise = async (
   fastify: FastifyInstance,
   userId: string,
   planDayExerciseId: string, // Renamed from planExerciseId
-  updateData: UpdateWorkoutPlanDayExerciseInput // Use renamed specific input type
+  updateData: UpdateWorkoutPlanDayExerciseBody // Use renamed specific input type
 ): Promise<DbWorkoutPlanDayExercise> => {
   // Use renamed specific return type
   // Use specific return type

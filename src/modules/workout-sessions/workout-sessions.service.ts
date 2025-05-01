@@ -1,13 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { Database, Tables, TablesInsert, TablesUpdate } from "../../types/database";
 import { PostgrestError } from "@supabase/supabase-js";
+import { LogSetBody, UpdateSetBody, FinishSessionBody, SessionDetails } from "@/schemas/workoutSessionsSchemas";
 // Assuming types for request bodies are defined here or in a shared types file
-import {
-  FinishSessionBody,
-  LogSetBody,
-  UpdateSetBody,
-  WorkoutSessionDetails, // Import the new type
-} from "./workout-sessions.types"; // We'll need to create this file/types
 
 // Define XP and Level constants (adjust as needed)
 const XP_PER_WORKOUT = 50;
@@ -626,7 +621,7 @@ export const getWorkoutSessionById = async (
   fastify: FastifyInstance,
   userId: string,
   sessionId: string
-): Promise<WorkoutSessionDetails | null> => {
+): Promise<SessionDetails | null> => {
   fastify.log.info(`Fetching workout session details for session: ${sessionId}, user: ${userId}`);
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
@@ -660,7 +655,7 @@ export const getWorkoutSessionById = async (
     }
 
     // The data structure should match WorkoutSessionDetails due to the select query
-    return data as WorkoutSessionDetails;
+    return data as SessionDetails;
   } catch (error: any) {
     fastify.log.error(error, `Unexpected error fetching workout session ${sessionId}`);
     throw error; // Re-throw unexpected errors

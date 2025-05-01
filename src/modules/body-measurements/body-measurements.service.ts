@@ -1,6 +1,11 @@
 import { FastifyInstance } from "fastify";
 import { PostgrestSingleResponse } from "@supabase/supabase-js";
-import { BodyMeasurement, LogBodyMeasurementInput, UpdateBodyMeasurementInput } from "./body-measurements.types";
+// Import types generated from schemas instead of local types file
+import {
+  type BodyMeasurement,
+  type PostBodyMeasurementsBody, // Use instead of LogBodyMeasurementInput
+  type UpdateBodyMeasurementsBody, // Use instead of UpdateBodyMeasurementInput
+} from "../../schemas/bodyMeasurementsSchemas";
 import { Database } from "@/types/database";
 
 type BodyMeasurementsTable = Database["public"]["Tables"]["body_measurements"];
@@ -19,9 +24,10 @@ type BodyMeasurementRow = BodyMeasurementsTable["Row"];
 export async function logBodyMeasurement(
   fastify: FastifyInstance,
   userId: string,
-  input: LogBodyMeasurementInput
+  input: PostBodyMeasurementsBody // Use schema type for input
 ): Promise<BodyMeasurement> {
   // Basic validation: Ensure at least one measurement value is present
+  // Access properties directly from PostBodyMeasurementsBody type
   if (input.weight_kg === undefined && input.body_fat_percentage === undefined && input.other_metrics === undefined) {
     throw new Error(
       "At least one measurement value (weight_kg, body_fat_percentage, or other_metrics) must be provided."
@@ -119,7 +125,7 @@ export async function updateBodyMeasurement(
   fastify: FastifyInstance,
   userId: string,
   measurementId: string,
-  input: UpdateBodyMeasurementInput
+  input: UpdateBodyMeasurementsBody // Use schema type for input
 ): Promise<BodyMeasurement> {
   // Construct update object, handling potential undefined fields
   const measurementToUpdate: BodyMeasurementUpdate = {};

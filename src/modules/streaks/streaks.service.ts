@@ -1,14 +1,24 @@
 import { FastifyInstance } from "fastify";
 import { differenceInCalendarDays, format, addDays } from "date-fns";
-import { UserStreak, UserStreakResponse, RecoverStreakInput } from "./streaks.types";
+// Import types generated from schemas
+import { type UserStreakResponse, type RecoverStreakBody } from "../../schemas/streaksSchemas";
+// Import DB types if needed
+import { Tables, TablesInsert, TablesUpdate } from "../../types/database";
+
+// Define internal types locally if they differ from schemas or represent DB structure
+type DbUserStreak = Tables<"user_streaks">;
+type UserStreakUpdate = TablesUpdate<"user_streaks">;
+// Keep RecoverStreakInput if internal logic requires more fields than the API body
+// interface RecoverStreakInput { ... } // Or remove if RecoverStreakBody is sufficient
 
 /**
  * Retrieves the current streak information for a user.
  * @param fastify - The Fastify instance with Supabase client.
  * @param userId - The user's ID.
- * @returns The user's streak information or null if no streak exists.
+ * @returns The user's streak information matching the API response schema, or null.
  */
 export const getUserStreak = async (fastify: FastifyInstance, userId: string): Promise<UserStreakResponse | null> => {
+  // Use schema type
   fastify.log.info(`Fetching streak for user: ${userId}`);
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
@@ -35,13 +45,14 @@ export const getUserStreak = async (fastify: FastifyInstance, userId: string): P
     daysUntilExpiry = Math.max(0, daysLeft);
   }
 
+  // Return object matching UserStreakResponse schema
   return {
     current_streak: data.current_streak,
     longest_streak: data.longest_streak,
     last_streak_activity_date: data.last_streak_activity_date,
     streak_broken_at: data.streak_broken_at,
     streak_recovered_at: data.streak_recovered_at,
-    days_until_expiry: daysUntilExpiry,
+    // days_until_expiry is calculated above but not part of the schema, so it's omitted here.
   };
 };
 
@@ -77,11 +88,11 @@ export const updateStreakOnWorkout = async (
     throw new Error(`Failed to fetch current streak data: ${fetchError.message}`);
   }
 
-  let streakData: Partial<UserStreak>;
+  let streakData: UserStreakUpdate = {}; // Use DB Update type
 
   if (!currentData) {
-    // First workout for streak tracking
-    streakData = {
+    // First workout for streak tracking - Use DB Insert type structure
+    const streakInsertData: TablesInsert<"user_streaks"> = {
       user_id: userId,
       current_streak: 1,
       longest_streak: 1,
@@ -89,7 +100,19 @@ export const updateStreakOnWorkout = async (
       streak_broken_at: null,
       streak_recovered_at: null,
     };
+    // Use upsert with the insert data
+    const { error: upsertError } = await fastify.supabase
+      .from("user_streaks")
+      .upsert(streakInsertData)
+      .eq("user_id", userId);
+    if (upsertError) {
+      fastify.log.error({ error: upsertError, userId, streakInsertData }, "Error upserting initial streak data");
+      throw new Error(`Failed to upsert streak data: ${upsertError.message}`);
+    }
+    fastify.log.info(`Successfully created initial streak for user: ${userId}`);
+    return; // Exit after creating initial record
   } else {
+    // Existing record, calculate update
     // Calculate days difference if last_streak_activity_date exists
     let daysDifference = 0;
     if (currentData.last_streak_activity_date) {
@@ -106,18 +129,20 @@ export const updateStreakOnWorkout = async (
     if (daysDifference > 0 && daysDifference <= 4) {
       // Streak continues/increases
       const newCurrentStreak = currentData.current_streak + 1;
+      // Use DB Update type structure
       streakData = {
         current_streak: newCurrentStreak,
-        longest_streak: Math.max(currentData.longest_streak, newCurrentStreak),
+        longest_streak: Math.max(currentData.longest_streak ?? 0, newCurrentStreak), // Handle potential null longest_streak
         last_streak_activity_date: formattedWorkoutDate,
         streak_broken_at: null,
         streak_recovered_at: null,
       };
     } else {
       // Streak was broken, start new one
+      // Use DB Update type structure
       streakData = {
         current_streak: 1,
-        longest_streak: currentData.longest_streak, // Longest doesn't reset
+        longest_streak: currentData.longest_streak ?? 0, // Handle potential null longest_streak
         last_streak_activity_date: formattedWorkoutDate,
         streak_broken_at: null, // Reset since new activity occurred
         streak_recovered_at: null,
@@ -125,12 +150,12 @@ export const updateStreakOnWorkout = async (
     }
   }
 
-  // Upsert the streak data
-  const { error: upsertError } = await fastify.supabase.from("user_streaks").upsert(streakData).eq("user_id", userId);
+  // Update the existing streak data
+  const { error: updateError } = await fastify.supabase.from("user_streaks").update(streakData).eq("user_id", userId);
 
-  if (upsertError) {
-    fastify.log.error({ error: upsertError, userId, streakData }, "Error upserting streak data");
-    throw new Error(`Failed to upsert streak data: ${upsertError.message}`);
+  if (updateError) {
+    fastify.log.error({ error: updateError, userId, streakData }, "Error updating streak data");
+    throw new Error(`Failed to update streak data: ${updateError.message}`);
   }
 
   fastify.log.info(`Successfully updated streak for user: ${userId}`);
@@ -140,14 +165,15 @@ export const updateStreakOnWorkout = async (
  * Recovers a broken streak for a user.
  * @param fastify - The Fastify instance with Supabase client.
  * @param userId - The user's ID.
- * @param recoveryDetails - Details for streak recovery.
- * @returns A promise that resolves when the streak is recovered.
+ * @param recoveryDetails - Details for streak recovery from API body.
+ * @returns A promise resolving to the updated UserStreakResponse.
  */
 export const recoverStreak = async (
   fastify: FastifyInstance,
   userId: string,
-  recoveryDetails: RecoverStreakInput
-): Promise<void> => {
+  recoveryDetails: RecoverStreakBody // Use schema type for input
+): Promise<UserStreakResponse> => {
+  // Return updated streak info
   fastify.log.info(`Recovering streak for user: ${userId}`, { recoveryDetails });
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
@@ -172,36 +198,45 @@ export const recoverStreak = async (
   // Determine the activity date (default to today if not provided)
   const activityDate = recoveryDetails.activity_date || format(new Date(), "yyyy-MM-dd");
 
-  // Determine the streak value to restore
-  let streakValue = 1; // Default to 1 if nothing else is available
-  if (recoveryDetails.streak_value) {
-    streakValue = recoveryDetails.streak_value;
-  } else if (currentData.streak_value_before_break) {
-    streakValue = currentData.streak_value_before_break;
-  }
+  // Determine the streak value to restore (simplified: use value before break or 1)
+  const streakValue = currentData.streak_value_before_break ?? 1;
 
-  // Prepare update data
-  const updateData: Partial<UserStreak> = {
+  // Prepare update data using DB Update type
+  const updateData: UserStreakUpdate = {
     current_streak: streakValue,
     last_streak_activity_date: activityDate,
-    longest_streak: Math.max(currentData.longest_streak, streakValue),
+    longest_streak: Math.max(currentData.longest_streak ?? 0, streakValue), // Handle null
     streak_broken_at: null,
     streak_value_before_break: null, // Clear the temporary value
     streak_recovered_at: new Date().toISOString(),
+    // last_paid_recovery_at is not part of the API body schema, handle separately if needed
   };
 
-  // If this is a paid recovery, update that field too
-  if (recoveryDetails.is_paid_recovery) {
-    updateData.last_paid_recovery_at = new Date().toISOString();
-  }
-
   // Update the streak data
-  const { error: updateError } = await fastify.supabase.from("user_streaks").update(updateData).eq("user_id", userId);
+  const { data: updatedData, error: updateError } = await fastify.supabase
+    .from("user_streaks")
+    .update(updateData)
+    .eq("user_id", userId)
+    .select() // Select the updated row
+    .single();
 
   if (updateError) {
     fastify.log.error({ error: updateError, userId, updateData }, "Error updating streak data for recovery");
     throw new Error(`Failed to update streak data for recovery: ${updateError.message}`);
   }
 
+  if (!updatedData) {
+    throw new Error("Failed to retrieve updated streak data after recovery.");
+  }
+
   fastify.log.info(`Successfully recovered streak for user: ${userId}`);
+
+  // Return the updated streak info matching the response schema
+  return {
+    current_streak: updatedData.current_streak,
+    longest_streak: updatedData.longest_streak,
+    last_streak_activity_date: updatedData.last_streak_activity_date,
+    streak_broken_at: updatedData.streak_broken_at,
+    streak_recovered_at: updatedData.streak_recovered_at,
+  };
 };

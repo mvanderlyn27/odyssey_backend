@@ -1,4 +1,5 @@
 import fastify, { FastifyInstance, FastifyServerOptions, FastifyRegisterOptions } from "fastify";
+import { TypeBoxTypeProvider } from "@fastify/type-provider-typebox"; // Import TypeBox provider
 // Removed autoload import: import fastifyAutoload from "@fastify/autoload";
 import path from "path";
 import fastifySwagger from "@fastify/swagger";
@@ -20,6 +21,31 @@ import supabaseAuthPlugin, { SupabaseAuthOptions } from "./plugins/supabaseAuth"
 import { SupabaseClient } from "@supabase/supabase-js"; // For mockServices type
 import { GoogleGenerativeAI } from "@google/generative-ai"; // For mockServices type
 import { GeminiService } from "./services/geminiService"; // For mockServices type
+
+// --- Import Schemas ---
+import {
+  ErrorResponseSchema,
+  UuidParamsSchema,
+  DoubleUuidParamsSchema,
+  MessageResponseSchema,
+  PaginationQuerySchema,
+  // Import the enums too
+  PrimaryMuscleGroupEnum,
+  ExerciseDifficultyEnum,
+} from "./schemas/commonSchemas";
+// Import module schema registration functions
+import { registerAiCoachMessagesSchemas } from "./schemas/aiCoachMessagesSchemas";
+import { registerBodyMeasurementsSchemas } from "./schemas/bodyMeasurementsSchemas";
+import { registerEquipmentSchemas } from "./schemas/equipmentSchemas";
+import { registerExercisesSchemas } from "./schemas/exercisesSchemas";
+import { registerOnboardingSchemas } from "./schemas/onboardingSchemas";
+import { registerProfileSchemas } from "./schemas/profileSchemas";
+import { registerStatsSchemas } from "./schemas/statsSchemas";
+import { registerStreaksSchemas } from "./schemas/streaksSchemas";
+import { registerUserGoalsSchemas } from "./schemas/userGoalsSchemas";
+import { registerWorkoutPlansSchemas } from "./schemas/workoutPlansSchemas";
+import { registerWorkoutSessionsSchemas } from "./schemas/workoutSessionsSchemas";
+// ... import other module schema registration functions as they are created
 
 // --- Import Route Handlers ---
 import statusRoutes from "./routes/status";
@@ -139,6 +165,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   const isProduction = process.env.NODE_ENV === "production";
   const loggerConfig = configureLoggerOptions(isProduction);
 
+  // Initialize with TypeBox provider
   const app = fastify({
     trustProxy: true,
     // Use logger from fastifyOptions if provided, otherwise use default config
@@ -146,7 +173,33 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     disableRequestLogging: true,
     // Spread other fastifyOptions
     ...opts.fastifyOptions,
-  });
+  }).withTypeProvider<TypeBoxTypeProvider>(); // Add the type provider
+
+  // --- Register Common Schemas ---
+  app.addSchema(ErrorResponseSchema);
+  app.addSchema(UuidParamsSchema);
+  app.addSchema(DoubleUuidParamsSchema);
+  app.addSchema(MessageResponseSchema);
+  app.addSchema(PaginationQuerySchema);
+  // Register the enums
+  app.addSchema(PrimaryMuscleGroupEnum);
+  app.addSchema(ExerciseDifficultyEnum);
+  app.log.info("Registered common schemas and enums.");
+
+  // --- Register Module Schemas ---
+  registerAiCoachMessagesSchemas(app);
+  registerBodyMeasurementsSchemas(app);
+  registerEquipmentSchemas(app);
+  registerExercisesSchemas(app);
+  registerOnboardingSchemas(app);
+  registerProfileSchemas(app);
+  registerStatsSchemas(app);
+  registerStreaksSchemas(app);
+  registerUserGoalsSchemas(app);
+  registerWorkoutPlansSchemas(app);
+  registerWorkoutSessionsSchemas(app);
+  // ... register other module schemas here
+  app.log.info("Registered module-specific schemas.");
 
   // --- Register Core Plugins ---
   app.register(helmet, { contentSecurityPolicy: false });

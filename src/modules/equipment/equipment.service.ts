@@ -1,7 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { Tables, TablesInsert } from "../../types/database"; // Import base types including TablesInsert
-import { Equipment } from "./equipment.types"; // Import specific Equipment type
-import { getUserEquipment } from "../exercises/exercises.service";
+// Import type generated from schema instead of local types file
+import { type Equipment } from "../../schemas/equipmentSchemas";
+// Removed incorrect import: import { getUserEquipment } from "../exercises/exercises.service";
 
 // Type Alias
 type UserEquipmentInsert = TablesInsert<"user_equipment">;
@@ -77,10 +78,71 @@ export const getAllEquipment = async (fastify: FastifyInstance, userId?: string)
       fastify.log.error({ userError }, "Error fetching user ");
       throw new Error(`Failed to fetch user: ${userError?.message}`);
     }
-    const availableEquipment = await getUserEquipment(fastify, userId);
-    const filteredData = data?.filter((equipment) => availableEquipment.includes(equipment.id));
-    return filteredData;
+    // getUserEquipment now returns Equipment[] objects
+    const userEquipmentList = await getUserEquipment(fastify, userId);
+    // Extract the IDs from the user's equipment list
+    const userEquipmentIds = userEquipmentList.map((eq) => eq.id);
+    // Filter the master list based on the user's equipment IDs
+    const filteredData = data?.filter((equipment) => userEquipmentIds.includes(equipment.id));
+    return filteredData || []; // Return filtered data or empty array
   }
 
   return data || [];
+};
+
+/**
+ * Retrieves the list of equipment associated with a specific user.
+ */
+// Define a more flexible intermediate type, acknowledging Supabase might return 'any' for nested selects
+type SupabaseUserEquipmentResponse = {
+  equipment: any; // Allow 'any' here initially
+}[];
+
+export const getUserEquipment = async (fastify: FastifyInstance, userId: string): Promise<Equipment[]> => {
+  fastify.log.info(`Fetching equipment for user: ${userId}`);
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+  const supabase = fastify.supabase;
+
+  try {
+    const { data, error } = await supabase
+      .from("user_equipment")
+      .select(
+        `
+        equipment (*)
+      `
+      )
+      .eq("user_id", userId);
+
+    if (error) {
+      fastify.log.error({ error, userId }, "Error fetching user equipment");
+      throw new Error(`Failed to fetch user equipment: ${error.message}`);
+    }
+
+    // Cast to the more flexible intermediate type
+    const responseData = data as SupabaseUserEquipmentResponse | null;
+
+    // Map and validate each nested equipment object
+    const equipmentList = (responseData || [])
+      .map((item) => {
+        // Check if item.equipment is an object and has the expected properties
+        if (
+          item.equipment &&
+          typeof item.equipment === "object" &&
+          "id" in item.equipment &&
+          "name" in item.equipment
+          // Add other mandatory checks if needed
+        ) {
+          return item.equipment as Equipment; // Cast to Equipment if valid
+        }
+        return null; // Return null if invalid structure
+      })
+      .filter((eq): eq is Equipment => eq !== null); // Filter out the nulls
+
+    return equipmentList;
+  } catch (error: any) {
+    fastify.log.error(error, `Unexpected error fetching equipment for user ${userId}`);
+    throw error; // Re-throw
+  }
 };

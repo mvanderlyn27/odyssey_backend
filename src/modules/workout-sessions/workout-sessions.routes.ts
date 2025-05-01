@@ -1,44 +1,33 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
 import {
-  getNextWorkout,
   startWorkoutSession,
-  logWorkoutSet,
-  updateLoggedSet,
-  deleteLoggedSet,
-  finishWorkoutSession,
-  skipWorkoutSession, // Import the new skip function
-  getWorkoutSessionById,
+  getWorkoutSessionById, // Renamed from getWorkoutSessionDetails
+  finishWorkoutSession, // Renamed from completeWorkoutSession
+  skipWorkoutSession, // Added missing service function
+  logWorkoutSet, // Added missing service function
+  updateLoggedSet, // Added missing service function
+  deleteLoggedSet, // Added missing service function
+  // Removed imports for functions not exported: list, cancel, pause, resume, addExercise, updateSessionExercise, deleteSessionExercise
 } from "./workout-sessions.service";
+// Import TypeBox schemas and types
 import {
-  LogSetBody as LogSetBodyType,
-  UpdateSetBody as UpdateSetBodyType, // Rename
-  FinishSessionBody as FinishSessionBodyType, // Rename
-  WorkoutSessionDetails, // Import the detailed type for response
-} from "./workout-sessions.types";
-
-// Define interfaces for route parameters and bodies
-// Note: Using imported types now, these local interfaces might be redundant or need adjustment
-interface SessionParams {
-  sessionId: string;
-}
-
-interface SessionExerciseParams extends SessionParams {
-  sessionExerciseId: string;
-}
-
-interface StartSessionBody {
-  workoutPlanDayId?: string;
-}
-
-// Using imported LogSetBodyType
-// interface LogSetBody { } // Removed invalid lines
-
-// Using imported UpdateSetBodyType
-// interface UpdateSetBody { } // Removed invalid lines
-
-// Using imported FinishSessionBodyType
-// interface FinishSessionBody { } // Removed invalid lines
+  type StartSessionBody,
+  type SessionDetails,
+  type GetSessionParams,
+  type FinishSessionBody, // Added schema
+  type LogSetParams, // Renamed from AddSessionExerciseParams
+  type LogSetBody, // Renamed from AddSessionExerciseBody
+  type SessionExercise, // For Log/Update response
+  type SessionExerciseParams, // Renamed from UpdateSessionExerciseParams
+  type UpdateSetBody, // Renamed from UpdateSessionExerciseBody
+  WorkoutSessionSchema, // Import as value for use in response schema
+  type WorkoutSession, // For skip response type
+  // Schemas will be referenced by $id
+} from "../../schemas/workoutSessionsSchemas";
+// Import common schema types
+import { type ErrorResponse, type MessageResponse } from "../../schemas/commonSchemas";
+// Import service input types if needed for casting
 
 /**
  * Encapsulates the routes for the Workout Sessions module.
@@ -46,343 +35,295 @@ interface StartSessionBody {
  * @param {FastifyPluginOptions} options - Plugin options.
  */
 async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPluginOptions): Promise<void> {
-  // --- GET /workouts/next --- (Get next suggested workout)
-  fastify.get(
-    "/next",
-    {
-      preHandler: [fastify.authenticate],
-      // TODO: Add schema
-    },
-    async (request: FastifyRequest, reply: FastifyReply) => {
-      const userId = request.user?.id;
-      if (!userId) return reply.code(401).send({ error: "Unauthorized" });
-      try {
-        // Call the updated service function
-        const result = await getNextWorkout(fastify, userId);
-
-        // Check for the specific error status returned by the service
-        if (result.status === "error") {
-          fastify.log.error(`Error from getNextWorkout for user ${userId}: ${result.message}`);
-          // Use the message from the service function if available
-          return reply.code(500).send({ error: "Internal Server Error", message: result.message });
-        }
-
-        // Send the entire result object back to the client
-        // It now contains status, message, and potentially current_session_id or workout_plan_day_id
-        return reply.send(result);
-      } catch (error: any) {
-        // Catch unexpected errors during the process
-        fastify.log.error(error, `Unexpected failure in /next route for user ${userId}`);
-        return reply.code(500).send({ error: "Internal Server Error", message: "An unexpected error occurred." });
-      }
-    }
-  );
-
-  // --- GET /workouts/{sessionId} --- (Get a specific workout session by ID)
-  fastify.get<{ Params: SessionParams }>(
-    "/:sessionId",
-    {
-      preHandler: [fastify.authenticate],
-      schema: {
-        tags: ["Workout Sessions"],
-        summary: "Get details of a specific workout session",
-        security: [{ bearerAuth: [] }],
-        params: {
-          type: "object",
-          required: ["sessionId"],
-          properties: {
-            sessionId: { type: "string", format: "uuid", description: "ID of the workout session" },
-          },
-        },
-        response: {
-          200: {
-            description: "Details of the workout session including exercises",
-            // Schema based on WorkoutSessionDetails type
-            type: "object",
-            properties: {
-              id: { type: "string", format: "uuid" },
-              user_id: { type: "string", format: "uuid" },
-              workout_plan_day_id: { type: ["string", "null"], format: "uuid" },
-              started_at: { type: "string", format: "date-time" },
-              ended_at: { type: ["string", "null"], format: "date-time" },
-              status: { type: "string", enum: ["started", "paused", "completed", "skipped"] },
-              notes: { type: ["string", "null"] },
-              overall_feeling: { type: ["string", "null"], enum: ["great", "good", "okay", "bad", "terrible"] },
-              created_at: { type: "string", format: "date-time" },
-              session_exercises: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    id: { type: "string", format: "uuid" },
-                    workout_session_id: { type: "string", format: "uuid" },
-                    exercise_id: { type: "string", format: "uuid" },
-                    plan_workout_exercise_id: { type: ["string", "null"], format: "uuid" },
-                    set_order: { type: "integer" },
-                    logged_reps: { type: "integer" },
-                    logged_weight_kg: { type: "number" },
-                    difficulty_rating: { type: ["integer", "null"] },
-                    notes: { type: ["string", "null"] },
-                    logged_at: { type: "string", format: "date-time" },
-                    was_successful_for_progression: { type: ["boolean", "null"] },
-                    exercises: {
-                      // Nested exercise details
-                      type: ["object", "null"],
-                      properties: {
-                        id: { type: "string", format: "uuid" },
-                        name: { type: "string" },
-                        description: { type: ["string", "null"] },
-                        category: { type: ["string", "null"] },
-                        target_muscles: { type: ["array", "null"], items: { type: "string" } },
-                        instructions: { type: ["string", "null"] },
-                        video_url: { type: ["string", "null"] },
-                        // Add other relevant fields from 'exercises' table
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-          401: {
-            description: "Unauthorized",
-            type: "object",
-            properties: { error: { type: "string" }, message: { type: "string" } },
-          },
-          404: {
-            description: "Workout session not found",
-            type: "object",
-            properties: { error: { type: "string" }, message: { type: "string" } },
-          },
-          500: {
-            description: "Internal Server Error",
-            type: "object",
-            properties: { error: { type: "string" }, message: { type: "string" } },
-          },
-        },
+  // --- POST /start --- (Start a new session)
+  fastify.post<{ Body: StartSessionBody; Reply: SessionDetails | ErrorResponse }>("/start", {
+    preHandler: [fastify.authenticate],
+    schema: {
+      description: "Starts a new workout session, optionally based on a plan day.",
+      tags: ["Workout Sessions"],
+      summary: "Start session",
+      security: [{ bearerAuth: [] }],
+      body: { $ref: "StartSessionBodySchema#" },
+      response: {
+        201: { $ref: "SessionDetailsSchema#" },
+        400: { $ref: "ErrorResponseSchema#" },
+        401: { $ref: "ErrorResponseSchema#" },
+        500: { $ref: "ErrorResponseSchema#" },
       },
     },
-    async (request: FastifyRequest<{ Params: SessionParams }>, reply: FastifyReply) => {
+    handler: async (request: FastifyRequest<{ Body: StartSessionBody }>, reply: FastifyReply) => {
       const userId = request.user?.id;
-      const { sessionId } = request.params;
-      if (!userId) return reply.code(401).send({ error: "Unauthorized" });
-
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
       try {
-        const sessionDetails = await getWorkoutSessionById(fastify, userId, sessionId);
+        // Pass workoutPlanDayId directly from body
+        const sessionDetails = await startWorkoutSession(fastify, userId, request.body.workoutPlanDayId);
+        return reply.code(201).send(sessionDetails);
+      } catch (error: any) {
+        fastify.log.error(error, "Failed starting workout session");
+        if (error.message.includes("not found")) {
+          return reply.code(400).send({ error: "Bad Request", message: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: "Failed to start session." });
+      }
+    },
+  });
+
+  // --- GET /{id} --- (Get session details)
+  fastify.get<{ Params: GetSessionParams; Reply: SessionDetails | ErrorResponse }>("/:id", {
+    preHandler: [fastify.authenticate],
+    schema: {
+      description: "Retrieves the details of a specific workout session.",
+      tags: ["Workout Sessions"],
+      summary: "Get session details",
+      security: [{ bearerAuth: [] }],
+      params: { $ref: "UuidParamsSchema#" },
+      response: {
+        200: { $ref: "SessionDetailsSchema#" },
+        401: { $ref: "ErrorResponseSchema#" },
+        404: { $ref: "ErrorResponseSchema#" },
+        500: { $ref: "ErrorResponseSchema#" },
+      },
+    },
+    handler: async (request: FastifyRequest<{ Params: GetSessionParams }>, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { id: sessionId } = request.params; // Correct param name is 'id' from UuidParamsSchema
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
+      try {
+        const sessionDetails = await getWorkoutSessionById(fastify, userId, sessionId); // Use renamed service function
         if (!sessionDetails) {
-          return reply.code(404).send({ error: "Workout session not found or unauthorized." });
+          return reply.code(404).send({ error: "Not Found", message: `Session with ID ${sessionId} not found.` });
         }
         return reply.send(sessionDetails);
       } catch (error: any) {
-        fastify.log.error(error, `Failed to get workout session ${sessionId}`);
-        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+        fastify.log.error(error, `Failed getting session details for ID: ${sessionId}`);
+        return reply.code(500).send({ error: "Internal Server Error", message: "Failed to retrieve session details." });
       }
-    }
-  );
-
-  // --- POST /workouts/start --- (Start a new workout session)
-  fastify.post<{ Body: StartSessionBody }>( // Apply type here
-    "/start",
-    {
-      preHandler: [fastify.authenticate],
-      // TODO: Add schema (optional plan_workout_id in body?)
     },
-    async (request: FastifyRequest<{ Body: StartSessionBody }>, reply: FastifyReply) => {
-      // Apply type here
-      const userId = request.user?.id;
-      if (!userId) return reply.code(401).send({ error: "Unauthorized" });
-      try {
-        const workoutPlanDayId = request.body?.workoutPlanDayId;
-        // TODO: Implement startWorkoutSession service function
-        const session = await startWorkoutSession(fastify, userId, workoutPlanDayId);
-        return reply.code(201).send(session);
-        // return reply.code(501).send({ message: "Start workout session not implemented yet." });
-      } catch (error: any) {
-        fastify.log.error(error, "Failed to start workout session");
-        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
-      }
-    }
-  );
+  });
 
-  // --- POST /workouts/{sessionId}/log --- (Log an exercise set)
-  fastify.post<{ Params: SessionParams; Body: LogSetBodyType }>( // Use renamed type
-    "/:sessionId/log",
-    {
-      preHandler: [fastify.authenticate],
-      // TODO: Add schema for request body (exercise_id, plan_workout_exercise_id?, set_order, reps, weight, etc.)
-    },
-    async (request: FastifyRequest<{ Params: SessionParams; Body: LogSetBodyType }>, reply: FastifyReply) => {
-      // Use renamed type
-      // Apply type here
-      const userId = request.user?.id;
-      const { sessionId } = request.params;
-      const logData = request.body; // logData is now correctly typed as LogSetBodyType
-      if (!userId) return reply.code(401).send({ error: "Unauthorized" });
-      try {
-        // TODO: Implement logWorkoutSet service function
-        const loggedSet = await logWorkoutSet(fastify, userId, sessionId, logData);
-        return reply.code(201).send(loggedSet);
-        // return reply.code(501).send({ message: "Log workout set not implemented yet." });
-      } catch (error: any) {
-        fastify.log.error(error, "Failed to log workout set");
-        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
-      }
-    }
-  );
-
-  // --- PUT /workouts/{sessionId}/exercises/{sessionExerciseId} --- (Update a logged set)
-  fastify.put<{ Params: SessionExerciseParams; Body: UpdateSetBodyType }>( // Use renamed type
-    "/:sessionId/exercises/:sessionExerciseId",
-    {
-      preHandler: [fastify.authenticate],
-      // TODO: Add schema
-    },
-    async (
-      request: FastifyRequest<{ Params: SessionExerciseParams; Body: UpdateSetBodyType }>,
-      reply: FastifyReply
-    ) => {
-      // Use renamed type
-      // Apply type here
-      const userId = request.user?.id;
-      const { sessionId, sessionExerciseId } = request.params;
-      const updateData = request.body; // updateData is now correctly typed as UpdateSetBodyType
-      if (!userId) return reply.code(401).send({ error: "Unauthorized" });
-      try {
-        // TODO: Implement updateLoggedSet service function
-        const updatedSet = await updateLoggedSet(fastify, userId, sessionExerciseId, updateData);
-        return reply.send(updatedSet);
-        // return reply.code(501).send({ message: "Update logged set not implemented yet." });
-      } catch (error: any) {
-        fastify.log.error(error, "Failed to update logged set");
-        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
-      }
-    }
-  );
-
-  // --- DELETE /workouts/{sessionId}/exercises/{sessionExerciseId} --- (Delete a logged set)
-  fastify.delete<{ Params: SessionExerciseParams }>( // Apply type here
-    "/:sessionId/exercises/:sessionExerciseId",
-    {
-      preHandler: [fastify.authenticate],
-      // TODO: Add schema
-    },
-    async (request: FastifyRequest<{ Params: SessionExerciseParams }>, reply: FastifyReply) => {
-      // Apply type here
-      // No body needed for delete
-      const userId = request.user?.id;
-      const { sessionId, sessionExerciseId } = request.params;
-      if (!userId) return reply.code(401).send({ error: "Unauthorized" });
-      try {
-        // TODO: Implement deleteLoggedSet service function
-        await deleteLoggedSet(fastify, userId, sessionExerciseId);
-        return reply.code(204).send();
-        // return reply.code(501).send({ message: "Delete logged set not implemented yet." });
-      } catch (error: any) {
-        fastify.log.error(error, "Failed to delete logged set");
-        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
-      }
-    }
-  );
-
-  // --- POST /workouts/{sessionId}/skip --- (Skip a workout session)
-  fastify.post<{ Params: SessionParams }>( // No body needed for skip
-    "/:sessionId/skip",
+  // --- POST /{id}/finish --- (Finish a session) - Renamed from /complete
+  fastify.post<{
+    Params: GetSessionParams;
+    Body: FinishSessionBody;
+    Reply: (WorkoutSession & { xpAwarded: number; levelUp: boolean }) | ErrorResponse;
+  }>(
+    "/:id/finish", // Renamed endpoint
     {
       preHandler: [fastify.authenticate],
       schema: {
+        description: "Marks an active workout session as completed and calculates progression/XP.",
         tags: ["Workout Sessions"],
-        summary: "Skip an active workout session",
+        summary: "Finish session",
         security: [{ bearerAuth: [] }],
-        params: {
-          type: "object",
-          required: ["sessionId"],
-          properties: {
-            sessionId: { type: "string", format: "uuid", description: "ID of the workout session to skip" },
-          },
-        },
+        params: { $ref: "UuidParamsSchema#" },
+        body: { $ref: "FinishSessionBodySchema#" }, // Added body schema
         response: {
           200: {
-            description: "Workout session successfully skipped",
+            // Use 200 OK for successful completion
+            description: "Session finished successfully, includes XP and level up status",
+            // Define response inline as it adds fields to WorkoutSessionSchema
             type: "object",
             properties: {
-              // Based on WorkoutSession type from DB schema
-              id: { type: "string", format: "uuid" },
-              user_id: { type: "string", format: "uuid" },
-              workout_plan_day_id: { type: ["string", "null"], format: "uuid" },
-              started_at: { type: "string", format: "date-time" },
-              ended_at: { type: ["string", "null"], format: "date-time" }, // Will be set by skip function
-              status: { type: "string", enum: ["started", "paused", "completed", "skipped"] }, // Should be 'skipped'
-              notes: { type: ["string", "null"] },
-              overall_feeling: { type: ["string", "null"], enum: ["great", "good", "okay", "bad", "terrible"] },
-              created_at: { type: "string", format: "date-time" },
+              ...WorkoutSessionSchema.properties, // Spread properties from base schema
+              xpAwarded: { type: "number" },
+              levelUp: { type: "boolean" },
             },
           },
-          401: {
-            description: "Unauthorized",
-            type: "object",
-            properties: { error: { type: "string" }, message: { type: "string" } },
-          },
-          404: {
-            description: "Workout session not found or cannot be skipped",
-            type: "object",
-            properties: { error: { type: "string" }, message: { type: "string" } },
-          },
-          500: {
-            description: "Internal Server Error",
-            type: "object",
-            properties: { error: { type: "string" }, message: { type: "string" } },
-          },
+          400: { $ref: "ErrorResponseSchema#" },
+          401: { $ref: "ErrorResponseSchema#" },
+          404: { $ref: "ErrorResponseSchema#" },
+          500: { $ref: "ErrorResponseSchema#" },
         },
       },
-    },
-    async (request: FastifyRequest<{ Params: SessionParams }>, reply: FastifyReply) => {
-      const userId = request.user?.id;
-      const { sessionId } = request.params;
-      if (!userId) return reply.code(401).send({ error: "Unauthorized" });
+      handler: async (
+        request: FastifyRequest<{ Params: GetSessionParams; Body: FinishSessionBody }>,
+        reply: FastifyReply
+      ) => {
+        const userId = request.user?.id;
+        const { id: sessionId } = request.params; // Correct param name is 'id'
+        if (!userId) {
+          return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+        }
+        try {
+          // Call renamed service function and pass body
+          const updatedSession = await finishWorkoutSession(fastify, userId, sessionId, request.body);
+          return reply.send(updatedSession);
+        } catch (error: any) {
+          fastify.log.error(error, `Failed finishing session ID: ${sessionId}`);
+          if (error.message.includes("not found") || error.message.includes("Invalid status")) {
+            return reply.code(404).send({ error: "Not Found or Bad Request", message: error.message });
+          }
+          return reply.code(500).send({ error: "Internal Server Error", message: "Failed to finish session." });
+        }
+      },
+    }
+  );
 
+  // --- POST /{id}/skip --- (Skip a session) - Added route
+  fastify.post<{ Params: GetSessionParams; Reply: WorkoutSession | ErrorResponse }>("/:id/skip", {
+    preHandler: [fastify.authenticate],
+    schema: {
+      description: "Marks an active or paused workout session as skipped.",
+      tags: ["Workout Sessions"],
+      summary: "Skip session",
+      security: [{ bearerAuth: [] }],
+      params: { $ref: "UuidParamsSchema#" },
+      response: {
+        200: { $ref: "WorkoutSessionSchema#" }, // Returns the updated session
+        400: { $ref: "ErrorResponseSchema#" }, // e.g., session already completed/skipped
+        401: { $ref: "ErrorResponseSchema#" },
+        404: { $ref: "ErrorResponseSchema#" },
+        500: { $ref: "ErrorResponseSchema#" },
+      },
+    },
+    handler: async (request: FastifyRequest<{ Params: GetSessionParams }>, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { id: sessionId } = request.params; // Correct param name is 'id'
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
       try {
         const skippedSession = await skipWorkoutSession(fastify, userId, sessionId);
         return reply.send(skippedSession);
       } catch (error: any) {
-        // Handle specific errors like "not found or cannot be skipped" vs internal errors
+        fastify.log.error(error, `Failed skipping session ID: ${sessionId}`);
         if (error.message.includes("not found") || error.message.includes("cannot be skipped")) {
-          fastify.log.warn(
-            { userId, sessionId, error: error.message },
-            "Failed to skip session - not found or invalid state"
-          );
-          return reply.code(404).send({ error: "Not Found", message: error.message });
+          return reply.code(404).send({ error: "Not Found or Bad Request", message: error.message });
         }
-        fastify.log.error(error, `Failed to skip workout session ${sessionId}`);
-        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+        return reply.code(500).send({ error: "Internal Server Error", message: "Failed to skip session." });
       }
+    },
+  });
+
+  // --- POST /{sessionId}/log-set --- (Log a set) - Added route
+  fastify.post<{ Params: LogSetParams; Body: LogSetBody; Reply: SessionExercise | ErrorResponse }>(
+    "/:sessionId/log-set", // Use sessionId from schema
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: "Logs a single completed set for an exercise within an active session.",
+        tags: ["Workout Sessions"],
+        summary: "Log workout set",
+        security: [{ bearerAuth: [] }],
+        params: { $ref: "LogSetParamsSchema#" },
+        body: { $ref: "LogSetBodySchema#" },
+        response: {
+          201: { $ref: "SessionExerciseSchema#" },
+          400: { $ref: "ErrorResponseSchema#" }, // e.g., session not active
+          401: { $ref: "ErrorResponseSchema#" },
+          404: { $ref: "ErrorResponseSchema#" }, // Session or exercise not found
+          500: { $ref: "ErrorResponseSchema#" },
+        },
+      },
+      handler: async (request: FastifyRequest<{ Params: LogSetParams; Body: LogSetBody }>, reply: FastifyReply) => {
+        const userId = request.user?.id;
+        const { sessionId } = request.params; // Correct param name
+        if (!userId) {
+          return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+        }
+        try {
+          // Cast body to service input type if needed
+          const loggedSet = await logWorkoutSet(fastify, userId, sessionId, request.body as LogSetBody);
+          return reply.code(201).send(loggedSet);
+        } catch (error: any) {
+          fastify.log.error(error, `Failed logging set for session ID: ${sessionId}`);
+          if (error.message.includes("not found") || error.message.includes("not in a state")) {
+            return reply.code(404).send({ error: "Not Found or Bad Request", message: error.message });
+          }
+          return reply.code(500).send({ error: "Internal Server Error", message: "Failed to log set." });
+        }
+      },
     }
   );
 
-  // --- POST /workouts/{sessionId}/finish --- (Finish a workout session)
-  fastify.post<{ Params: SessionParams; Body: FinishSessionBodyType }>(
-    "/:sessionId/finish",
+  // --- PUT /sets/{id} --- (Update logged set) - Renamed from /exercises/{id}
+  fastify.put<{ Params: SessionExerciseParams; Body: UpdateSetBody; Reply: SessionExercise | ErrorResponse }>(
+    "/sets/:id", // Use :id from SessionExerciseParamsSchema (UuidParamsSchema)
     {
       preHandler: [fastify.authenticate],
-      // TODO: Add schema (optional notes, overall_feeling in body?)
-    },
-    async (request: FastifyRequest<{ Params: SessionParams; Body: FinishSessionBodyType }>, reply: FastifyReply) => {
-      // Use renamed type
-      // Apply type here
-      const userId = request.user?.id;
-      const { sessionId } = request.params;
-      const finishData = request.body; // finishData is now correctly typed as FinishSessionBodyType
-      if (!userId) return reply.code(401).send({ error: "Unauthorized" });
-      try {
-        // TODO: Implement finishWorkoutSession service function (updates status, triggers progression, awards XP)
-        const result = await finishWorkoutSession(fastify, userId, sessionId, finishData);
-        return reply.send(result); // Might return updated profile/stats?
-        // return reply.code(501).send({ message: "Finish workout session not implemented yet." });
-      } catch (error: any) {
-        fastify.log.error(error, "Failed to finish workout session");
-        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
-      }
+      schema: {
+        description: "Updates the details of a previously logged set.",
+        tags: ["Workout Sessions"],
+        summary: "Update logged set",
+        security: [{ bearerAuth: [] }],
+        params: { $ref: "UuidParamsSchema#" }, // Use common UuidParamsSchema
+        body: { $ref: "UpdateSetBodySchema#" }, // Use correct schema name
+        response: {
+          200: { $ref: "SessionExerciseSchema#" },
+          400: { $ref: "ErrorResponseSchema#" },
+          401: { $ref: "ErrorResponseSchema#" },
+          403: { $ref: "ErrorResponseSchema#" }, // If session is completed/canceled
+          404: { $ref: "ErrorResponseSchema#" },
+          500: { $ref: "ErrorResponseSchema#" },
+        },
+      },
+      handler: async (
+        request: FastifyRequest<{ Params: SessionExerciseParams; Body: UpdateSetBody }>,
+        reply: FastifyReply
+      ) => {
+        const userId = request.user?.id;
+        const { id: sessionExerciseId } = request.params; // Correct param name is 'id'
+        if (!userId) {
+          return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+        }
+        try {
+          // Cast body to service input type
+          const updatedSet = await updateLoggedSet(fastify, userId, sessionExerciseId, request.body as UpdateSetBody);
+          return reply.send(updatedSet);
+        } catch (error: any) {
+          fastify.log.error(error, `Failed updating logged set ID: ${sessionExerciseId}`);
+          if (error.message.includes("not found") || error.message.includes("not active")) {
+            return reply.code(404).send({ error: "Not Found or Forbidden", message: error.message });
+          }
+          return reply.code(500).send({ error: "Internal Server Error", message: "Failed to update logged set." });
+        }
+      },
     }
   );
+
+  // --- DELETE /sets/{id} --- (Delete logged set) - Renamed from /exercises/{id}
+  fastify.delete<{ Params: SessionExerciseParams; Reply: void | ErrorResponse }>("/sets/:id", {
+    // Use :id
+    preHandler: [fastify.authenticate],
+    schema: {
+      description: "Deletes a previously logged set from an active workout session.",
+      tags: ["Workout Sessions"],
+      summary: "Delete logged set",
+      security: [{ bearerAuth: [] }],
+      params: { $ref: "UuidParamsSchema#" }, // Use common UuidParamsSchema
+      response: {
+        204: { type: "null", description: "Set deleted successfully" },
+        401: { $ref: "ErrorResponseSchema#" },
+        403: { $ref: "ErrorResponseSchema#" }, // If session is completed/canceled
+        404: { $ref: "ErrorResponseSchema#" },
+        500: { $ref: "ErrorResponseSchema#" },
+      },
+    },
+    handler: async (request: FastifyRequest<{ Params: SessionExerciseParams }>, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { id: sessionExerciseId } = request.params; // Correct param name is 'id'
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
+      try {
+        await deleteLoggedSet(fastify, userId, sessionExerciseId);
+        return reply.code(204).send();
+      } catch (error: any) {
+        fastify.log.error(error, `Failed deleting logged set ID: ${sessionExerciseId}`);
+        if (error.message.includes("not found") || error.message.includes("not active")) {
+          return reply.code(404).send({ error: "Not Found or Forbidden", message: error.message });
+        }
+        return reply.code(500).send({ error: "Internal Server Error", message: "Failed to delete logged set." });
+      }
+    },
+  });
+
+  // Removed routes for cancel, pause, resume, addExerciseToSession, updateSessionExercise, deleteSessionExercise
+  // as corresponding service functions were not found/exported.
 }
 
 export default workoutSessionRoutes;

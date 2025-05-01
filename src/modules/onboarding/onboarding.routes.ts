@@ -1,89 +1,49 @@
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
-import fp from "fastify-plugin"; // Import fastify-plugin
-import userGoalsRoutes from "../user-goals/user-goals.routes";
-import equipmentRoutes from "../equipment/equipment.routes";
+import fp from "fastify-plugin";
 import { completeOnboarding } from "./onboarding.service";
-
-// Schema for the POST /complete endpoint
-const completeOnboardingSchema = {
-  // No body needed
-  response: {
-    200: {
-      type: "object",
-      properties: {
-        message: { type: "string" },
-        // Replace $ref with inline schema definition
-        profile: {
-          type: "object",
-          properties: {
-            id: { type: "string", format: "uuid" },
-            username: { type: ["string", "null"] },
-            full_name: { type: ["string", "null"] },
-            avatar_url: { type: ["string", "null"] },
-            onboarding_complete: { type: "boolean" },
-            created_at: { type: "string", format: "date-time" },
-            updated_at: { type: ["string", "null"], format: "date-time" },
-            experience_points: { type: "integer" },
-            level: { type: "integer" },
-            preferred_unit: { type: "string", enum: ["metric", "imperial"] },
-            height_cm: { type: ["integer", "null"] },
-            current_goal_id: { type: ["string", "null"], format: "uuid" },
-            subscription_status: { type: "string", enum: ["free", "trial", "active", "canceled"] },
-          },
-          required: [
-            "id",
-            "onboarding_complete",
-            "created_at",
-            "experience_points",
-            "level",
-            "preferred_unit",
-            "subscription_status",
-          ],
-          additionalProperties: false,
-        },
-      },
-      required: ["message", "profile"],
-    },
-    // Add 401, 500 etc.
-  },
-  security: [
-    { bearerAuth: [] }, // Requires JWT authentication
-  ],
-  tags: ["Onboarding"],
-  description: "Marks the user's onboarding process as complete.",
-} as const;
+// Import TypeBox schemas and types
+import { type PostOnboardingCompleteResponse } from "../../schemas/onboardingSchemas";
+// Import common schema types if needed for error responses
+// import { type ErrorResponse } from "../../schemas/commonSchemas";
 
 /**
- * Encapsulates all routes related to the onboarding process.
- * Registers sub-routes for goals and equipment.
+ * Encapsulates the routes for the Onboarding module.
  * @param {FastifyInstance} fastify - Fastify instance.
  * @param {FastifyPluginOptions} options - Plugin options.
  */
 async function onboardingRoutes(fastify: FastifyInstance, options: FastifyPluginOptions): Promise<void> {
-  // Note: Goal setting and equipment selection routes are handled by their respective modules (user-goals, equipment)
-  // and should be registered independently in app.ts, not nested here.
-
-  // --- Mark Onboarding Complete ---
-  fastify.post(
+  // --- POST /complete --- (Mark onboarding as complete)
+  fastify.post<{ Reply: PostOnboardingCompleteResponse }>( // Use TypeBox static type for Reply
     "/complete",
-    { schema: completeOnboardingSchema },
+    {
+      preHandler: [fastify.authenticate], // Requires authentication
+      schema: {
+        description: "Mark the authenticated user's onboarding process as complete.",
+        tags: ["Onboarding"],
+        summary: "Complete onboarding",
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: { $ref: "PostOnboardingCompleteResponseSchema#" }, // Reference schema by $id
+          401: { $ref: "ErrorResponseSchema#" },
+          500: { $ref: "ErrorResponseSchema#" },
+        },
+      },
+    },
     async (request: FastifyRequest, reply: FastifyReply) => {
       const userId = request.user?.id;
       if (!userId) {
-        return reply.code(401).send({ error: "Unauthorized" });
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
       }
-
-      fastify.log.info(`Marking onboarding complete for user: ${userId}`);
       try {
         const result = await completeOnboarding(fastify, userId);
+        // Fastify serializes based on PostOnboardingCompleteResponseSchema
         return reply.send(result);
       } catch (error: any) {
-        fastify.log.error(error, "Failed to complete onboarding");
-        return reply.code(500).send({ error: "Internal Server Error", message: error.message });
+        fastify.log.error(error, "Failed marking onboarding complete");
+        return reply.code(500).send({ error: "Internal Server Error", message: "Failed to complete onboarding." });
       }
     }
   );
 }
 
-// Wrap with fp and define prefix here
 export default onboardingRoutes;
