@@ -317,7 +317,7 @@ export const ListWorkoutPlanDayExercisesParamsSchema = Type.Object(
 );
 export type ListWorkoutPlanDayExercisesParams = Static<typeof ListWorkoutPlanDayExercisesParamsSchema>;
 
-export const ListWorkoutPlanDayExercisesResponseSchema = Type.Array(WorkoutPlanDayExerciseDetailsSchema, {
+export const ListWorkoutPlanDayExercisesResponseSchema = Type.Array(WorkoutPlanDayExerciseSchema, {
   $id: "ListWorkoutPlanDayExercisesResponseSchema",
 });
 export type ListWorkoutPlanDayExercisesResponse = Static<typeof ListWorkoutPlanDayExercisesResponseSchema>;

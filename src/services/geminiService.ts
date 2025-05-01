@@ -17,10 +17,10 @@ import { alternativesSchema } from "../types/geminiSchemas/alternativesSchema";
 import { mealPlanMetadataSchema } from "../types/geminiSchemas/mealPlanMetadataSchema";
 import { v4 as uuidv4 } from "uuid"; // Import uuid
 import { exercisePlanSchema } from "../types/geminiSchemas/exercisePlanSchema";
-import { WorkoutPlan, WorkoutPlanDetails } from "../modules/workout-plans/workout-plans.types"; // Import WorkoutPlanDetails
-import { Exercise } from "../modules/exercises/exercises.types"; // For alternatives return type
-import { Equipment } from "../modules/equipment/equipment.types"; // For alternatives input
 import { UpdatedWorkoutPlanResponse } from "../modules/ai-coach-messages/ai-coach-messages.types"; // For plan return type
+import { Equipment } from "@/schemas/equipmentSchemas";
+import { Exercise } from "@/schemas/exercisesSchemas";
+import { WorkoutPlanDetails } from "@/schemas/workoutPlansSchemas";
 
 // Helper function to convert buffer/mimetype to Gemini Part format
 function fileToGenerativePart(buffer: Buffer, mimeType: string): Part {

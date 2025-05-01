@@ -640,6 +640,7 @@ export const listWorkoutPlanDayExercises = async (
     }
 
     // Cast the result to the expected type
+    fastify.log.info("exercise: ", JSON.stringify(exercises, null, 2));
     return (exercises as any) || [];
   } catch (error: any) {
     fastify.log.error(error, `Unexpected error listing workout plan day exercises for day ${planDayId}`);

@@ -823,4 +823,4 @@ async function workoutPlanRoutes(fastify: FastifyInstance, options: FastifyPlugi
   );
 }
 
-export default fp(workoutPlanRoutes); // Use fastify-plugin
+export default workoutPlanRoutes; // Use fastify-plugin
