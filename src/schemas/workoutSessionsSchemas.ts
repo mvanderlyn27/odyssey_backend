@@ -6,14 +6,19 @@ import { ExerciseSchema } from "./exercisesSchemas"; // Import Exercise schema
 // --- Enums ---
 const SessionStatusEnum = Type.Union(
   [
+    Type.Literal("pending"),
     Type.Literal("active"),
     Type.Literal("paused"),
     Type.Literal("completed"),
     Type.Literal("canceled"),
     Type.Literal("skipped"),
+    Type.Literal("error"),
+    Type.Literal("no_plan"),
+    Type.Literal("no_workouts"),
   ], // Added skipped
   { $id: "SessionStatusEnum", description: "Status of a workout session" }
 );
+export type SessionStatus = Static<typeof SessionStatusEnum>;
 
 // --- Base Schemas (Reflecting DB Tables) ---
 
@@ -21,7 +26,7 @@ export const WorkoutSessionSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
     user_id: Type.String({ format: "uuid" }),
-    workout_plan_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]),
+    // workout_plan_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]),
     workout_plan_day_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]),
     started_at: Type.String({ format: "date-time" }),
     ended_at: Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
@@ -169,25 +174,12 @@ export type UpdateSetBody = Static<typeof UpdateSetBodySchema>;
 // Response is 204 No Content
 
 // GET /workout-sessions/next
-const GetNextWorkoutStatusEnum = Type.Union(
-  [
-    Type.Literal("started"),
-    Type.Literal("paused"),
-    Type.Literal("completed"),
-    Type.Literal("skipped"),
-    Type.Literal("pending"),
-    Type.Literal("no_plan"),
-    Type.Literal("no_workouts"),
-    Type.Literal("error"),
-  ],
-  { $id: "GetNextWorkoutStatusEnum", description: "Possible states for the next workout" }
-);
 
 export const GetNextWorkoutResponseSchema = Type.Object(
   {
     current_session_id: Type.Optional(Type.String({ format: "uuid" })),
     workout_plan_day_id: Type.Optional(Type.String({ format: "uuid" })),
-    status: GetNextWorkoutStatusEnum,
+    status: SessionStatusEnum,
     message: Type.String(),
   },
   { $id: "GetNextWorkoutResponseSchema", description: "Response for the get next workout endpoint" }

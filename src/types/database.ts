@@ -143,19 +143,19 @@ export type Database = {
         Row: {
           created_at: string
           id: string
-          muscle_ranking_data: Json
+          muscle_ranking_data: Json | null
           name: string | null
         }
         Insert: {
           created_at?: string
           id?: string
-          muscle_ranking_data: Json
+          muscle_ranking_data?: Json | null
           name?: string | null
         }
         Update: {
           created_at?: string
           id?: string
-          muscle_ranking_data?: Json
+          muscle_ranking_data?: Json | null
           name?: string | null
         }
         Relationships: []
@@ -589,7 +589,7 @@ export type Database = {
           notes: string | null
           overall_feeling: string | null
           started_at: string
-          status: string | null
+          status: Database["public"]["Enums"]["session_status"] | null
           user_id: string
           workout_plan_day_id: string | null
         }
@@ -599,7 +599,7 @@ export type Database = {
           notes?: string | null
           overall_feeling?: string | null
           started_at?: string
-          status?: string | null
+          status?: Database["public"]["Enums"]["session_status"] | null
           user_id: string
           workout_plan_day_id?: string | null
         }
@@ -609,7 +609,7 @@ export type Database = {
           notes?: string | null
           overall_feeling?: string | null
           started_at?: string
-          status?: string | null
+          status?: Database["public"]["Enums"]["session_status"] | null
           user_id?: string
           workout_plan_day_id?: string | null
         }
@@ -696,6 +696,12 @@ export type Database = {
     }
     Enums: {
       meal_type: "breakfast" | "lunch" | "dinner" | "snack"
+      session_status:
+        | "active"
+        | "paused"
+        | "completed"
+        | "skipped"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -812,6 +818,7 @@ export const Constants = {
   public: {
     Enums: {
       meal_type: ["breakfast", "lunch", "dinner", "snack"],
+      session_status: ["active", "paused", "completed", "skipped", "cancelled"],
     },
   },
 } as const

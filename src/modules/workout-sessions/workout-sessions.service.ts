@@ -1,7 +1,16 @@
 import { FastifyInstance } from "fastify";
 import { Database, Tables, TablesInsert, TablesUpdate } from "../../types/database";
 import { PostgrestError } from "@supabase/supabase-js";
-import { LogSetBody, UpdateSetBody, FinishSessionBody, SessionDetails } from "@/schemas/workoutSessionsSchemas";
+import {
+  LogSetBody,
+  UpdateSetBody,
+  FinishSessionBody,
+  SessionDetails,
+  SessionStatus,
+  GetNextWorkoutResponse,
+  WorkoutSession,
+  SessionExercise,
+} from "@/schemas/workoutSessionsSchemas";
 // Assuming types for request bodies are defined here or in a shared types file
 
 // Define XP and Level constants (adjust as needed)
@@ -10,9 +19,6 @@ const XP_PER_SUCCESSFUL_EXERCISE = 10; // Bonus XP for meeting progression targe
 const LEVEL_THRESHOLDS = [0, 100, 250, 500, 800, 1200, 1700, 2300, 3000, 4000]; // XP required to reach level index + 1
 
 // Type aliases for clarity
-type WorkoutSession = Tables<"workout_sessions">;
-type SessionExercise = Tables<"session_exercises">;
-type SessionExerciseInsert = TablesInsert<"session_exercises">;
 type SessionExerciseUpdate = TablesUpdate<"session_exercises">;
 type PlanWorkoutExercise = Tables<"workout_plan_day_exercises">;
 type PlanWorkoutExerciseUpdate = TablesUpdate<"workout_plan_day_exercises">;
@@ -119,15 +125,7 @@ const getUtcTodayRange = (): { startOfDay: string; endOfDay: string } => {
   };
 };
 
-export const getNextWorkout = async (
-  fastify: FastifyInstance,
-  userId: string
-): Promise<{
-  current_session_id?: string;
-  workout_plan_day_id?: string;
-  status: "started" | "paused" | "completed" | "skipped" | "pending" | "no_plan" | "no_workouts" | "error"; // Added 'skipped'
-  message: string;
-}> => {
+export const getNextWorkout = async (fastify: FastifyInstance, userId: string): Promise<GetNextWorkoutResponse> => {
   fastify.log.info(`Getting next workout state for user: ${userId}`);
   if (!fastify.supabase) {
     // Return an error state instead of throwing
@@ -138,12 +136,12 @@ export const getNextWorkout = async (
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
   try {
-    // --- 1. Check for an ongoing (started/paused) session ---
+    // --- 1. Check for an ongoing (active/paused) session ---
     const { data: ongoingSession, error: ongoingError } = await supabase
       .from("workout_sessions")
       .select("id, status, started_at")
       .eq("user_id", userId)
-      .in("status", ["started", "paused"])
+      .in("status", ["active", "paused"])
       .order("started_at", { ascending: false }) // Get the most recent one
       .limit(1)
       .maybeSingle();
@@ -154,11 +152,11 @@ export const getNextWorkout = async (
     }
 
     if (ongoingSession) {
-      const startedAt = new Date(ongoingSession.started_at);
-      if (startedAt < twentyFourHoursAgo) {
+      const activeAt = new Date(ongoingSession.started_at);
+      if (activeAt < twentyFourHoursAgo) {
         // Session is stale (> 24 hours old), auto-complete it without rewards
         fastify.log.warn(
-          { userId, sessionId: ongoingSession.id, startedAt: ongoingSession.started_at },
+          { userId, sessionId: ongoingSession.id, activeAt: ongoingSession.started_at },
           "Auto-completing stale workout session older than 24 hours."
         );
         const { error: updateError } = await supabase
@@ -179,7 +177,7 @@ export const getNextWorkout = async (
         // Recent ongoing session found
         return {
           current_session_id: ongoingSession.id,
-          status: ongoingSession.status as "started" | "paused", // Type assertion
+          status: ongoingSession.status as "active" | "paused", // Type assertion
           message: "Ongoing session found.",
         };
       }
@@ -324,13 +322,13 @@ export const startWorkoutSession = async (
   const supabase = fastify.supabase;
   const now = new Date().toISOString();
 
-  // --- Pre-check: Auto-complete any existing 'started' or 'paused' sessions ---
+  // --- Pre-check: Auto-complete any existing 'active' or 'paused' sessions ---
   try {
     const { data: existingSessions, error: fetchError } = await supabase
       .from("workout_sessions")
       .select("id")
       .eq("user_id", userId)
-      .in("status", ["started", "paused"]);
+      .in("status", ["active", "paused"]);
 
     if (fetchError) {
       fastify.log.error(
@@ -365,14 +363,14 @@ export const startWorkoutSession = async (
   }
 
   // --- Create the new session ---
-  const sessionData: TablesInsert<"workout_sessions"> = {
+  const sessionData = {
     user_id: userId,
     workout_plan_day_id: workoutPlanDayId ?? null, // Use null if undefined
-    status: "started",
+    status: "active",
     started_at: new Date().toISOString(),
   };
 
-  const { data, error } = await fastify.supabase.from("workout_sessions").insert(sessionData).select().single();
+  const { data, error } = await fastify.supabase.from("workout_sessions").insert(sessionData).select("*").single();
 
   if (error) {
     fastify.log.error({ error, userId, sessionData }, "Error starting workout session");
@@ -381,9 +379,9 @@ export const startWorkoutSession = async (
 
   if (!data) {
     // This case should ideally be covered by the error above, but belt-and-suspenders
-    throw new Error("Failed to retrieve started workout session after insert.");
+    throw new Error("Failed to retrieve active workout session after insert.");
   }
-
+  fastify.log.info({ data }, "data for workout session");
   return data;
 };
 
@@ -400,7 +398,7 @@ export const logWorkoutSet = async (
   const supabase = fastify.supabase;
 
   try {
-    // 1. Verify the session belongs to the user and is 'started' or 'paused'
+    // 1. Verify the session belongs to the user and is 'active' or 'paused'
     const { data: session, error: sessionError } = await supabase
       .from("workout_sessions")
       .select("id, status")
@@ -415,14 +413,14 @@ export const logWorkoutSet = async (
     if (!session) {
       throw new Error(`Workout session ${sessionId} not found or does not belong to user ${userId}.`);
     }
-    if (session.status !== "started" && session.status !== "paused") {
+    if (session.status !== "active" && session.status !== "paused") {
       throw new Error(
         `Workout session ${sessionId} is not in a state where sets can be logged (status: ${session.status}).`
       );
     }
 
     // 2. Prepare data for insertion
-    const setData: SessionExerciseInsert = {
+    const setData = {
       workout_session_id: sessionId,
       exercise_id: logData.exercise_id,
       plan_workout_exercise_id: logData.plan_workout_exercise_id ?? null,
@@ -439,7 +437,7 @@ export const logWorkoutSet = async (
     const { data: loggedSet, error: insertError } = await supabase
       .from("session_exercises")
       .insert(setData)
-      .select()
+      .select("*")
       .single();
 
     if (insertError) {
@@ -498,7 +496,7 @@ export const updateLoggedSet = async (
 
     // Check if session is in editable state
     const sessionStatus = (verificationData.workout_sessions as any)?.status;
-    if (sessionStatus !== "started" && sessionStatus !== "paused") {
+    if (sessionStatus !== "active" && sessionStatus !== "paused") {
       throw new Error(`Cannot update set because workout session is not active (status: ${sessionStatus}).`);
     }
 
@@ -584,7 +582,7 @@ export const deleteLoggedSet = async (
     }
 
     const sessionStatus = (verificationData.workout_sessions as any)?.status;
-    if (sessionStatus !== "started" && sessionStatus !== "paused") {
+    if (sessionStatus !== "active" && sessionStatus !== "paused") {
       throw new Error(`Cannot delete set because workout session is not active (status: ${sessionStatus}).`);
     }
 
@@ -664,7 +662,7 @@ export const getWorkoutSessionById = async (
 
 /**
  * Marks a workout session as 'skipped'.
- * Verifies ownership and that the session is currently 'started' or 'paused'.
+ * Verifies ownership and that the session is currently 'active' or 'paused'.
  * Does not award XP or trigger progression.
  * @param fastify - Fastify instance.
  * @param userId - The ID of the user skipping the session.
@@ -684,13 +682,13 @@ export const skipWorkoutSession = async (
   const now = new Date().toISOString();
 
   try {
-    // 1. Verify the session belongs to the user and is 'started' or 'paused'
+    // 1. Verify the session belongs to the user and is 'active' or 'paused'
     const { data: session, error: sessionError } = await supabase
       .from("workout_sessions")
       .select("id, status")
       .eq("id", sessionId)
       .eq("user_id", userId)
-      .in("status", ["started", "paused"]) // Can only skip active sessions
+      .in("status", ["active", "paused"] as SessionStatus[]) // Can only skip active sessions
       .maybeSingle();
 
     if (sessionError) {
@@ -699,7 +697,7 @@ export const skipWorkoutSession = async (
     }
     if (!session) {
       throw new Error(
-        `Workout session ${sessionId} not found for user ${userId} or cannot be skipped (status not 'started' or 'paused').`
+        `Workout session ${sessionId} not found for user ${userId} or cannot be skipped (status not 'active' or 'paused').`
       );
     }
 
@@ -754,7 +752,7 @@ export const finishWorkoutSession = async (
       .select("*, profiles!inner ( id, experience_points, level, username )") // Fetch profile too, use inner join to ensure profile exists
       .eq("id", sessionId)
       .eq("user_id", userId)
-      .in("status", ["started", "paused"])
+      .in("status", ["active", "paused"])
       .maybeSingle();
 
     if (verificationError) {
@@ -793,7 +791,7 @@ export const finishWorkoutSession = async (
     let planExercisesMap: Map<string, PlanWorkoutExercise> = new Map();
     if (planWorkoutId) {
       const { data: planExercisesData, error: planExercisesError } = await supabase
-        .from("plan_workout_exercises")
+        .from("workout_plan_day_exercises")
         .select("*")
         .eq("workout_plan_day_id", planWorkoutId);
 

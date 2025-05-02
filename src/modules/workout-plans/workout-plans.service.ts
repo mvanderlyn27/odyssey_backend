@@ -144,8 +144,6 @@ export const getWorkoutPlanDetails = async (
   fastify: FastifyInstance,
   planId: string
 ): Promise<WorkoutPlanDetails | Error> => {
-  fastify.log.info(`---> Entering getWorkoutPlanDetails for plan ${planId}`); // <-- Add Entry Log
-
   if (!fastify.supabase) {
     fastify.log.error("Supabase client not available in getWorkoutPlanDetails"); // <-- Log specific error
     return new Error("Supabase client not available");
@@ -153,7 +151,6 @@ export const getWorkoutPlanDetails = async (
   const supabase = fastify.supabase;
 
   try {
-    fastify.log.info(`---> About to query Supabase for plan ${planId}`); // <-- Add Before DB Log
     const { data, error } = await supabase
       .from("workout_plans")
       .select(
@@ -171,7 +168,7 @@ export const getWorkoutPlanDetails = async (
       .eq("id", planId)
       .single(); // Expect exactly one plan
 
-    fastify.log.info({ data, error }, `<--- Supabase query completed for plan ${planId}`); // <-- Add After DB Log (log data & error)
+    // fastify.log.info({ data, error }, `<--- Supabase query completed for plan ${planId}`); // <-- Add After DB Log (log data & error)
 
     if (error) {
       fastify.log.error({ error, planId }, "Error fetching workout plan details from Supabase"); // <-- Log specific error
@@ -233,7 +230,7 @@ export const getWorkoutPlanDetails = async (
     };
 
     // Log the final constructed object
-    fastify.log.info({ planDetails }, "Constructed planDetails object before return");
+    // fastify.log.info({ planDetails }, "Constructed planDetails object before return");
 
     return planDetails;
   } catch (err: any) {

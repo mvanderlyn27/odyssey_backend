@@ -38,7 +38,7 @@ import { type ErrorResponse, type MessageResponse } from "../../schemas/commonSc
  */
 async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPluginOptions): Promise<void> {
   // --- POST /start --- (Start a new session)
-  fastify.post<{ Body: StartSessionBody; Reply: SessionDetails | ErrorResponse }>("/start", {
+  fastify.post<{ Body: StartSessionBody; Reply: WorkoutSession | ErrorResponse }>("/start", {
     preHandler: [fastify.authenticate],
     schema: {
       description: "Starts a new workout session, optionally based on a plan day.",
@@ -47,7 +47,7 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
       security: [{ bearerAuth: [] }],
       body: { $ref: "StartSessionBodySchema#" },
       response: {
-        201: { $ref: "SessionDetailsSchema#" },
+        201: { $ref: "WorkoutSessionSchema#" },
         400: { $ref: "ErrorResponseSchema#" },
         401: { $ref: "ErrorResponseSchema#" },
         500: { $ref: "ErrorResponseSchema#" },
