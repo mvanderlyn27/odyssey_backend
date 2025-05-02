@@ -81,7 +81,8 @@ export type WorkoutPlanDayExercise = Static<typeof WorkoutPlanDayExerciseSchema>
 // --- Nested Detail Schemas ---
 
 // Define nested structure for detailed plan response
-const WorkoutPlanDayExerciseDetailsSchema = Type.Intersect(
+export const WorkoutPlanDayExerciseDetailsSchema = Type.Intersect(
+  // Add export
   [
     WorkoutPlanDayExerciseSchema,
     Type.Object({
@@ -92,7 +93,8 @@ const WorkoutPlanDayExerciseDetailsSchema = Type.Intersect(
 );
 export type WorkoutPlanDayExerciseDetails = Static<typeof WorkoutPlanDayExerciseDetailsSchema>;
 
-const WorkoutPlanDayDetailsSchema = Type.Intersect(
+export const WorkoutPlanDayDetailsSchema = Type.Intersect(
+  // Add export
   [
     WorkoutPlanDaySchema,
     Type.Object({
@@ -370,53 +372,3 @@ export const DeleteWorkoutPlanDayExerciseParamsSchema = Type.Object(
 );
 export type DeleteWorkoutPlanDayExerciseParams = Static<typeof DeleteWorkoutPlanDayExerciseParamsSchema>;
 // Response is 204 No Content
-
-// --- Registration ---
-export function registerWorkoutPlansSchemas(instance: any) {
-  // Enums are implicitly included by referencing schemas
-
-  // Base Schemas
-  instance.addSchema(WorkoutPlanSchema);
-  instance.addSchema(WorkoutPlanDaySchema);
-  instance.addSchema(WorkoutPlanDayExerciseSchema);
-
-  // Nested Detail Schemas (Need to register components explicitly if not automatically handled)
-  // instance.addSchema(ExerciseSchema); // Assume ExerciseSchema is registered elsewhere
-  instance.addSchema(WorkoutPlanDayExerciseDetailsSchema);
-  instance.addSchema(WorkoutPlanDayDetailsSchema);
-  instance.addSchema(WorkoutPlanDetailsSchema);
-
-  // Workout Plan Routes
-  instance.addSchema(ListWorkoutPlansResponseSchema);
-  instance.addSchema(CreateWorkoutPlanBodySchema);
-  // GetWorkoutPlanParamsSchema uses UuidParamsSchema (assumed registered)
-  // UpdateWorkoutPlanParamsSchema uses UuidParamsSchema (assumed registered)
-  instance.addSchema(UpdateWorkoutPlanBodySchema);
-  instance.addSchema(GeneratePlanBodySchema);
-  instance.addSchema(ImportPlanBodySchema);
-
-  // Workout Plan Day Routes
-  instance.addSchema(CreateWorkoutPlanDayParamsSchema);
-  instance.addSchema(CreateWorkoutPlanDayBodySchema);
-  instance.addSchema(ListWorkoutPlanDaysParamsSchema);
-  instance.addSchema(ListWorkoutPlanDaysResponseSchema);
-  instance.addSchema(GetWorkoutPlanDayParamsSchema);
-  instance.addSchema(UpdateWorkoutPlanDayParamsSchema);
-  instance.addSchema(UpdateWorkoutPlanDayBodySchema);
-  instance.addSchema(DeleteWorkoutPlanDayParamsSchema);
-
-  // Workout Plan Day Exercise Routes
-  instance.addSchema(CreateWorkoutPlanDayExerciseParamsSchema);
-  instance.addSchema(CreateWorkoutPlanDayExerciseBodySchema);
-  instance.addSchema(ListWorkoutPlanDayExercisesParamsSchema);
-  instance.addSchema(ListWorkoutPlanDayExercisesResponseSchema);
-  instance.addSchema(GetWorkoutPlanDayExerciseParamsSchema);
-  instance.addSchema(UpdateWorkoutPlanDayExerciseParamsSchema);
-  instance.addSchema(UpdateWorkoutPlanDayExerciseBodySchema);
-  instance.addSchema(DeleteWorkoutPlanDayExerciseParamsSchema);
-
-  // Common Schemas (Ensure these are registered, likely in a central place)
-  // instance.addSchema(UuidParamsSchema);
-  // instance.addSchema(MessageResponseSchema);
-  // instance.addSchema(ErrorResponseSchema);
-}

@@ -23,10 +23,4 @@ export const PostOnboardingCompleteResponseSchema = Type.Object(
   },
   { $id: "PostOnboardingCompleteResponseSchema", description: "Response after marking onboarding as complete" }
 );
-export type PostOnboardingCompleteResponse = Static<typeof PostOnboardingCompleteResponseSchema>;
-
-// Helper function to add schemas to Fastify instance
-export function registerOnboardingSchemas(instance: any) {
-  // instance.addSchema(ProfileSchemaPlaceholder); // Only register if not referencing an external one
-  instance.addSchema(PostOnboardingCompleteResponseSchema);
-}
+export type OnboardingResponse = Static<typeof PostOnboardingCompleteResponseSchema>; // Corrected schema name

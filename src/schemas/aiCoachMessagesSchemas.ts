@@ -89,15 +89,3 @@ export const GetSessionsResponseSchema = Type.Array(Type.Ref(AiCoachSessionSumma
   description: "List of chat session summaries",
 });
 export type GetSessionsResponse = Static<typeof GetSessionsResponseSchema>;
-
-// Helper function to add schemas to Fastify instance
-export function registerAiCoachMessagesSchemas(instance: any) {
-  instance.addSchema(AiCoachMessageSchema);
-  instance.addSchema(PostChatBodySchema);
-  instance.addSchema(PostChatResponseSchema);
-  instance.addSchema(GetChatHistoryParamsSchema);
-  instance.addSchema(GetChatHistoryQuerySchema);
-  instance.addSchema(GetChatHistoryResponseSchema);
-  instance.addSchema(AiCoachSessionSummarySchema); // Register new schema
-  instance.addSchema(GetSessionsResponseSchema); // Register new schema
-}

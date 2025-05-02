@@ -158,19 +158,3 @@ export const MuscleStatsSchema = Type.Intersect(
   { $id: "MuscleStatsSchema", description: "Performance statistics aggregated by primary muscle group" }
 );
 export type MuscleStats = Static<typeof MuscleStatsSchema>;
-
-// --- Registration ---
-export function registerStatsSchemas(instance: any) {
-  // instance.addSchema(TimePeriodEnum); // Not needed if only used internally
-  // instance.addSchema(GroupingEnum); // Not needed if only used internally
-  instance.addSchema(GetExerciseStatsQuerySchema);
-  instance.addSchema(ExerciseStatsSchema);
-  instance.addSchema(SessionStatsSchema);
-  instance.addSchema(GetUserStatsQuerySchema);
-  instance.addSchema(UserStatsSchema);
-  instance.addSchema(GetBodyStatsQuerySchema);
-  instance.addSchema(BodyStatsSchema);
-  instance.addSchema(GetMuscleStatsParamsSchema);
-  instance.addSchema(GetMuscleStatsQuerySchema);
-  instance.addSchema(MuscleStatsSchema);
-}

@@ -64,12 +64,3 @@ export const GetProfileResponseSchema = Type.Ref(ProfileSchema, {
   $id: "GetProfileResponseSchema",
 });
 export type GetProfileResponse = Static<typeof GetProfileResponseSchema>;
-
-// Helper function to add schemas to Fastify instance
-export function registerProfileSchemas(instance: any) {
-  // instance.addSchema(UnitPreferenceEnum); // Might not be needed if only used internally
-  // instance.addSchema(SubscriptionStatusEnum); // Might not be needed if only used internally
-  instance.addSchema(ProfileSchema);
-  instance.addSchema(UpdateProfileBodySchema);
-  instance.addSchema(GetProfileResponseSchema);
-}

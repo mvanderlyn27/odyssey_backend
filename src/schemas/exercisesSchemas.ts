@@ -127,18 +127,3 @@ export type UpdateExerciseBody = Static<typeof UpdateExerciseBodySchema>;
 
 // --- GET /exercises/health ---
 // Response schema could be a simple status object if needed
-
-// --- Registration ---
-export function registerExercisesSchemas(instance: any) {
-  // Enums are now registered centrally in app.ts via commonSchemas
-
-  instance.addSchema(ExerciseSchema);
-  instance.addSchema(ListExercisesQuerySchema);
-  instance.addSchema(ListExercisesResponseSchema);
-  instance.addSchema(GetExerciseResponseSchema);
-  instance.addSchema(GetExerciseAlternativesQuerySchema);
-  instance.addSchema(GetExerciseAlternativesResponseSchema);
-  instance.addSchema(CreateExerciseBodySchema);
-  instance.addSchema(UpdateExerciseBodySchema);
-  instance.addSchema(SearchExercisesQuerySchema); // Register search query schema
-}

@@ -33,19 +33,120 @@ import {
   PrimaryMuscleGroupEnum,
   ExerciseDifficultyEnum,
 } from "./schemas/commonSchemas";
-// Import module schema registration functions
-import { registerAiCoachMessagesSchemas } from "./schemas/aiCoachMessagesSchemas";
-import { registerBodyMeasurementsSchemas } from "./schemas/bodyMeasurementsSchemas";
-import { registerEquipmentSchemas } from "./schemas/equipmentSchemas";
-import { registerExercisesSchemas } from "./schemas/exercisesSchemas";
-import { registerOnboardingSchemas } from "./schemas/onboardingSchemas";
-import { registerProfileSchemas } from "./schemas/profileSchemas";
-import { registerStatsSchemas } from "./schemas/statsSchemas";
-import { registerStreaksSchemas } from "./schemas/streaksSchemas";
-import { registerUserGoalsSchemas } from "./schemas/userGoalsSchemas";
-import { registerWorkoutPlansSchemas } from "./schemas/workoutPlansSchemas";
-import { registerWorkoutSessionsSchemas } from "./schemas/workoutSessionsSchemas";
-// ... import other module schema registration functions as they are created
+
+// --- Import ALL Schema Objects for Central Registration ---
+// AI Coach Messages
+import {
+  AiCoachMessageSchema,
+  PostChatBodySchema,
+  PostChatResponseSchema,
+  GetChatHistoryParamsSchema,
+  GetChatHistoryQuerySchema,
+  GetChatHistoryResponseSchema,
+  AiCoachSessionSummarySchema,
+  GetSessionsResponseSchema,
+} from "./schemas/aiCoachMessagesSchemas";
+// Body Measurements
+import {
+  BodyMeasurementSchema,
+  PostBodyMeasurementsBodySchema,
+  PostBodyMeasurementsResponseSchema,
+  UpdateBodyMeasurementsBodySchema,
+} from "./schemas/bodyMeasurementsSchemas";
+// Equipment
+import {
+  EquipmentSchema,
+  GetEquipmentResponseSchema,
+  PutUserEquipmentBodySchema,
+  PutUserEquipmentResponseSchema,
+} from "./schemas/equipmentSchemas";
+// Exercises
+import {
+  ExerciseSchema,
+  ListExercisesQuerySchema,
+  ListExercisesResponseSchema,
+  SearchExercisesQuerySchema,
+  GetExerciseResponseSchema,
+  GetExerciseAlternativesQuerySchema,
+  GetExerciseAlternativesResponseSchema,
+  CreateExerciseBodySchema,
+  UpdateExerciseBodySchema,
+} from "./schemas/exercisesSchemas";
+// Onboarding
+import { PostOnboardingCompleteResponseSchema } from "./schemas/onboardingSchemas";
+// Profile
+import { ProfileSchema, UpdateProfileBodySchema, GetProfileResponseSchema } from "./schemas/profileSchemas";
+// Stats
+import {
+  GetExerciseStatsParamsSchema,
+  GetExerciseStatsQuerySchema,
+  ExerciseStatsSchema,
+  GetSessionStatsParamsSchema,
+  SessionStatsSchema,
+  GetUserStatsQuerySchema,
+  UserStatsSchema,
+  GetBodyStatsQuerySchema,
+  BodyStatsSchema,
+  GetMuscleStatsParamsSchema,
+  GetMuscleStatsQuerySchema,
+  MuscleStatsSchema,
+} from "./schemas/statsSchemas";
+// Streaks
+import { UserStreakResponseSchema, RecoverStreakBodySchema } from "./schemas/streaksSchemas";
+// User Goals
+import {
+  UserGoalSchema,
+  CreateUserGoalBodySchema,
+  GetCurrentGoalResponseSchema,
+  GetGoalHistoryResponseSchema,
+} from "./schemas/userGoalsSchemas";
+// Workout Plans
+import {
+  WorkoutPlanSchema,
+  WorkoutPlanDaySchema,
+  WorkoutPlanDayExerciseSchema,
+  WorkoutPlanDayExerciseDetailsSchema,
+  WorkoutPlanDayDetailsSchema,
+  WorkoutPlanDetailsSchema,
+  ListWorkoutPlansResponseSchema,
+  CreateWorkoutPlanBodySchema,
+  GetWorkoutPlanParamsSchema,
+  UpdateWorkoutPlanParamsSchema,
+  UpdateWorkoutPlanBodySchema,
+  GeneratePlanBodySchema,
+  ImportPlanBodySchema,
+  CreateWorkoutPlanDayParamsSchema,
+  CreateWorkoutPlanDayBodySchema,
+  ListWorkoutPlanDaysParamsSchema,
+  ListWorkoutPlanDaysResponseSchema,
+  GetWorkoutPlanDayParamsSchema,
+  UpdateWorkoutPlanDayParamsSchema,
+  UpdateWorkoutPlanDayBodySchema,
+  DeleteWorkoutPlanDayParamsSchema,
+  CreateWorkoutPlanDayExerciseParamsSchema,
+  CreateWorkoutPlanDayExerciseBodySchema,
+  ListWorkoutPlanDayExercisesParamsSchema,
+  ListWorkoutPlanDayExercisesResponseSchema,
+  GetWorkoutPlanDayExerciseParamsSchema,
+  UpdateWorkoutPlanDayExerciseParamsSchema,
+  UpdateWorkoutPlanDayExerciseBodySchema,
+  DeleteWorkoutPlanDayExerciseParamsSchema,
+} from "./schemas/workoutPlansSchemas";
+// Workout Sessions
+import {
+  WorkoutSessionSchema,
+  SessionExerciseSchema,
+  StartSessionBodySchema,
+  SessionDetailsSchema,
+  GetSessionParamsSchema,
+  FinishSessionBodySchema,
+  FinishSessionResponseSchema,
+  LogSetParamsSchema,
+  LogSetBodySchema,
+  SessionExerciseParamsSchema,
+  UpdateSetBodySchema,
+  CurrentWorkoutStateResponseSchema,
+} from "./schemas/workoutSessionsSchemas";
 
 // --- Import Route Handlers ---
 import statusRoutes from "./routes/status";
@@ -186,20 +287,123 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(ExerciseDifficultyEnum);
   app.log.info("Registered common schemas and enums.");
 
-  // --- Register Module Schemas ---
-  registerAiCoachMessagesSchemas(app);
-  registerBodyMeasurementsSchemas(app);
-  registerEquipmentSchemas(app);
-  registerExercisesSchemas(app);
-  registerOnboardingSchemas(app);
-  registerProfileSchemas(app);
-  registerStatsSchemas(app);
-  registerStreaksSchemas(app);
-  registerUserGoalsSchemas(app);
-  registerWorkoutPlansSchemas(app);
-  registerWorkoutSessionsSchemas(app);
-  // ... register other module schemas here
-  app.log.info("Registered module-specific schemas.");
+  // --- Register ALL Schemas Centrally ---
+  app.log.info("Registering all application schemas centrally...");
+
+  // Base Schemas (likely dependencies for others)
+  app.addSchema(EquipmentSchema);
+  app.addSchema(ExerciseSchema);
+  app.addSchema(ProfileSchema);
+  app.addSchema(UserGoalSchema);
+  app.addSchema(WorkoutPlanSchema);
+  app.addSchema(WorkoutPlanDaySchema);
+  app.addSchema(WorkoutPlanDayExerciseSchema);
+  app.addSchema(WorkoutSessionSchema);
+  app.addSchema(SessionExerciseSchema);
+  app.addSchema(AiCoachMessageSchema);
+  app.addSchema(BodyMeasurementSchema);
+  app.addSchema(AiCoachSessionSummarySchema);
+
+  // Schemas with Dependencies (using Type.Ref or Intersect)
+  // Exercises
+  app.addSchema(ListExercisesQuerySchema);
+  app.addSchema(ListExercisesResponseSchema);
+  app.addSchema(SearchExercisesQuerySchema);
+  app.addSchema(GetExerciseResponseSchema);
+  app.addSchema(GetExerciseAlternativesQuerySchema);
+  app.addSchema(GetExerciseAlternativesResponseSchema);
+  app.addSchema(CreateExerciseBodySchema);
+  app.addSchema(UpdateExerciseBodySchema);
+
+  // Workout Plans
+  app.addSchema(WorkoutPlanDayExerciseDetailsSchema);
+  app.addSchema(WorkoutPlanDayDetailsSchema);
+  app.addSchema(WorkoutPlanDetailsSchema);
+  app.addSchema(ListWorkoutPlansResponseSchema);
+  app.addSchema(CreateWorkoutPlanBodySchema);
+  // GetWorkoutPlanParamsSchema uses UuidParamsSchema (already registered)
+  // UpdateWorkoutPlanParamsSchema uses UuidParamsSchema (already registered)
+  app.addSchema(UpdateWorkoutPlanBodySchema);
+  app.addSchema(GeneratePlanBodySchema);
+  app.addSchema(ImportPlanBodySchema);
+  app.addSchema(CreateWorkoutPlanDayParamsSchema);
+  app.addSchema(CreateWorkoutPlanDayBodySchema);
+  app.addSchema(ListWorkoutPlanDaysParamsSchema);
+  app.addSchema(ListWorkoutPlanDaysResponseSchema);
+  app.addSchema(GetWorkoutPlanDayParamsSchema);
+  app.addSchema(UpdateWorkoutPlanDayParamsSchema);
+  app.addSchema(UpdateWorkoutPlanDayBodySchema);
+  app.addSchema(DeleteWorkoutPlanDayParamsSchema);
+  app.addSchema(CreateWorkoutPlanDayExerciseParamsSchema);
+  app.addSchema(CreateWorkoutPlanDayExerciseBodySchema);
+  app.addSchema(ListWorkoutPlanDayExercisesParamsSchema);
+  app.addSchema(ListWorkoutPlanDayExercisesResponseSchema);
+  app.addSchema(GetWorkoutPlanDayExerciseParamsSchema);
+  app.addSchema(UpdateWorkoutPlanDayExerciseParamsSchema);
+  app.addSchema(UpdateWorkoutPlanDayExerciseBodySchema);
+  app.addSchema(DeleteWorkoutPlanDayExerciseParamsSchema);
+
+  // Workout Sessions
+  app.addSchema(StartSessionBodySchema);
+  app.addSchema(SessionDetailsSchema);
+  // GetSessionParamsSchema uses UuidParamsSchema (already registered)
+  app.addSchema(FinishSessionBodySchema);
+  app.addSchema(FinishSessionResponseSchema);
+  app.addSchema(LogSetParamsSchema);
+  app.addSchema(LogSetBodySchema);
+  // SessionExerciseParamsSchema uses UuidParamsSchema (already registered)
+  app.addSchema(UpdateSetBodySchema);
+  app.addSchema(CurrentWorkoutStateResponseSchema);
+
+  // AI Coach Messages
+  app.addSchema(PostChatBodySchema);
+  app.addSchema(PostChatResponseSchema);
+  app.addSchema(GetChatHistoryParamsSchema);
+  app.addSchema(GetChatHistoryQuerySchema);
+  app.addSchema(GetChatHistoryResponseSchema);
+  app.addSchema(GetSessionsResponseSchema);
+
+  // Body Measurements
+  app.addSchema(PostBodyMeasurementsBodySchema);
+  app.addSchema(PostBodyMeasurementsResponseSchema);
+  app.addSchema(UpdateBodyMeasurementsBodySchema);
+
+  // Equipment
+  app.addSchema(GetEquipmentResponseSchema);
+  app.addSchema(PutUserEquipmentBodySchema);
+  app.addSchema(PutUserEquipmentResponseSchema);
+
+  // Onboarding
+  app.addSchema(PostOnboardingCompleteResponseSchema);
+
+  // Profile
+  app.addSchema(UpdateProfileBodySchema);
+  app.addSchema(GetProfileResponseSchema);
+
+  // Stats
+  // GetExerciseStatsParamsSchema uses UuidParamsSchema (already registered)
+  app.addSchema(GetExerciseStatsQuerySchema);
+  app.addSchema(ExerciseStatsSchema);
+  // GetSessionStatsParamsSchema uses UuidParamsSchema (already registered)
+  app.addSchema(SessionStatsSchema);
+  app.addSchema(GetUserStatsQuerySchema);
+  app.addSchema(UserStatsSchema);
+  app.addSchema(GetBodyStatsQuerySchema);
+  app.addSchema(BodyStatsSchema);
+  app.addSchema(GetMuscleStatsParamsSchema);
+  app.addSchema(GetMuscleStatsQuerySchema);
+  app.addSchema(MuscleStatsSchema);
+
+  // Streaks
+  app.addSchema(UserStreakResponseSchema);
+  app.addSchema(RecoverStreakBodySchema);
+
+  // User Goals
+  app.addSchema(CreateUserGoalBodySchema);
+  app.addSchema(GetCurrentGoalResponseSchema);
+  app.addSchema(GetGoalHistoryResponseSchema);
+
+  app.log.info("Registered all application schemas centrally.");
 
   // --- Register Core Plugins ---
   app.register(helmet, { contentSecurityPolicy: false });

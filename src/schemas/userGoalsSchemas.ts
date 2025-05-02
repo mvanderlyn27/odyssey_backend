@@ -60,12 +60,3 @@ export const GetGoalHistoryResponseSchema = Type.Array(Type.Ref(UserGoalSchema),
   description: "List of the user's past fitness goals",
 });
 export type GetGoalHistoryResponse = Static<typeof GetGoalHistoryResponseSchema>;
-
-// Helper function to add schemas to Fastify instance
-export function registerUserGoalsSchemas(instance: any) {
-  // instance.addSchema(GoalTypeEnum); // Might not be needed
-  instance.addSchema(UserGoalSchema);
-  instance.addSchema(CreateUserGoalBodySchema);
-  instance.addSchema(GetCurrentGoalResponseSchema);
-  instance.addSchema(GetGoalHistoryResponseSchema);
-}

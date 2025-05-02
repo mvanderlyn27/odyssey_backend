@@ -8,7 +8,9 @@ import {
   logWorkoutSet, // Added missing service function
   updateLoggedSet, // Added missing service function
   deleteLoggedSet, // Added missing service function
-  getNextWorkout, // Added for the new route
+  getCurrentActiveSession, // Refactored function
+  getTodaysWorkouts, // Refactored function
+  getNextPlannedWorkout, // Refactored function
   // Removed imports for functions not exported: list, cancel, pause, resume, addExercise, updateSessionExercise, deleteSessionExercise
 } from "./workout-sessions.service";
 // Import TypeBox schemas and types
@@ -22,9 +24,12 @@ import {
   type SessionExercise, // For Log/Update response
   type SessionExerciseParams, // Renamed from UpdateSessionExerciseParams
   type UpdateSetBody, // Renamed from UpdateSessionExerciseBody
-  WorkoutSessionSchema, // Import as value for use in response schema
   type WorkoutSession, // For skip response type
-  type GetNextWorkoutResponse, // Added for the new route
+  // Import new/renamed schemas and types
+  FinishSessionResponseSchema, // Schema for finish response
+  type FinishSessionResponse, // Type for finish response
+  CurrentWorkoutStateResponseSchema, // Renamed schema for current state
+  type CurrentWorkoutStateResponse, // Renamed type for current state
   // Schemas will be referenced by $id
 } from "../../schemas/workoutSessionsSchemas";
 // Import common schema types
@@ -111,7 +116,7 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
   fastify.post<{
     Params: GetSessionParams;
     Body: FinishSessionBody;
-    Reply: (WorkoutSession & { xpAwarded: number; levelUp: boolean }) | ErrorResponse;
+    Reply: FinishSessionResponse | ErrorResponse; // Use dedicated response type
   }>(
     "/:id/finish", // Renamed endpoint
     {
@@ -127,13 +132,7 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
           200: {
             // Use 200 OK for successful completion
             description: "Session finished successfully, includes XP and level up status",
-            // Define response inline as it adds fields to WorkoutSessionSchema
-            type: "object",
-            properties: {
-              ...WorkoutSessionSchema.properties, // Spread properties from base schema
-              xpAwarded: { type: "number" },
-              levelUp: { type: "boolean" },
-            },
+            $ref: "FinishSessionResponseSchema#", // Use dedicated response schema
           },
           400: { $ref: "ErrorResponseSchema#" },
           401: { $ref: "ErrorResponseSchema#" },
@@ -327,16 +326,18 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
   // Removed routes for cancel, pause, resume, addExerciseToSession, updateSessionExercise, deleteSessionExercise
   // as corresponding service functions were not found/exported.
 
-  // --- GET /next --- (Get next workout state) - Added route
-  fastify.get<{ Reply: GetNextWorkoutResponse | ErrorResponse }>("/next", {
+  // --- GET /current-state --- (Get current workout state: active session, today's sessions, next planned) - Renamed from /status
+  fastify.get<{ Reply: CurrentWorkoutStateResponse | ErrorResponse }>("/current-state", {
+    // Use renamed response type
     preHandler: [fastify.authenticate],
     schema: {
-      description: "Gets the user's current workout state or suggests the next workout.",
+      description:
+        "Gets the user's current workout state, including any active session, sessions started today, and the next planned workout.",
       tags: ["Workout Sessions"],
-      summary: "Get next workout",
+      summary: "Get current workout state", // Updated summary
       security: [{ bearerAuth: [] }],
       response: {
-        200: { $ref: "GetNextWorkoutResponseSchema#" },
+        200: { $ref: "CurrentWorkoutStateResponseSchema#" }, // Use renamed schema (corrected typo)
         401: { $ref: "ErrorResponseSchema#" },
         500: { $ref: "ErrorResponseSchema#" },
       },
@@ -347,18 +348,27 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
         return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
       }
       try {
-        const nextWorkoutState = await getNextWorkout(fastify, userId);
-        // Check if the service function indicated an internal error
-        if (nextWorkoutState.status === "error") {
-          return reply.code(500).send({ error: "Internal Server Error", message: nextWorkoutState.message });
-        }
-        return reply.send(nextWorkoutState);
+        // Fetch all pieces of information concurrently
+        const [currentSession, todaysWorkouts, nextPlannedWorkout] = await Promise.all([
+          getCurrentActiveSession(fastify, userId),
+          getTodaysWorkouts(fastify, userId),
+          getNextPlannedWorkout(fastify, userId), // Only call if no active session? Let's call always for simplicity.
+        ]);
+
+        // Construct the combined response
+        const statusResponse: CurrentWorkoutStateResponse = {
+          // Use renamed type
+          currentSession: currentSession,
+          todaysWorkouts: todaysWorkouts,
+          nextPlannedWorkout: nextPlannedWorkout,
+        };
+
+        return reply.send(statusResponse);
       } catch (error: any) {
-        fastify.log.error(error, `Failed getting next workout state for user ID: ${userId}`);
-        // Catch unexpected errors from the service function itself
+        fastify.log.error(error, `Failed getting current workout state for user ID: ${userId}`); // Updated log message
         return reply
           .code(500)
-          .send({ error: "Internal Server Error", message: "Failed to determine next workout state." });
+          .send({ error: "Internal Server Error", message: "Failed to determine current workout state." }); // Updated error message
       }
     },
   });

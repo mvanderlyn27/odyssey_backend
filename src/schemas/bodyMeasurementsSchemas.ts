@@ -51,12 +51,3 @@ export const UpdateBodyMeasurementsBodySchema = Type.Object(
     minProperties: 1, // Ensure at least one field is provided for update
   }
 );
-export type UpdateBodyMeasurementsBody = Static<typeof UpdateBodyMeasurementsBodySchema>;
-
-// Helper function to add schemas to Fastify instance
-export function registerBodyMeasurementsSchemas(instance: any) {
-  instance.addSchema(BodyMeasurementSchema);
-  instance.addSchema(PostBodyMeasurementsBodySchema);
-  instance.addSchema(PostBodyMeasurementsResponseSchema);
-  instance.addSchema(UpdateBodyMeasurementsBodySchema); // Register the new schema
-}

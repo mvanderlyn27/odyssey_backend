@@ -27,9 +27,3 @@ export const RecoverStreakBodySchema = Type.Object(
 );
 export type RecoverStreakBody = Static<typeof RecoverStreakBodySchema>;
 // Response for recover uses UserStreakResponseSchema
-
-// Helper function to add schemas to Fastify instance
-export function registerStreaksSchemas(instance: any) {
-  instance.addSchema(UserStreakResponseSchema);
-  instance.addSchema(RecoverStreakBodySchema);
-}

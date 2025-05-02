@@ -43,11 +43,3 @@ export const PutUserEquipmentResponseSchema = Type.Object(
   { $id: "PutUserEquipmentResponseSchema", description: "Response after updating user's equipment" }
 );
 export type PutUserEquipmentResponse = Static<typeof PutUserEquipmentResponseSchema>;
-
-// Helper function to add schemas to Fastify instance
-export function registerEquipmentSchemas(instance: any) {
-  instance.addSchema(EquipmentSchema);
-  instance.addSchema(GetEquipmentResponseSchema);
-  instance.addSchema(PutUserEquipmentBodySchema);
-  instance.addSchema(PutUserEquipmentResponseSchema);
-}

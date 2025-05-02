@@ -1,6 +1,6 @@
-import { Type, Static } from "@sinclair/typebox";
+import { Type, Static, TSchema } from "@sinclair/typebox"; // Added TSchema for WorkoutPlanDaySchema import
 import { UuidParamsSchema, PaginationQuerySchema } from "./commonSchemas"; // Import common schemas
-import { WorkoutPlanSchema } from "./workoutPlansSchemas"; // Import WorkoutPlan schema
+import { WorkoutPlanSchema, WorkoutPlanDaySchema } from "./workoutPlansSchemas"; // Import WorkoutPlan & WorkoutPlanDay schemas
 import { ExerciseSchema } from "./exercisesSchemas"; // Import Exercise schema
 
 // --- Enums ---
@@ -85,7 +85,7 @@ const SessionExerciseDetailsSchema = Type.Intersect([
 ]);
 export const SessionDetailsSchema = Type.Intersect(
   [
-    WorkoutSessionSchema,
+    Type.Ref(WorkoutSessionSchema), // Use Type.Ref()
     Type.Object({
       session_exercises: Type.Array(SessionExerciseDetailsSchema),
       // Optionally include profile details if needed (like in finishWorkoutSession)
@@ -120,7 +120,22 @@ export const FinishSessionBodySchema = Type.Object(
   { $id: "FinishSessionBodySchema", description: "Optional notes and feeling when completing a session" }
 );
 export type FinishSessionBody = Static<typeof FinishSessionBodySchema>;
-// Response uses SessionDetailsSchema (potentially with added XP/Level info)
+
+// Define response schema for POST /workout-sessions/{id}/finish
+export const FinishSessionResponseSchema = Type.Intersect(
+  [
+    Type.Ref(WorkoutSessionSchema), // Use Type.Ref()
+    Type.Object({
+      xpAwarded: Type.Number({ description: "Experience points awarded for completing the session." }),
+      levelUp: Type.Boolean({ description: "Indicates if the user leveled up after this session." }),
+    }),
+  ],
+  {
+    $id: "FinishSessionResponseSchema",
+    description: "Response after successfully finishing a workout session, including XP and level status.",
+  }
+);
+export type FinishSessionResponse = Static<typeof FinishSessionResponseSchema>;
 
 // POST /workout-sessions/{id}/skip
 // Params use GetSessionParamsSchema
@@ -173,32 +188,22 @@ export type UpdateSetBody = Static<typeof UpdateSetBodySchema>;
 // Params use SessionExerciseParamsSchema
 // Response is 204 No Content
 
-// GET /workout-sessions/next
-
-export const GetNextWorkoutResponseSchema = Type.Object(
+// GET /workout-sessions/current-state (Renamed from /status)
+export const CurrentWorkoutStateResponseSchema = Type.Object(
   {
-    current_session_id: Type.Optional(Type.String({ format: "uuid" })),
-    workout_plan_day_id: Type.Optional(Type.String({ format: "uuid" })),
-    status: SessionStatusEnum,
-    message: Type.String(),
+    currentSession: Type.Union([Type.Ref(WorkoutSessionSchema), Type.Null()], {
+      // Use Type.Ref()
+      description: "The currently active or paused session, if any.",
+    }),
+    todaysWorkouts: Type.Array(Type.Ref(WorkoutSessionSchema), {
+      // Use Type.Ref()
+      description: "List of workout sessions started today.",
+    }),
+    nextPlannedWorkout: Type.Union([Type.Ref(WorkoutPlanDaySchema), Type.Null()], {
+      // Also use Type.Ref for consistency
+      description: "The next suggested workout day from the active plan, if any.",
+    }),
   },
-  { $id: "GetNextWorkoutResponseSchema", description: "Response for the get next workout endpoint" }
+  { $id: "CurrentWorkoutStateResponseSchema", description: "Combined status of current, today's, and next workouts" } // Renamed $id
 );
-export type GetNextWorkoutResponse = Static<typeof GetNextWorkoutResponseSchema>;
-
-// --- Registration ---
-export function registerWorkoutSessionsSchemas(instance: any) {
-  // instance.addSchema(SessionStatusEnum);
-  instance.addSchema(WorkoutSessionSchema);
-  instance.addSchema(SessionExerciseSchema);
-  instance.addSchema(StartSessionBodySchema);
-  instance.addSchema(SessionDetailsSchema); // Includes nested schemas implicitly
-  // Remove List schemas
-  // instance.addSchema(ListSessionsQuerySchema);
-  // instance.addSchema(ListSessionsResponseSchema);
-  instance.addSchema(FinishSessionBodySchema);
-  instance.addSchema(LogSetParamsSchema);
-  instance.addSchema(LogSetBodySchema);
-  instance.addSchema(UpdateSetBodySchema);
-  instance.addSchema(GetNextWorkoutResponseSchema); // Register the new schema
-}
+export type CurrentWorkoutStateResponse = Static<typeof CurrentWorkoutStateResponseSchema>; // Renamed type
