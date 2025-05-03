@@ -2,7 +2,7 @@ import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } f
 import fp from "fastify-plugin";
 import { completeOnboarding } from "./onboarding.service";
 // Import TypeBox schemas and types
-import { type PostOnboardingCompleteResponse } from "../../schemas/onboardingSchemas";
+import { type OnboardingResponse } from "../../schemas/onboardingSchemas";
 // Import common schema types if needed for error responses
 // import { type ErrorResponse } from "../../schemas/commonSchemas";
 
@@ -13,7 +13,7 @@ import { type PostOnboardingCompleteResponse } from "../../schemas/onboardingSch
  */
 async function onboardingRoutes(fastify: FastifyInstance, options: FastifyPluginOptions): Promise<void> {
   // --- POST /complete --- (Mark onboarding as complete)
-  fastify.post<{ Reply: PostOnboardingCompleteResponse }>( // Use TypeBox static type for Reply
+  fastify.post<{ Reply: OnboardingResponse }>( // Use TypeBox static type for Reply
     "/complete",
     {
       preHandler: [fastify.authenticate], // Requires authentication

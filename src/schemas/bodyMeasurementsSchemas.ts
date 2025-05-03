@@ -51,3 +51,4 @@ export const UpdateBodyMeasurementsBodySchema = Type.Object(
     minProperties: 1, // Ensure at least one field is provided for update
   }
 );
+export type UpdateBodyMeasurementsBody = Static<typeof UpdateBodyMeasurementsBodySchema>;

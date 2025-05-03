@@ -506,8 +506,13 @@ export const getBodyStats = async (fastify: FastifyInstance, userId: string): Pr
     throw new Error("Supabase client not initialized");
   }
 
+  // Define corrected type for the query result
+  type UserMuscleGroupWithObject = Tables<"user_muscle_groups"> & {
+    muscle_groups: Pick<Tables<"muscle_groups">, "name"> | null; // Explicitly an object or null
+  };
+
   // Query user_muscle_groups and join muscle_groups for names
-  const { data: userMuscleStats, error: statsError } = await supabase
+  const { data: userMuscleStats, error: statsError } = (await supabase
     .from("user_muscle_groups")
     .select(
       `
@@ -517,7 +522,7 @@ export const getBodyStats = async (fastify: FastifyInstance, userId: string): Pr
       muscle_groups ( name )
     `
     )
-    .eq("user_id", userId);
+    .eq("user_id", userId)) as { data: UserMuscleGroupWithObject[] | null; error: PostgrestError | null }; // Apply type assertion
 
   if (statsError) {
     fastify.log.error({ error: statsError, userId }, "Error fetching user muscle group stats for getBodyStats");
@@ -528,10 +533,10 @@ export const getBodyStats = async (fastify: FastifyInstance, userId: string): Pr
 
   if (userMuscleStats) {
     userMuscleStats.forEach((stat) => {
-      // Correctly access the name from the potentially array-like relation using index [0]
+      // Access the name directly from the object (type assertion ensures this is correct)
       const muscleGroupName = stat.muscle_groups?.name ?? "Unknown Muscle Group";
       muscleGroupStatsMap[stat.muscle_group_id] = {
-        name: muscleGroupName,
+        name: muscleGroupName, // Access should now be correct due to type assertion
         last_trained: stat.last_trained_at,
         muscle_ranking: stat.current_ranking, // Use the fetched ranking
       };
@@ -562,8 +567,13 @@ export const getMuscleStats = async (
     throw new Error("Supabase client not initialized");
   }
 
+  // Define corrected type for the single query result
+  type UserMuscleGroupSingleWithObject = Tables<"user_muscle_groups"> & {
+    muscle_groups: Pick<Tables<"muscle_groups">, "name"> | null; // Explicitly an object or null
+  };
+
   // Query user_muscle_groups and join muscle_groups for the name
-  const { data: userMuscleStat, error: statError } = await supabase
+  const { data: userMuscleStat, error: statError } = (await supabase
     .from("user_muscle_groups")
     .select(
       `
@@ -575,7 +585,7 @@ export const getMuscleStats = async (
     )
     .eq("user_id", userId)
     .eq("muscle_group_id", muscleId)
-    .maybeSingle(); // Expect one or zero results
+    .maybeSingle()) as { data: UserMuscleGroupSingleWithObject | null; error: PostgrestError | null }; // Apply type assertion
 
   if (statError) {
     fastify.log.error({ error: statError, userId, muscleId }, "Error fetching user muscle group stat");
@@ -604,9 +614,9 @@ export const getMuscleStats = async (
     };
   }
 
-  // Access name via index [0] assuming it might be an array
+  // Access name directly from the object (type assertion ensures this is correct)
   fastify.log.info({ userMuscleStat }, "user muscle stat");
-  const muscleGroupName = userMuscleStat.muscle_groups?.name ?? "Unknown Muscle Group";
+  const muscleGroupName = userMuscleStat.muscle_groups?.name ?? "Unknown Muscle Group"; // Access should now be correct
 
   return {
     muscle_group_id: userMuscleStat.muscle_group_id,

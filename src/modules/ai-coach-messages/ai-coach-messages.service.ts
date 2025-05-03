@@ -10,22 +10,17 @@ import {
   FunctionCall, // Import SchemaType enum
 } from "@google/generative-ai";
 import { v4 as uuidv4 } from "uuid"; // For generating session IDs
-import {
-  AiCoachMessage,
-  SendAiCoachMessageInput,
-  AiCoachChatResponse,
-  // FunctionCallResult, // Removed as it's not directly used in the response/handling flow
-  FunctionCallType,
-  UpdatedWorkoutPlanResponse,
-  AiCoachSessionSummary, // Import the new response type
-} from "./ai-coach-messages.types";
-import { WorkoutPlan } from "../workout-plans/workout-plans.types";
-import { Exercise } from "../exercises/exercises.types";
-import { Equipment } from "../equipment/equipment.types";
 import { listExercises } from "../exercises/exercises.service"; // Assuming this returns Exercise[] | Error
 import { getAllEquipment } from "../equipment/equipment.service"; // Assuming this returns Equipment[] | Error
 import { getWorkoutPlan, getWorkoutPlanDetails } from "../workout-plans/workout-plans.service"; // Import getWorkoutPlanDetails
 import { generateUpdatedWorkoutPlan, suggestExerciseAlternatives } from "../../services/geminiService"; // Import actual service functions
+// Import types from schemas
+import {
+  AiCoachMessage,
+  AiCoachSessionSummary,
+  PostChatResponse, // Import the response type for processUserChatMessage
+} from "../../schemas/aiCoachMessagesSchemas";
+import { SendAiCoachMessageInput } from "./ai-coach-messages.types"; // Keep this for the input type
 
 // Type Aliases
 type DbAiCoachMessage = Tables<"ai_coach_messages">;
@@ -313,7 +308,8 @@ export const processUserChatMessage = async (
   fastify: FastifyInstance,
   userId: string,
   chatInput: SendAiCoachMessageInput // Use the defined input type
-): Promise<AiCoachChatResponse> => {
+): Promise<PostChatResponse> => {
+  // Changed return type
   fastify.log.info(`Processing chat message for user: ${userId}, session: ${chatInput.session_id}`); // Corrected log statement
   if (!fastify.supabase) throw new Error("Supabase client not available");
   if (!fastify.gemini) throw new Error("Gemini client not available");
@@ -493,19 +489,21 @@ export const processUserChatMessage = async (
         created_at: new Date().toISOString(),
         // Add other potential fields if needed from the type
       };
-      return { ai_message: tempAiMessage, session_id: sessionId };
+      // Return structure matching PostChatResponse
+      return { ai_message: tempAiMessage, session_id: sessionId, ai_function_response_data: undefined };
       // Or throw? throw new Error(`Failed to store AI response: ${aiInsertError?.message || 'Unknown error'}`);
     }
 
-    // 7. Return the AI's response message and session ID
+    // 7. Return the AI's response message and session ID (matching PostChatResponse)
     // Store the structured data from the function call if it exists and wasn't an error
     const functionResponseData =
       handledFunctionResult && !(handledFunctionResult instanceof Error)
         ? handledFunctionResult.response // Store the actual response data
         : undefined;
 
+    // Cast storedAiMessage to AiCoachMessage type for the response
     return {
-      ai_message: storedAiMessage,
+      ai_message: storedAiMessage as AiCoachMessage,
       ai_function_response_data: functionResponseData, // Pass the structured data
       session_id: sessionId,
     };
@@ -528,7 +526,8 @@ export const getChatHistory = async (
   fastify: FastifyInstance,
   userId: string,
   sessionId: string
-): Promise<DbAiCoachMessage[]> => {
+): Promise<AiCoachMessage[]> => {
+  // Changed return type to use schema type
   // Use specific DB type
   fastify.log.info(`Fetching chat history for user: ${userId}, session: ${sessionId}`);
   if (!fastify.supabase) {
@@ -547,7 +546,8 @@ export const getChatHistory = async (
     throw new Error(`Failed to fetch chat history: ${error.message}`);
   }
 
-  return data || [];
+  // Cast the result to AiCoachMessage[] before returning
+  return (data || []) as AiCoachMessage[];
 };
 
 /**

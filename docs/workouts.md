@@ -151,7 +151,7 @@ workout_log_sets (Log of actual performance per set)
 
         Output: 201 Created with basic plan details (id, name).
 
-        Usage: Get the possible exercies from the backend that have required_equipment contained in the user's available_equipment, Pass this info along with other input info of user preferences to Gemini generation, parse the response, populate workout_plans, plan_days, workout_plan_day_exercises, plan_sets. Sets initial current_target_weight (based on user input, or gemini estimates) and weight_progression_amount in base units (KG). Deactivates previous plan.
+        Usage: Get the possible exercies from the backend that have equipment_required contained in the user's available_equipment, Pass this info along with other input info of user preferences to Gemini generation, parse the response, populate workout_plans, plan_days, workout_plan_day_exercises, plan_sets. Sets initial current_target_weight (based on user input, or gemini estimates) and weight_progression_amount in base units (KG). Deactivates previous plan.
 
     GET /workouts/plans/active
 

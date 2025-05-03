@@ -1,5 +1,5 @@
+import { Profile } from "@/schemas/profileSchemas";
 import { FastifyInstance } from "fastify";
-import { Profile } from "../profile/profile.types"; // Import Profile type
 
 export const completeOnboarding = async (
   fastify: FastifyInstance,
@@ -26,7 +26,6 @@ export const completeOnboarding = async (
     throw new Error(`Profile not found for user ID: ${userId} when trying to mark onboarding complete.`);
   }
 
-  // Ensure the returned data matches the Profile type structure
   const profile: Profile = {
     id: updatedProfile.id,
     username: updatedProfile.username,
@@ -41,7 +40,7 @@ export const completeOnboarding = async (
     height_cm: updatedProfile.height_cm,
     current_goal_id: updatedProfile.current_goal_id,
     subscription_status: updatedProfile.subscription_status,
-  };
+  } as Profile;
 
   return { message: "Onboarding marked as complete.", profile: profile };
 };
