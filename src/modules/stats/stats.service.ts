@@ -453,8 +453,6 @@ export const getUserStats = async (
     const groupKey = getGroupKey(session.started_at, grouping);
     groupedWorkouts[groupKey] = (groupedWorkouts[groupKey] || 0) + 1;
 
-    fastify.log.info({ session }, "session exercises");
-
     for (const se of session.session_exercises) {
       const reps = se.logged_reps ?? 0;
       const weight = se.logged_weight_kg ?? 0;
@@ -531,7 +529,7 @@ export const getBodyStats = async (fastify: FastifyInstance, userId: string): Pr
   if (userMuscleStats) {
     userMuscleStats.forEach((stat) => {
       // Correctly access the name from the potentially array-like relation using index [0]
-      const muscleGroupName = (stat.muscle_groups as { name: string }[] | null)?.[0]?.name ?? "Unknown Muscle Group";
+      const muscleGroupName = stat.muscle_groups?.name ?? "Unknown Muscle Group";
       muscleGroupStatsMap[stat.muscle_group_id] = {
         name: muscleGroupName,
         last_trained: stat.last_trained_at,
@@ -607,8 +605,8 @@ export const getMuscleStats = async (
   }
 
   // Access name via index [0] assuming it might be an array
-  const muscleGroupName =
-    (userMuscleStat.muscle_groups as { name: string }[] | null)?.[0]?.name ?? "Unknown Muscle Group";
+  fastify.log.info({ userMuscleStat }, "user muscle stat");
+  const muscleGroupName = userMuscleStat.muscle_groups?.name ?? "Unknown Muscle Group";
 
   return {
     muscle_group_id: userMuscleStat.muscle_group_id,
