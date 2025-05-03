@@ -221,6 +221,7 @@ export type Database = {
       }
       session_exercises: {
         Row: {
+          created_at: string
           difficulty_rating: number | null
           exercise_id: string
           id: string
@@ -234,6 +235,7 @@ export type Database = {
           workout_session_id: string
         }
         Insert: {
+          created_at?: string
           difficulty_rating?: number | null
           exercise_id: string
           id?: string
@@ -247,6 +249,7 @@ export type Database = {
           workout_session_id: string
         }
         Update: {
+          created_at?: string
           difficulty_rating?: number | null
           exercise_id?: string
           id?: string
@@ -388,6 +391,61 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "user_goals_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_muscle_groups: {
+        Row: {
+          current_ranking: Database["public"]["Enums"]["muscle_rank"] | null
+          last_trained_at: string | null
+          max_weight_achieved_at: string | null
+          max_weight_exercise_id: string | null
+          max_weight_kg: number | null
+          muscle_group_id: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          current_ranking?: Database["public"]["Enums"]["muscle_rank"] | null
+          last_trained_at?: string | null
+          max_weight_achieved_at?: string | null
+          max_weight_exercise_id?: string | null
+          max_weight_kg?: number | null
+          muscle_group_id: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          current_ranking?: Database["public"]["Enums"]["muscle_rank"] | null
+          last_trained_at?: string | null
+          max_weight_achieved_at?: string | null
+          max_weight_exercise_id?: string | null
+          max_weight_kg?: number | null
+          muscle_group_id?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_muscle_groups_max_weight_exercise_id_fkey"
+            columns: ["max_weight_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_muscle_groups_muscle_group_id_fkey"
+            columns: ["muscle_group_id"]
+            isOneToOne: false
+            referencedRelation: "muscle_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_muscle_groups_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
@@ -584,6 +642,7 @@ export type Database = {
       }
       workout_sessions: {
         Row: {
+          created_at: string
           ended_at: string | null
           id: string
           notes: string | null
@@ -594,6 +653,7 @@ export type Database = {
           workout_plan_day_id: string | null
         }
         Insert: {
+          created_at?: string
           ended_at?: string | null
           id?: string
           notes?: string | null
@@ -604,6 +664,7 @@ export type Database = {
           workout_plan_day_id?: string | null
         }
         Update: {
+          created_at?: string
           ended_at?: string | null
           id?: string
           notes?: string | null
@@ -681,6 +742,10 @@ export type Database = {
           user_id: string
         }
       }
+      initialize_user_muscle_groups: {
+        Args: { new_user_id: string }
+        Returns: undefined
+      }
       is_plan_day_owner: {
         Args: { plan_day_id: string }
         Returns: boolean
@@ -693,15 +758,31 @@ export type Database = {
         Args: { set_log_id: string }
         Returns: boolean
       }
+      recalculate_all_muscle_stats: {
+        Args: { target_user_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       meal_type: "breakfast" | "lunch" | "dinner" | "snack"
+      muscle_rank:
+        | "Neophyte"
+        | "Adept"
+        | "Vanguard"
+        | "Elite"
+        | "Master"
+        | "Champion"
+        | "Legend"
       session_status:
         | "active"
         | "paused"
         | "completed"
         | "skipped"
         | "cancelled"
+        | "error"
+        | "pending"
+        | "no_plan"
+        | "no_workouts"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -818,7 +899,26 @@ export const Constants = {
   public: {
     Enums: {
       meal_type: ["breakfast", "lunch", "dinner", "snack"],
-      session_status: ["active", "paused", "completed", "skipped", "cancelled"],
+      muscle_rank: [
+        "Neophyte",
+        "Adept",
+        "Vanguard",
+        "Elite",
+        "Master",
+        "Champion",
+        "Legend",
+      ],
+      session_status: [
+        "active",
+        "paused",
+        "completed",
+        "skipped",
+        "cancelled",
+        "error",
+        "pending",
+        "no_plan",
+        "no_workouts",
+      ],
     },
   },
 } as const

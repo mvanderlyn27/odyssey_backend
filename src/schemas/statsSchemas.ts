@@ -1,7 +1,8 @@
 import { Type, Static } from "@sinclair/typebox";
+import { z } from "zod"; // Import Zod
 import { UuidParamsSchema } from "./commonSchemas"; // Import common schemas
 
-// --- Enums & Common Types ---
+// --- Enums & Common Types (TypeBox) ---
 const TimePeriodEnum = Type.Union(
   [Type.Literal("day"), Type.Literal("week"), Type.Literal("month"), Type.Literal("year"), Type.Literal("all")],
   { $id: "TimePeriodEnum", description: "Time period for statistics aggregation" }
@@ -14,6 +15,31 @@ const GroupingEnum = Type.Union(
 );
 export type TimePeriod = Static<typeof TimePeriodEnum>; // Export static type
 export type Grouping = Static<typeof GroupingEnum>; // Export static type
+
+// --- Muscle Ranking (Zod Schemas) ---
+// Define the enum values in Zod for validation and type generation
+export const MuscleRankEnum = Type.Enum({
+  Neophyte: "Neophyte",
+  Adept: "Adept",
+  Vanguard: "Vanguard",
+  Elite: "Elite",
+  Master: "Master",
+  Champion: "Champion",
+  Legend: "Legend",
+});
+export const muscleRankEnum = z.enum(["Neophyte", "Adept", "Vanguard", "Elite", "Master", "Champion", "Legend"]);
+export type MuscleRank = z.infer<typeof muscleRankEnum>;
+
+// Schema for a single threshold object within the array
+export const muscleRankingThresholdSchema = z.object({
+  rank: muscleRankEnum,
+  required_weight_kg: z.number().positive("Required weight must be positive"),
+});
+export type MuscleRankingThreshold = z.infer<typeof muscleRankingThresholdSchema>;
+
+// Schema for the array stored in the muscle_groups.muscle_ranking_data column
+export const muscleRankingThresholdsSchema = z.array(muscleRankingThresholdSchema);
+export type MuscleRankingThresholds = z.infer<typeof muscleRankingThresholdsSchema>;
 
 // --- GET /stats/exercise/{id} ---
 export const GetExerciseStatsParamsSchema = UuidParamsSchema; // Re-use common schema
@@ -114,10 +140,11 @@ export const GetBodyStatsQuerySchema = Type.Object(
 );
 export type GetBodyStatsQuery = Static<typeof GetBodyStatsQuerySchema>;
 
+// Update MuscleGroupStatSchema to use the Zod enum type for muscle_ranking
 const MuscleGroupStatSchema = Type.Object({
   name: Type.Union([Type.String(), Type.Null()]),
   last_trained: Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
-  muscle_ranking: Type.Union([Type.String(), Type.Null()]), // e.g., "Novice", "Intermediate"
+  muscle_ranking: Type.Union([MuscleRankEnum, Type.Null()]), // Use Zod enum here
 });
 
 export const BodyStatsSchema = Type.Object(

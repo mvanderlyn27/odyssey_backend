@@ -10,6 +10,7 @@ import {
   WorkoutSession,
   SessionExercise,
 } from "@/schemas/workoutSessionsSchemas";
+import { updateUserMuscleGroupStatsAfterSession } from "../stats/stats.service"; // Import the new helper
 // Assuming types for request bodies are defined here or in a shared types file
 
 // Define XP and Level constants (adjust as needed)
@@ -25,20 +26,9 @@ type Profile = Tables<"profiles">;
 type ProfileUpdate = TablesUpdate<"profiles">;
 type AiCoachMessageInsert = TablesInsert<"ai_coach_messages">;
 
-// Helper function to parse target reps string (e.g., "8-12", "5", "AMRAP")
-const parseTargetReps = (targetReps: string): { min: number; max: number | null } => {
-  if (targetReps.toUpperCase() === "AMRAP") {
-    return { min: 1, max: null }; // As many reps as possible, min 1 for success check?
-  }
-  const parts = targetReps.split("-").map(Number);
-  if (parts.length === 1 && !isNaN(parts[0])) {
-    return { min: parts[0], max: parts[0] };
-  }
-  if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-    return { min: Math.min(parts[0], parts[1]), max: Math.max(parts[0], parts[1]) };
-  }
-  // Default or throw error for invalid format?
-  return { min: 0, max: 0 }; // Indicate invalid format
+// Type alias for session exercises with joined details (needed for the helper function)
+type SessionExerciseWithDetails = Tables<"session_exercises"> & {
+  exercises: Pick<Tables<"exercises">, "id" | "primary_muscle_groups" | "secondary_muscle_groups"> | null;
 };
 
 // Helper function to check if a set was successful based on target reps (min/max)
@@ -811,17 +801,26 @@ export const finishWorkoutSession = async (
     const currentProfile = sessionData.profiles;
     const planWorkoutId = sessionData.workout_plan_day_id;
 
-    // --- 2. Fetch Session Exercises and Plan Exercises (if applicable) ---
-    const { data: sessionExercises, error: exercisesError } = await supabase
+    // --- 2. Fetch Session Exercises (including joined exercise details) and Plan Exercises (if applicable) ---
+    const { data: sessionExercisesData, error: exercisesError } = (await supabase
       .from("session_exercises")
-      .select("*")
-      .eq("workout_session_id", sessionId);
+      .select(
+        `
+        *,
+        exercises ( id, primary_muscle_groups, secondary_muscle_groups )
+      `
+      )
+      .eq("workout_session_id", sessionId)) as {
+      data: SessionExerciseWithDetails[] | null;
+      error: PostgrestError | null;
+    }; // Type assertion
 
     if (exercisesError) {
       fastify.log.error({ error: exercisesError, sessionId }, "Error fetching session exercises");
       throw new Error(`Failed to fetch exercises for session: ${exercisesError.message}`);
     }
-    if (!sessionExercises) {
+    // Use sessionExercisesData which is correctly typed now
+    if (!sessionExercisesData) {
       // Should not happen if error is null, but check anyway
       fastify.log.warn(`No session exercises found for session ${sessionId}, proceeding.`);
       // Allow finishing a workout with 0 exercises logged
@@ -849,10 +848,11 @@ export const finishWorkoutSession = async (
     const planExerciseUpdates: { id: string; update: PlanWorkoutExerciseUpdate }[] = [];
     let successfulExercisesCount = 0;
 
-    if (planWorkoutId && planExercisesMap.size > 0 && sessionExercises && sessionExercises.length > 0) {
+    // Use sessionExercisesData here
+    if (planWorkoutId && planExercisesMap.size > 0 && sessionExercisesData && sessionExercisesData.length > 0) {
       // Group session exercises by plan_workout_exercise_id
-      const groupedSessionExercises: { [key: string]: SessionExercise[] } = {};
-      sessionExercises.forEach((se) => {
+      const groupedSessionExercises: { [key: string]: SessionExerciseWithDetails[] } = {}; // Use correct type
+      sessionExercisesData.forEach((se) => {
         if (se.plan_workout_exercise_id) {
           if (!groupedSessionExercises[se.plan_workout_exercise_id]) {
             groupedSessionExercises[se.plan_workout_exercise_id] = [];
@@ -1030,6 +1030,24 @@ export const finishWorkoutSession = async (
       xpAwarded: awardedXp,
       levelUp: levelUpOccurred,
     };
+
+    // --- 8. Update User Muscle Group Stats (after session is marked completed) ---
+    // Run this asynchronously in the background, don't await it to avoid delaying the response.
+    // Use sessionUpdatePayload.ended_at! as it's guaranteed to be set.
+    if (sessionExercisesData && sessionExercisesData.length > 0) {
+      updateUserMuscleGroupStatsAfterSession(fastify, userId, sessionUpdatePayload.ended_at!, sessionExercisesData)
+        .then(() => {
+          fastify.log.info(`Successfully updated muscle group stats for user ${userId} in background.`);
+        })
+        .catch((muscleStatsError) => {
+          fastify.log.error(
+            { error: muscleStatsError, userId, sessionId },
+            "Background update of user muscle group stats failed."
+          );
+          // Log error but don't fail the main request
+        });
+    }
+
     return result;
   } catch (error: any) {
     fastify.log.error(error, `Unexpected error finishing workout session ${sessionId}`);

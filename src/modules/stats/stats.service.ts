@@ -30,13 +30,48 @@ interface MuscleRanking {
   rank: string;
   required_weight_kg: number;
 }
-
-// Type Aliases
-type SessionExercise = Tables<"session_exercises">;
-type Exercise = Tables<"exercises">;
-type WorkoutSession = Tables<"workout_sessions">;
-
 // --- Helper Functions ---
+
+import { MuscleRank, MuscleRankingThreshold, muscleRankingThresholdsSchema } from "../../schemas/statsSchemas"; // Import Zod types
+
+/**
+ * Calculates the muscle rank based on the user's max weight for the group and the defined thresholds.
+ * @param maxWeightKg - The user's maximum weight lifted for any exercise in the muscle group.
+ * @param thresholdsJson - The JSONB data from muscle_groups.muscle_ranking_data.
+ * @returns The calculated MuscleRank or null if no rank is met or data is invalid.
+ */
+function calculateMuscleRank(
+  maxWeightKg: number | null | undefined,
+  thresholdsJson: unknown // Accept unknown type from DB JSONB
+): MuscleRank | null {
+  if (maxWeightKg === null || maxWeightKg === undefined || maxWeightKg <= 0) {
+    return null; // No rank if no weight lifted
+  }
+
+  // Validate and parse the thresholds JSON using Zod
+  const parseResult = muscleRankingThresholdsSchema.safeParse(thresholdsJson);
+  if (!parseResult.success) {
+    // Log error or handle invalid threshold data structure
+    console.error("Invalid muscle ranking thresholds data:", parseResult.error);
+    return null;
+  }
+  const thresholds = parseResult.data;
+
+  if (thresholds.length === 0) {
+    return null; // No thresholds defined
+  }
+
+  // Sort thresholds descending by weight requirement to find the highest achieved rank
+  const sortedThresholds = [...thresholds].sort((a, b) => b.required_weight_kg - a.required_weight_kg);
+
+  for (const threshold of sortedThresholds) {
+    if (maxWeightKg >= threshold.required_weight_kg) {
+      return threshold.rank; // Return the first (highest) rank met
+    }
+  }
+
+  return null; // No rank met
+}
 
 /**
  * Calculates the start date based on the current date and a time period.
@@ -347,6 +382,16 @@ export const getUserStats = async (
 ): Promise<UserStats> => {
   // Use imported schema type
   // Use imported schema type
+
+  // Define the expected structure more explicitly to guide TypeScript
+  type SessionExerciseWithExercise = Tables<"session_exercises"> & {
+    exercises: Tables<"exercises"> | null; // Explicitly single object or null
+  };
+
+  type SessionWithTypedExercises = Tables<"workout_sessions"> & {
+    session_exercises: SessionExerciseWithExercise[];
+  };
+
   const { supabase } = fastify;
   if (!supabase) {
     throw new Error("Supabase client not initialized");
@@ -365,7 +410,7 @@ export const getUserStats = async (
         logged_reps,
         logged_weight_kg,
         exercise_id,
-        exercises ( name )
+        exercises ( * )
       )
     `
     )
@@ -375,7 +420,11 @@ export const getUserStats = async (
     sessionQuery = sessionQuery.gte("started_at", startDate);
   }
 
-  const { data: sessionData, error: sessionError } = await sessionQuery;
+  // Add type assertion to the query result
+  const { data: sessionData, error: sessionError } = (await sessionQuery) as {
+    data: SessionWithTypedExercises[] | null;
+    error: PostgrestError | null;
+  };
 
   if (sessionError) {
     fastify.log.error(sessionError, `Error fetching user session data for user ${userId}`);
@@ -404,11 +453,13 @@ export const getUserStats = async (
     const groupKey = getGroupKey(session.started_at, grouping);
     groupedWorkouts[groupKey] = (groupedWorkouts[groupKey] || 0) + 1;
 
+    fastify.log.info({ session }, "session exercises");
+
     for (const se of session.session_exercises) {
       const reps = se.logged_reps ?? 0;
       const weight = se.logged_weight_kg ?? 0;
       const exerciseId = se.exercise_id;
-      const exerciseName = se.exercises?.[0]?.name ?? "Unknown Exercise";
+      const exerciseName = se.exercises?.name ?? "Unknown Exercise"; // Revert to direct access
 
       totalWeightLiftedOverall += reps * weight;
 
@@ -452,53 +503,42 @@ export const getUserStats = async (
  * @returns {Promise<BodyStats>} The calculated body statistics.
  */
 export const getBodyStats = async (fastify: FastifyInstance, userId: string): Promise<BodyStats> => {
-  // Use imported schema type
-  // Use imported schema type
   const { supabase } = fastify;
   if (!supabase) {
     throw new Error("Supabase client not initialized");
   }
 
-  // Query 1: Get all muscle groups
-  const { data: muscleGroups, error: muscleGroupError } = await supabase.from("muscle_groups").select("id, name");
+  // Query user_muscle_groups and join muscle_groups for names
+  const { data: userMuscleStats, error: statsError } = await supabase
+    .from("user_muscle_groups")
+    .select(
+      `
+      muscle_group_id,
+      last_trained_at,
+      current_ranking, 
+      muscle_groups ( name )
+    `
+    )
+    .eq("user_id", userId);
 
-  if (muscleGroupError) {
-    fastify.log.error(muscleGroupError, "Error fetching muscle groups");
-    throw new Error(`Database error: ${muscleGroupError.message}`);
+  if (statsError) {
+    fastify.log.error({ error: statsError, userId }, "Error fetching user muscle group stats for getBodyStats");
+    throw new Error(`Database error fetching body stats: ${statsError.message}`);
   }
 
-  if (!muscleGroups || muscleGroups.length === 0) {
-    return { muscle_group_stats: {} };
-  }
-
-  // Use a map to store the results
   const muscleGroupStatsMap: BodyStats["muscle_group_stats"] = {};
 
-  // Fetch stats for each muscle group individually using getMuscleStats
-  // We'll use 'all' time period for ranking and last trained date
-  const timePeriod: TimePeriod = "all";
-
-  const statsPromises = muscleGroups.map(async (mg) => {
-    try {
-      const stats = await getMuscleStats(fastify, userId, mg.id, timePeriod);
-      muscleGroupStatsMap[mg.id] = {
-        name: stats.name,
-        last_trained: stats.last_trained,
-        muscle_ranking: stats.muscle_ranking, // Include the ranking
+  if (userMuscleStats) {
+    userMuscleStats.forEach((stat) => {
+      // Correctly access the name from the potentially array-like relation using index [0]
+      const muscleGroupName = (stat.muscle_groups as { name: string }[] | null)?.[0]?.name ?? "Unknown Muscle Group";
+      muscleGroupStatsMap[stat.muscle_group_id] = {
+        name: muscleGroupName,
+        last_trained: stat.last_trained_at,
+        muscle_ranking: stat.current_ranking, // Use the fetched ranking
       };
-    } catch (error: any) {
-      fastify.log.error(error, `Error fetching stats for muscle group ${mg.id}`);
-      // Optionally handle error for individual muscle groups, e.g., set default values
-      muscleGroupStatsMap[mg.id] = {
-        name: mg.name,
-        last_trained: null,
-        muscle_ranking: null,
-      };
-    }
-  });
-
-  // Wait for all individual muscle stats fetches to complete
-  await Promise.all(statsPromises);
+    });
+  }
 
   return {
     muscle_group_stats: muscleGroupStatsMap,
@@ -510,124 +550,241 @@ export const getBodyStats = async (fastify: FastifyInstance, userId: string): Pr
  * @param fastify - Fastify instance.
  * @param userId - The ID of the user.
  * @param muscleId - The ID of the muscle group.
- * @param timePeriod - The time frame ('day', 'week', 'month', 'year', 'all').
+ * @param _timePeriod - The time frame (currently unused as stats are read directly).
  * @returns {Promise<MuscleStats>} The calculated muscle statistics.
  */
 export const getMuscleStats = async (
   fastify: FastifyInstance,
   userId: string,
   muscleId: string,
-  timePeriod: TimePeriod // Use imported enum type
+  _timePeriod: TimePeriod // Parameter kept for signature consistency, but not used
 ): Promise<MuscleStats> => {
-  // Use imported schema type
-  // Use imported schema type
   const { supabase } = fastify;
   if (!supabase) {
     throw new Error("Supabase client not initialized");
   }
-  const startDate = getStartDate(timePeriod);
 
-  // Query 1: Get muscle group details including ranking data and ranking exercise
-  const { data: muscleGroup, error: muscleGroupError } = await supabase
-    .from("muscle_groups")
-    .select("id, name, muscle_ranking_data, ranking_exercise_id") // Fetch ranking data and exercise ID
-    .eq("id", muscleId)
-    .single();
+  // Query user_muscle_groups and join muscle_groups for the name
+  const { data: userMuscleStat, error: statError } = await supabase
+    .from("user_muscle_groups")
+    .select(
+      `
+      muscle_group_id,
+      last_trained_at,
+      current_ranking,
+      muscle_groups ( name )
+    `
+    )
+    .eq("user_id", userId)
+    .eq("muscle_group_id", muscleId)
+    .maybeSingle(); // Expect one or zero results
 
-  if (muscleGroupError) {
-    fastify.log.error(muscleGroupError, `Error fetching muscle group ${muscleId}`);
-    if (muscleGroupError.code === "PGRST116") {
+  if (statError) {
+    fastify.log.error({ error: statError, userId, muscleId }, "Error fetching user muscle group stat");
+    throw new Error(`Database error fetching muscle stat: ${statError.message}`);
+  }
+
+  if (!userMuscleStat) {
+    // This might happen if the initialization trigger failed or if called before user creation?
+    // Or if the muscleId is invalid. Fetch muscle group name separately for better error message.
+    const { data: muscleGroup, error: mgError } = await supabase
+      .from("muscle_groups")
+      .select("name")
+      .eq("id", muscleId)
+      .single();
+
+    if (mgError || !muscleGroup) {
       throw new Error(`Muscle group with ID ${muscleId} not found.`);
     }
-    throw new Error(`Database error: ${muscleGroupError.message}`);
-  }
-  if (!muscleGroup) {
-    throw new Error(`Muscle group with ID ${muscleId} not found.`);
-  }
 
-  // Query 2: Find exercises targeting this muscle group (for last_trained)
-  const { data: exercises, error: exercisesError } = await supabase
-    .from("exercises")
-    .select("id")
-    .contains("primary_muscle_groups", [muscleId]);
-
-  if (exercisesError) {
-    fastify.log.error(exercisesError, `Error fetching exercises for muscle group ${muscleId}`);
-    // Don't throw, we can still calculate rank if ranking_exercise_id exists
+    fastify.log.warn(`No user_muscle_groups record found for user ${userId}, muscle ${muscleId}. Returning defaults.`);
+    return {
+      muscle_group_id: muscleId,
+      name: muscleGroup.name,
+      last_trained: null,
+      muscle_ranking: null, // No rank if no user record found
+    };
   }
 
-  const targetExerciseIds = exercises ? exercises.map((e) => e.id) : [];
-
-  // Query 3: Find the latest session where *any* of these exercises was done by the user (for last_trained)
-  let lastTrainedDate: string | null = null;
-  if (targetExerciseIds.length > 0) {
-    let latestSessionQuery = supabase
-      .from("workout_sessions")
-      .select("started_at, session_exercises!inner(exercise_id)")
-      .eq("user_id", userId)
-      .in("session_exercises.exercise_id", targetExerciseIds)
-      .order("started_at", { ascending: false })
-      .limit(1);
-
-    if (startDate) {
-      latestSessionQuery = latestSessionQuery.gte("started_at", startDate);
-    }
-
-    const { data: latestSession, error: latestSessionError } = await latestSessionQuery.maybeSingle();
-
-    if (latestSessionError) {
-      fastify.log.error(latestSessionError, `Error fetching latest session for muscle ${muscleId}, user ${userId}`);
-      // Don't throw, proceed to rank calculation
-    }
-    lastTrainedDate = latestSession ? latestSession.started_at : null;
-  }
-
-  // Query 4: Calculate Muscle Ranking
-  let muscleRanking: string | null = null;
-  const rankingData = muscleGroup.muscle_ranking_data as MuscleRanking[] | null;
-  const rankingExerciseId = muscleGroup.ranking_exercise_id;
-
-  if (rankingData && rankingData.length > 0 && rankingExerciseId) {
-    // Find user's max lift for the specific ranking exercise within the time period
-    let maxLiftQuery = supabase
-      .from("session_exercises")
-      .select("logged_weight_kg, workout_sessions!inner(user_id, started_at)")
-      .eq("exercise_id", rankingExerciseId)
-      .eq("workout_sessions.user_id", userId)
-      .order("logged_weight_kg", { ascending: false })
-      .limit(1);
-
-    if (startDate) {
-      maxLiftQuery = maxLiftQuery.gte("workout_sessions.started_at", startDate);
-    }
-
-    const { data: maxLiftData, error: maxLiftError } = await maxLiftQuery.maybeSingle();
-
-    if (maxLiftError) {
-      fastify.log.error(
-        maxLiftError,
-        `Error fetching max lift for ranking exercise ${rankingExerciseId}, user ${userId}`
-      );
-      // Proceed without ranking if max lift cannot be determined
-    } else if (maxLiftData && maxLiftData.logged_weight_kg !== null) {
-      const userMaxLift = maxLiftData.logged_weight_kg;
-      // Sort ranking data descending by required weight
-      const sortedRankingData = [...rankingData].sort((a, b) => b.required_weight_kg - a.required_weight_kg);
-
-      // Find the highest rank the user qualifies for
-      for (const rankInfo of sortedRankingData) {
-        if (userMaxLift >= rankInfo.required_weight_kg) {
-          muscleRanking = rankInfo.rank;
-          break; // Found the highest rank
-        }
-      }
-    }
-  }
+  // Access name via index [0] assuming it might be an array
+  const muscleGroupName =
+    (userMuscleStat.muscle_groups as { name: string }[] | null)?.[0]?.name ?? "Unknown Muscle Group";
 
   return {
-    muscle_group_id: muscleGroup.id,
-    name: muscleGroup.name,
-    last_trained: lastTrainedDate,
-    muscle_ranking: muscleRanking,
+    muscle_group_id: userMuscleStat.muscle_group_id,
+    name: muscleGroupName,
+    last_trained: userMuscleStat.last_trained_at,
+    muscle_ranking: userMuscleStat.current_ranking, // Use the fetched ranking
   };
+};
+
+// --- New Helper Function for User Muscle Group Updates ---
+
+// Define type for session exercises including joined exercise data
+type SessionExerciseWithDetails = Tables<"session_exercises"> & {
+  exercises: Pick<Tables<"exercises">, "id" | "primary_muscle_groups" | "secondary_muscle_groups"> | null;
+};
+
+/**
+ * Updates the user_muscle_groups table based on a completed workout session.
+ * Should be called once after a session is finished.
+ *
+ * @param fastify - Fastify instance.
+ * @param userId - The ID of the user.
+ * @param sessionEndedAt - The ISO timestamp when the session ended.
+ * @param sessionExercisesData - Array of session exercises from the completed session, including joined exercise details.
+ */
+export const updateUserMuscleGroupStatsAfterSession = async (
+  fastify: FastifyInstance,
+  userId: string,
+  sessionEndedAt: string, // ISO string
+  sessionExercisesData: SessionExerciseWithDetails[]
+): Promise<void> => {
+  fastify.log.info(`Updating user muscle group stats for user ${userId} after session ending at ${sessionEndedAt}`);
+  const { supabase } = fastify;
+  if (!supabase) {
+    fastify.log.error("Supabase client not available in updateUserMuscleGroupStatsAfterSession");
+    // Decide how to handle: throw error or return silently? Throwing is safer.
+    throw new Error("Database client not available.");
+  }
+
+  if (!sessionExercisesData || sessionExercisesData.length === 0) {
+    fastify.log.info(`No session exercises provided for user ${userId}, skipping muscle group stats update.`);
+    return;
+  }
+
+  try {
+    // 1. Fetch current user_muscle_groups stats
+    const { data: currentUserMuscleStatsData, error: fetchError } = await supabase
+      .from("user_muscle_groups")
+      .select("*")
+      .eq("user_id", userId);
+
+    if (fetchError) {
+      fastify.log.error({ error: fetchError, userId }, "Failed to fetch current user muscle stats");
+      throw new Error(`Database error fetching user muscle stats: ${fetchError.message}`);
+    }
+
+    // Create a map for easy lookup: muscle_group_id -> stats
+    const currentUserMuscleStatsMap = new Map<string, Tables<"user_muscle_groups">>();
+    if (currentUserMuscleStatsData) {
+      currentUserMuscleStatsData.forEach((stat) => currentUserMuscleStatsMap.set(stat.muscle_group_id, stat));
+    }
+
+    // Fetch muscle group ranking data
+    const { data: muscleGroupsData, error: mgError } = await supabase
+      .from("muscle_groups")
+      .select("id, muscle_ranking_data"); // Fetch ranking data
+
+    if (mgError) {
+      fastify.log.error({ error: mgError }, "Failed to fetch muscle group ranking data");
+      throw new Error(`Database error fetching muscle group data: ${mgError.message}`);
+    }
+
+    const muscleGroupRankingDataMap = new Map<string, unknown>(); // Store as unknown for Zod parsing
+    if (muscleGroupsData) {
+      muscleGroupsData.forEach((mg) => muscleGroupRankingDataMap.set(mg.id, mg.muscle_ranking_data));
+    }
+
+    // 2. Prepare updates based on session exercises
+    const updatesMap = new Map<string, Partial<Tables<"user_muscle_groups">>>();
+    const sessionEndedDate = new Date(sessionEndedAt); // For comparison
+
+    for (const se of sessionExercisesData) {
+      if (!se.exercises) continue; // Skip if exercise details are missing
+
+      const loggedWeightKg = se.logged_weight_kg ?? 0;
+      const exerciseId = se.exercise_id;
+      const muscleGroupsAffected = [
+        ...(se.exercises.primary_muscle_groups || []),
+        ...(se.exercises.secondary_muscle_groups || []),
+      ];
+
+      for (const muscleGroupId of muscleGroupsAffected) {
+        // Get current stats or initialize if missing (shouldn't happen due to trigger, but safer)
+        const currentStat = currentUserMuscleStatsMap.get(muscleGroupId);
+        const updatePayload = updatesMap.get(muscleGroupId) || { user_id: userId, muscle_group_id: muscleGroupId };
+
+        // Update last_trained_at
+        const currentLastTrained = currentStat?.last_trained_at ? new Date(currentStat.last_trained_at) : null;
+        if (!currentLastTrained || sessionEndedDate > currentLastTrained) {
+          updatePayload.last_trained_at = sessionEndedAt;
+        }
+
+        // Update max_weight_kg and related fields
+        const currentMaxWeight = currentStat?.max_weight_kg ?? -Infinity; // Use -Infinity for comparison
+        const updateMaxWeight = updatePayload.max_weight_kg ?? currentMaxWeight; // Consider already staged updates
+
+        if (loggedWeightKg > updateMaxWeight) {
+          updatePayload.max_weight_kg = loggedWeightKg;
+          updatePayload.max_weight_exercise_id = exerciseId;
+          updatePayload.max_weight_achieved_at = sessionEndedAt;
+        }
+
+        // Store the potential update
+        updatesMap.set(muscleGroupId, updatePayload);
+      }
+    }
+
+    // 3. Calculate final ranks and prepare upsert data
+    const updatesToApply: Tables<"user_muscle_groups">[] = []; // Use the full type for the final array
+    for (const [muscleGroupId, accumulatedChanges] of updatesMap.entries()) {
+      const currentStat = currentUserMuscleStatsMap.get(muscleGroupId);
+
+      // Determine final values, preferring accumulated changes, then current stats, then null
+      const finalMaxWeight = accumulatedChanges.max_weight_kg ?? currentStat?.max_weight_kg ?? null;
+      const finalLastTrained = accumulatedChanges.last_trained_at ?? currentStat?.last_trained_at ?? null;
+      const finalMaxWeightExerciseId =
+        accumulatedChanges.max_weight_exercise_id ?? currentStat?.max_weight_exercise_id ?? null;
+      const finalMaxWeightAchievedAt =
+        accumulatedChanges.max_weight_achieved_at ?? currentStat?.max_weight_achieved_at ?? null;
+
+      // Get ranking thresholds
+      const rankingThresholdsJson = muscleGroupRankingDataMap.get(muscleGroupId);
+
+      // Calculate the rank based on the final max weight
+      const calculatedRank = calculateMuscleRank(finalMaxWeight, rankingThresholdsJson);
+
+      // Construct the full object for upsert, ensuring all required fields are present
+      // Note: Supabase types might define non-nullable fields; adjust defaults if needed.
+      const finalUpdate: Tables<"user_muscle_groups"> = {
+        user_id: userId,
+        muscle_group_id: muscleGroupId,
+        last_trained_at: finalLastTrained,
+        max_weight_kg: finalMaxWeight,
+        max_weight_exercise_id: finalMaxWeightExerciseId,
+        max_weight_achieved_at: finalMaxWeightAchievedAt,
+        current_ranking: calculatedRank, // Assign calculated rank
+        updated_at: new Date().toISOString(), // Set updated_at timestamp
+      };
+
+      // Add to the list to be applied (only if it was touched in the map)
+      if (updatesMap.has(muscleGroupId)) {
+        updatesToApply.push(finalUpdate);
+      }
+    }
+
+    // 4. Perform batch upsert
+    if (updatesToApply.length > 0) {
+      fastify.log.info(`Applying ${updatesToApply.length} upserts to user_muscle_groups for user ${userId}`);
+
+      // Upsert the full objects
+      const { error: upsertError } = await supabase.from("user_muscle_groups").upsert(updatesToApply, {
+        onConflict: "user_id, muscle_group_id", // Specify conflict target
+        // defaultToNull: false, // Optional: prevent unspecified fields from being set to null if needed
+      });
+
+      if (upsertError) {
+        fastify.log.error({ error: upsertError, userId }, "Error upserting user muscle group stats");
+        // Throw error as the update failed
+        throw new Error(`Database error updating user muscle stats: ${upsertError.message}`);
+      }
+    } else {
+      fastify.log.info(`No updates needed for user_muscle_groups for user ${userId} based on this session.`);
+    }
+  } catch (error: any) {
+    fastify.log.error(error, `Unexpected error updating user muscle group stats for user ${userId}`);
+    // Re-throw the error
+    throw error;
+  }
 };
