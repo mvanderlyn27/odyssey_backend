@@ -21,7 +21,7 @@ export const listExercises = async (fastify: FastifyInstance, query: ListExercis
   }
   if (query.equipment_id) {
     // Assuming equipment_required is an array of UUIDs
-    queryBuilder = queryBuilder.contains("equipment_required", [query.equipment_id]);
+    queryBuilder = queryBuilder.contains("equipment_required", [query.equipment_id]); // Reverted field name
   }
   // Add more filters as needed
 
@@ -125,6 +125,7 @@ export const suggestAlternatives = async (
     prompt += `\nSecondary muscles: ${originalExercise.secondary_muscle_groups.join(", ")}.`;
   }
   if (originalExercise.equipment_required && originalExercise.equipment_required.length > 0) {
+    // Reverted field name
     // We need equipment names, not just IDs here. Fetching them adds complexity.
     // For simplicity now, we'll just state the requirement. A better approach fetches names.
     prompt += `\nThe original exercise requires specific equipment.`;
@@ -220,7 +221,7 @@ export const createExercise = async (
   const exerciseToInsert: ExerciseInsert = {
     ...exerciseData,
     // Ensure equipment_required is handled correctly (schema uses it)
-    equipment_required: exerciseData.equipment_required ?? [], // Default to empty array if null/undefined
+    equipment_required: exerciseData.equipment_required ?? [], // Reverted field name, default to empty array if null/undefined
     // Ensure optional fields default to null if not provided and DB allows null
     description: exerciseData.description ?? null,
     secondary_muscle_groups: exerciseData.secondary_muscle_groups ?? null,
@@ -268,7 +269,7 @@ export const updateExercise = async (
     exerciseToUpdate.primary_muscle_groups = updateData.primary_muscle_groups;
   if (updateData.secondary_muscle_groups !== undefined)
     exerciseToUpdate.secondary_muscle_groups = updateData.secondary_muscle_groups;
-  // Handle potential null for equipment_required based on updated DB type
+  // Map equipment_required from UpdateExerciseBodySchema to equipment_required for DB update
   if (updateData.equipment_required !== undefined) exerciseToUpdate.equipment_required = updateData.equipment_required;
   if (updateData.image_url !== undefined) exerciseToUpdate.image_url = updateData.image_url;
   // Handle potential null for difficulty based on updated DB type

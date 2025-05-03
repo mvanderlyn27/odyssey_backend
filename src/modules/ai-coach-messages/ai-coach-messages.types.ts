@@ -1,9 +1,5 @@
-// Import Exercise type from its schema file
-import { type Exercise } from "../../schemas/exercisesSchemas";
 // Import WorkoutPlan type from its schema file
 import { type WorkoutPlan } from "../../schemas/workoutPlansSchemas";
-// Import the TypeBox generated type for AiCoachMessage
-import { type AiCoachMessage } from "../../schemas/aiCoachMessagesSchemas";
 
 export enum FunctionCallType {
   ModifyWorkoutPlan = "modify_workout_plan",

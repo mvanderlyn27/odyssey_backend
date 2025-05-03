@@ -26,7 +26,7 @@ This document outlines the available API endpoints for the Aura backend.
 
 *   **Auth:** Optional
 *   **Input:** Optional Query Params: `?search=<string>`, `?muscleGroup=<string>`
-*   **Output:** Array of exercise objects from `exercises_library` table: `[{ id, name, description?, muscle_groups, required_equipment? }]`
+*   **Output:** Array of exercise objects from `exercises_library` table: `[{ id, name, description?, muscle_groups, equipment_required? }]`
 *   **Purpose:** Fetch exercises from the library to populate exercise pickers or for reference during plan generation. Allows filtering by text search or muscle group.
 
 **2. GET `/workouts/exercises/alternatives`**

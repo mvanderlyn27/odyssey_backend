@@ -108,7 +108,7 @@ export const UpdateExerciseBodySchema = Type.Partial(
     description: Type.Union([Type.String(), Type.Null()]),
     primary_muscle_groups: Type.Array(Type.String({ format: "uuid" }), { minItems: 1 }), // Now array of Muscle Group UUIDs
     secondary_muscle_groups: Type.Union([Type.Array(Type.String({ format: "uuid" })), Type.Null()]), // Now array of Muscle Group UUIDs
-    required_equipment: Type.Union([Type.Array(Type.String({ format: "uuid" })), Type.Null()]),
+    equipment_required: Type.Union([Type.Array(Type.String({ format: "uuid" })), Type.Null()]),
     image_url: Type.Union([Type.String({ format: "uri" }), Type.Null()]),
     difficulty: Type.Union([Type.Ref(ExerciseDifficultyEnum), Type.Null()]), // Use Ref
   }),
