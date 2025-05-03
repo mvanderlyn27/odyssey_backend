@@ -1,691 +1,308 @@
-Okay, thank you for providing the detailed type definitions! This allows for a much more accurate and complete API documentation outline.
-
-I have updated the outline below, integrating the specific types you provided.
-
----
-
 # Aura Backend API Routes
 
-This document outlines the available API routes, grouped by module.
+*This document outlines the available API routes, grouped by module, based on the route definitions and TypeBox schemas.*
 
-**Note:** All routes are prefixed with `/api`. Input/Output structures are based on route definitions, provided types, and inferred from database schemas where possible. Authentication is generally required unless otherwise noted. Type definitions refer to corresponding interfaces/types defined in the project. Structures marked with `(DB Schema)` are directly derived from database table definitions.
+**Note:** All routes are prefixed with `/api`. Authentication is required via Bearer Token unless otherwise noted. Input/Output structures reference the schemas defined within each module section. Common error responses (`401`, `500`, etc.) generally follow the `ErrorResponse` schema unless specified otherwise.
 
 ---
 
-## AI Coach (`/api/ai-coach-messages`)
+## Workout Sessions (`/api/workout-sessions`)
+
+**Base Path:** `/api/workout-sessions`
+
+### Schemas
 
 ```typescript
-// AiCoachMessage (DB Schema: ai_coach_messages)
-interface AiCoachMessage {
-  id: string; // UUID, Primary Key
-  user_id: string; // UUID, Foreign Key to profiles
-  session_id: string; // string (Not necessarily UUID)
-  sender: "user" | "ai";
-  content: string;
+// SessionStatus (Based on SessionStatusEnum)
+type SessionStatus =
+  | "pending"
+  | "active"
+  | "paused"
+  | "completed"
+  | "canceled"
+  | "skipped"
+  | "error"
+  | "no_plan"
+  | "no_workouts";
+
+// WorkoutSession (Based on WorkoutSessionSchema)
+interface WorkoutSession {
+  id: string; // UUID
+  user_id: string; // UUID
+  workout_plan_day_id: string | null; // UUID
+  started_at: string; // ISO 8601 Timestamp
+  ended_at: string | null; // ISO 8601 Timestamp
+  status: SessionStatus;
+  notes: string | null;
   created_at: string; // ISO 8601 Timestamp
+  overall_feeling?: string | null;
 }
 
-// AiCoachChatResponse (Output for POST /chat)
-interface AiCoachChatResponse {
-  ai_message: AiCoachMessage; // Reference to the message schema
-  // Represents potential structured data from AI function calls (type unknown in schema)
-  ai_function_response_data?: unknown | null;
-  session_id: string; // Return the session ID (new or existing)
+// SessionExercise (Based on SessionExerciseSchema)
+// Represents a logged set
+interface SessionExercise {
+  id: string; // UUID
+  workout_session_id: string; // UUID
+  exercise_id: string; // UUID
+  plan_workout_exercise_id: string | null; // UUID (from workout_plan_day_exercises)
+  set_order: number;
+  target_sets?: number | null;
+  target_reps_min?: number | null;
+  target_reps_max?: number | null;
+  target_rest_seconds?: number | null;
+  logged_sets?: number | null; // Number of sets logged for this exercise in the session (might be redundant if logging per set)
+  logged_reps: number; // Reps logged for this specific set
+  logged_weight_kg: number | null; // Weight logged for this specific set
+  logged_rest_seconds?: number | null; // Rest logged after this specific set
+  logged_notes?: string | null; // Notes for this specific set
+  is_completed?: boolean | null; // Was the target for this exercise completed?
+  created_at: string; // ISO 8601 Timestamp (when this set was logged)
+  difficulty_rating?: number | null; // 1-10 for this set
+  was_successful_for_progression?: boolean | null; // Calculated field for progression
 }
 
-// UpdatedWorkoutPlanResponse (Part of AiCoachChatResponse.ai_function_response_data)
-interface UpdatedWorkoutPlanResponse {
-  plan: WorkoutPlan; // See Workout Plans section for structure
-  text: string; // Text summary of the changes or the plan itself
-}
-
-// Exercise (Imported) - See Exercises section for structure
-// WorkoutPlan (Imported) - See Workout Plans section for structure
-```
-
-*   **`POST /api/ai-coach-messages/chat`**
-    *   **Purpose:** Send a message from the user to the AI coach and get a response, managing session state.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   Body:
-            ```typescript
-            {
-              message: string;
-              sessionId?: string; // string (Optional: Provide to continue an existing session)
-            }
-            ```
-    *   **Output:**
-        *   `200 OK`: `AiCoachChatResponse` (Contains the AI's reply message, session ID, and potentially structured data if the AI triggered a function like modifying a plan or suggesting alternatives).
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Error during AI interaction or DB operation. `{ error: string; message?: string }`
-
-*   **`GET /api/ai-coach-messages/chat/{sessionId}`**
-    *   **Purpose:** Retrieve the chat message history for a specific coaching session.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   URL Params: `sessionId` (string)
-        *   Query Params (Optional): `limit?: number`, `offset?: number`, `before_message_id?: string (UUID)` (for pagination)
-    *   **Output:**
-        *   `200 OK`: `AiCoachMessage[]` (Sorted chronologically, newest first if using `before_message_id`)
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Session not found or doesn't belong to user. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`GET /api/ai-coach-messages/sessions`**
-    *   **Purpose:** Retrieve a list of chat session summaries for the user.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   Query Params (Optional): `limit?: number`, `offset?: number`
-    *   **Output:**
-        *   `200 OK`:
-            ```typescript
-            // AiCoachSessionSummary
-            interface AiCoachSessionSummary {
-              session_id: string;
-              last_message_at: string; // ISO 8601 Timestamp
-              first_message_preview: string;
-            }
-            // Response Type
-            AiCoachSessionSummary[]
-            ```
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
----
-
-## Body Measurements (`/api/body-measurements`)
-
-```typescript
-// BodyMeasurement (DB Schema: body_measurements)
-interface BodyMeasurement {
-  id: string; // UUID, Primary Key
-  user_id: string; // UUID, Foreign Key to profiles
-  logged_at: string; // ISO 8601 Timestamp
-  weight_kg: number | null;
-  body_fat_percentage: number | null;
-  // Add other specific measurement fields as reflected in the DB schema (e.g., waist_cm)
-  other_metrics: Record<string, number | string> | null; // JSONB
-}
-
-// UpdateBodyMeasurementsBody (Based on schema)
-interface UpdateBodyMeasurementsBody {
-  logged_at?: string; // ISO 8601 Timestamp
-  weight_kg?: number | null;
-  body_fat_percentage?: number | null;
-  other_metrics?: Record<string, number | string> | null; // JSONB
-}
-```
-
-*   **`POST /api/body-measurements/`**
-    *   **Purpose:** Log a new body measurement entry (weight, body fat, etc.) for the authenticated user.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   Body: `Partial<Omit<BodyMeasurement, 'id' | 'user_id'>>` (Fields like `weight_kg`, `body_fat_percentage`, `logged_at` (optional), `other_metrics`)
-    *   **Output:**
-        *   `201 Created`: `BodyMeasurement` (The newly created record)
-        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error during insertion. `{ error: string; message?: string }`
-
-*   **`GET /api/body-measurements/{id}`**
-    *   **Purpose:** Get a specific body measurement entry by its ID.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   URL Params: `id` (UUID)
-    *   **Output:**
-        *   `200 OK`: `BodyMeasurement`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Measurement not found or doesn't belong to user. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`PUT /api/body-measurements/{id}`**
-    *   **Purpose:** Update an existing body measurement entry.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   URL Params: `id` (UUID)
-        *   Body: `UpdateBodyMeasurementsBody` (Partial fields to update)
-    *   **Output:**
-        *   `200 OK`: `BodyMeasurement` (The updated record)
-        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Measurement not found or doesn't belong to user. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Database error during update. `{ error: string; message?: string }`
-
-*   **`DELETE /api/body-measurements/{id}`**
-    *   **Purpose:** Delete a specific body measurement entry.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   URL Params: `id` (UUID)
-    *   **Output:**
-        *   `204 No Content`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Measurement not found or doesn't belong to user. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
----
-
-## Equipment (`/api/equipment`)
-
-```typescript
-// Equipment (DB Schema: equipment - Assuming structure)
-interface Equipment {
-  id: string; // UUID, Primary Key
-  name: string;
-  // description: string | null; // Not in current schema
-  // category: string | null; // Not in current schema
-  image_url?: string | null;
-  created_at: string; // ISO 8601 Timestamp
-}
-```
-
-*   **`GET /api/equipment/`**
-    *   **Purpose:** List all available equipment types defined in the system.
-    *   **Authentication:** Required (Or potentially public).
-    *   **Input:** `(None)`
-    *   **Output:**
-        *   `200 OK`: `Equipment[]`
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`GET /api/equipment/user`**
-    *   **Purpose:** Get the list of equipment the authenticated user has indicated they own.
-    *   **Authentication:** Required.
-    *   **Input:** `(None)`
-    *   **Output:**
-        *   `200 OK`: `Equipment[]`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`PUT /api/equipment/user`**
-    *   **Purpose:** Set or replace the list of equipment the authenticated user owns.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   Body:
-            ```typescript
-            {
-              equipment_ids: string[]; // Array of Equipment UUIDs the user owns
-            }
-            ```
-    *   **Output:**
-        *   `200 OK`:
-            ```typescript
-            {
-              message: string; // e.g., "User equipment updated successfully."
-              count: number; // Number of equipment items now linked to the user
-            }
-            ```
-        *   `400 Bad Request`: Invalid input (e.g., non-existent UUIDs). `{ error: string; message?: string }`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error during transaction. `{ error: string; message?: string }`
-
----
-
-## Exercises (`/api/exercises`)
-
-```typescript
-type PrimaryMuscleGroup =
-  | "chest" | "back" | "legs" | "shoulders" | "biceps"
-  | "triceps" | "abs" | "full_body" | "other";
-type ExerciseDifficulty = "beginner" | "intermediate" | "advanced";
-
-// Exercise (Based on exercises.types.ts)
+// Exercise (Imported from exercisesSchemas - Assumed Definition)
 interface Exercise {
   id: string; // UUID
   name: string;
-  description: string | null;
-  primary_muscle_groups: PrimaryMuscleGroup[] | null;
-  secondary_muscle_groups?: PrimaryMuscleGroup[] | null; // Optional
-  equipment_required: string[] | null; // Array of Equipment UUIDs
-  image_url: string | null;
-  // difficulty: ExerciseDifficulty | null; // Removed as it's not in the final schema yet
-  created_at: string; // ISO 8601 Timestamp
-  updated_at: string; // ISO 8601 Timestamp
+  // ... other exercise fields
 }
 
-// CreateExerciseInput (Based on exercises.types.ts)
-interface CreateExerciseInput {
-  name: string;
-  description?: string | null;
-  primary_muscle_groups: PrimaryMuscleGroup[]; // Required for creation
-  secondary_muscle_groups?: PrimaryMuscleGroup[];
-  equipment_required?: string[]; // Array of Equipment UUIDs
-  image_url?: string | null;
-  difficulty?: ExerciseDifficulty | null;
-}
-
-// UpdateExerciseInput (Based on exercises.types.ts)
-interface UpdateExerciseInput {
-  name?: string;
-  description?: string | null;
-  primary_muscle_groups?: PrimaryMuscleGroup[];
-  secondary_muscle_groups?: PrimaryMuscleGroup[];
-  equipment_required?: string[]; // Array of Equipment UUIDs
-  image_url?: string | null;
-  difficulty?: ExerciseDifficulty | null;
-}
-
-// ListExercisesQuery (Based on exercises.types.ts)
-interface ListExercisesQuery {
-  search?: string;
-  search?: string;
-  primary_muscle_group?: PrimaryMuscleGroup; // Filter by one primary group
-  equipment_id?: string; // Filter by one equipment ID
-  // difficulty?: ExerciseDifficulty; // Removed as it's not in the final schema yet
-  limit?: number;
-  offset?: number;
-}
-```
-
-*   **`GET /api/exercises/`**
-    *   **Purpose:** List exercises, optionally filtered by query parameters.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   Query Params: `ListExercisesQuery` (Optional fields: `search`, `primary_muscle_group`, `equipment_id`, `difficulty`, `limit`, `offset`)
-    *   **Output:**
-        *   `200 OK`: `Exercise[]`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`GET /api/exercises/search`**
-    *   **Purpose:** Search for exercises based on a search term (e.g., name). *Note: Functionality might overlap with `GET /exercises/?search=term`*.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   Query Params: `name?: string` (Search term for exercise name)
-    *   **Output:**
-        *   `200 OK`: `Exercise[]`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`GET /api/exercises/{exerciseId}`**
-    *   **Purpose:** Get details for a specific exercise by its ID.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   URL Params: `exerciseId` (UUID)
-    *   **Output:**
-        *   `200 OK`: `Exercise`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Exercise not found. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`GET /api/exercises/{exerciseId}/alternatives`**
-    *   **Purpose:** Suggest alternative exercises based on similar muscle groups, equipment, etc. (Logic likely internal, may use AI or predefined rules).
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   URL Params: `exerciseId` (UUID)
-        *   Query Params: (None currently defined in schema)
-    *   **Output:**
-        *   `200 OK`: `Exercise[]` (List of alternative exercises)
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Original exercise not found. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Error during suggestion logic or DB query. `{ error: string; message?: string }`
-
-*   **`POST /api/exercises/`** *(Admin Only)*
-    *   **Purpose:** Create a new exercise definition in the system.
-    *   **Authentication:** Required (Admin role check needed).
-    *   **Input:**
-        *   Body: `CreateExerciseInput`
-    *   **Output:**
-        *   `201 Created`: `Exercise` (The newly created exercise)
-        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `403 Forbidden`: User is not an admin.
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`PUT /api/exercises/{exerciseId}`** *(Admin Only)*
-    *   **Purpose:** Update an existing exercise definition.
-    *   **Authentication:** Required (Admin role check needed).
-    *   **Input:**
-        *   URL Params: `exerciseId` (UUID)
-        *   Body: `UpdateExerciseInput` (Partial fields to update)
-    *   **Output:**
-        *   `200 OK`: `Exercise` (The updated exercise)
-        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `403 Forbidden`: User is not an admin.
-        *   `404 Not Found`: Exercise not found. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`DELETE /api/exercises/{exerciseId}`** *(Admin Only)*
-    *   **Purpose:** Delete an exercise definition from the system.
-    *   **Authentication:** Required (Admin role check needed).
-    *   **Input:**
-        *   URL Params: `exerciseId` (UUID)
-    *   **Output:**
-        *   `204 No Content`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `403 Forbidden`: User is not an admin.
-        *   `404 Not Found`: Exercise not found. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`GET /api/exercises/health`**
-    *   **Purpose:** Basic health check endpoint for the exercises module.
-    *   **Authentication:** None (Public).
-    *   **Input:** `(None)`
-    *   **Output:**
-        *   `200 OK`: `{ status: "OK", module: "exercises" }`
-
----
-
-## Onboarding (`/api/onboarding`)
-
-*   **`POST /api/onboarding/complete`**
-    *   **Purpose:** Mark the authenticated user's onboarding process as complete.
-    *   **Authentication:** Required.
-    *   **Input:** `(None)`
-    *   **Output:**
-        *   `200 OK`:
-            ```typescript
-            {
-              message: string; // e.g., "Onboarding marked as complete."
-              profile: Profile; // Updated user profile, see Profile section for structure
-            }
-            ```
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error updating profile. `{ error: string; message?: string }`
-
----
-
-## Profile (`/api/profile`)
-
-```typescript
-// Profile (DB Schema: profiles - Simplified Example)
+// Profile (Placeholder - Assumed Definition)
 interface Profile {
-  id: string; // UUID, Primary Key (matches auth.users.id)
-  username: string | null;
-  full_name: string | null;
-  avatar_url: string | null;
-  onboarding_complete: boolean;
-  created_at: string; // ISO 8601 Timestamp
-  updated_at: string; // ISO 8601 Timestamp
+  id: string;
   experience_points: number;
   level: number;
-  preferred_unit: 'metric' | 'imperial' | null;
-  height_cm: number | null;
-  current_goal_id: string | null; // UUID, Foreign Key to user_goals
-  subscription_status: 'free' | 'trial' | 'active' | 'canceled' | 'past_due' | null;
-  admin: boolean; // Added from schema
+  username: string | null;
 }
 
-// UpdateProfileBody (Based on schema)
-interface UpdateProfileBody {
-  username?: string;
-  full_name?: string;
-  avatar_url?: string; // URI format
-  preferred_unit?: 'metric' | 'imperial';
-  height_cm?: number;
-}
-```
-
-*   **`GET /api/profile/`**
-    *   **Purpose:** Get the profile information for the currently authenticated user.
-    *   **Authentication:** Required.
-    *   **Input:** `(None)`
-    *   **Output:**
-        *   `200 OK`: `Profile`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Profile record missing. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`PUT /api/profile/`**
-    *   **Purpose:** Update the profile information for the currently authenticated user.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   Body: `UpdateProfileBody` (Only provide fields to update, see definition above)
-    *   **Output:**
-        *   `200 OK`: `Profile` (The updated profile)
-        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error during update. `{ error: string; message?: string }`
-
----
-
-## Stats (`/api/stats`)
-
-```typescript
-type TimePeriod = "day" | "week" | "month" | "year" | "all";
-type Grouping = "day" | "week" | "month" | "year"; // Added based on schema
-
-// ExerciseStats (Based on stats.types.ts)
-interface ExerciseStats {
-  total_reps: number;
-  total_weight_lifted: number; // Consider units (kg assumed)
-  max_weight_lifted: number; // Consider units (kg assumed)
-  grouped_stats: Record<
-    string, // Group key (e.g., 'YYYY-MM-DD', 'YYYY-WW', 'YYYY-MM', 'YYYY', 'all')
-    {
-      total_reps: number;
-      total_weight_lifted: number;
-      max_weight_lifted: number;
-    }
-  >;
+// SessionExerciseDetails (Helper for SessionDetailsSchema)
+interface SessionExerciseDetails extends SessionExercise {
+  exercises: Exercise | null; // Full exercise details
 }
 
-// SessionExerciseStat (Based on stats.types.ts)
-interface SessionExerciseStat {
-  exercise_name: string;
-  total_reps: number;
-  total_weight_lifted: number;
-  max_weight_lifted: number;
-  is_personal_record: boolean; // Calculated field
+// SessionDetails (Based on SessionDetailsSchema)
+interface SessionDetails extends WorkoutSession {
+  session_exercises: SessionExerciseDetails[];
+  profiles?: Profile | null; // Optional profile info
 }
 
-// SessionStats (Based on stats.types.ts)
-interface SessionStats {
-  session_id: string;
-  user_id: string;
-  total_reps: number;
-  total_weight_lifted: number;
-  max_weight_lifted_overall: number;
-  exercises: Record<string, SessionExerciseStat>; // Keyed by exercise_id
+// StartSessionBody (Based on StartSessionBodySchema)
+interface StartSessionBody {
+  workoutPlanDayId?: string; // UUID
 }
 
-// TopExerciseStat (Based on stats.types.ts)
-interface TopExerciseStat {
-  exercise_id: string;
-  name: string; // Exercise name
-  max_weight?: number; // Used for top_exercises_by_weight
-  count?: number; // Used for top_exercises_by_frequency
+// GetSessionParams (Based on UuidParamsSchema)
+interface GetSessionParams {
+  id: string; // Session UUID
 }
 
-// UserStats (Based on stats.types.ts)
-interface UserStats {
-  total_workouts: number;
-  total_weight_lifted: number; // Overall sum
-  top_exercises_by_weight: TopExerciseStat[]; // Based on max weight logged
-  top_exercises_by_frequency: TopExerciseStat[]; // Based on number of times logged
-  grouped_workouts: Record<string, number>; // Group key (e.g., 'YYYY-MM') -> workout count
+// FinishSessionBody (Based on FinishSessionBodySchema)
+interface FinishSessionBody {
+  notes?: string | null;
+  overall_feeling?: string | null;
+  loggedSets?: LoggedSetInput[]; // Optional array of sets logged during the session
 }
 
-// MuscleGroupStat (Based on stats.types.ts)
-interface MuscleGroupStat {
-  name: string | null; // Name of the muscle group
-  last_trained: string | null; // ISO timestampz
-  muscle_ranking: string | null; // Calculated rank (e.g., "Novice", "Intermediate")
+// FinishSessionResponse (Based on FinishSessionResponseSchema)
+interface FinishSessionResponse extends WorkoutSession {
+  xpAwarded: number; // XP awarded for the session
+  levelUp: boolean; // Did the user level up?
 }
 
-// BodyStats (Based on stats.types.ts)
-interface BodyStats {
-  muscle_group_stats: Record<string, MuscleGroupStat>; // Keyed by muscle group ID or name
+// LogSetParams (Removed)
+// LogSetBody (Removed)
+
+// SessionExerciseParams (Based on UuidParamsSchema)
+interface SessionExerciseParams {
+  id: string; // SessionExercise (logged set) UUID
 }
 
-// MuscleStats (Based on stats.types.ts)
-interface MuscleStats {
-  muscle_group_id: string; // ID or name identifying the group
-  name: string | null; // Name of the muscle group
-  last_trained: string | null; // ISO timestampz
-  muscle_ranking: string | null; // Calculated rank based on performance
+// UpdateSetBody (Based on UpdateSetBodySchema)
+// Requires at least one field
+interface UpdateSetBody {
+  logged_reps?: number;
+  logged_weight_kg?: number;
+  difficulty_rating?: number | null; // 1-10
+  notes?: string | null;
+}
+
+// LoggedSetInput (Based on LoggedSetInputSchema)
+// Represents data for a single set logged by the client before saving
+interface LoggedSetInput {
+  exercise_id: string; // UUID
+  plan_workout_exercise_id?: string | null; // UUID (Optional link to plan)
+  set_order: number; // Order of the set for this exercise in the session (>= 1)
+  logged_reps: number; // Reps logged for this set (>= 0)
+  logged_weight_kg: number; // Weight logged for this set (>= 0)
+  difficulty_rating?: number | null; // 1-5 scale (Optional)
+  notes?: string | null; // Optional notes for this set
+}
+
+// SkipPlanDayParams (Based on SkipPlanDayParamsSchema)
+interface SkipPlanDayParams {
+  planDayId: string; // UUID of the workout plan day to skip
+}
+
+// WorkoutPlanDay (Imported from workoutPlansSchemas - Assumed Definition)
+interface WorkoutPlanDay {
+  id: string; // UUID
+  // ... other plan day fields
+}
+
+// CurrentWorkoutStateResponse (Based on CurrentWorkoutStateResponseSchema)
+interface CurrentWorkoutStateResponse {
+  currentSession: WorkoutSession | null;
+  todaysWorkouts: WorkoutSession[];
+  nextPlannedWorkout: WorkoutPlanDay | null;
+}
+
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
 }
 ```
 
-*   **`GET /api/stats/exercise/{exerciseId}`**
-    *   **Purpose:** Get performance statistics for a specific exercise for the user.
-    *   **Authentication:** Required.
+### Routes
+
+*   **`POST /start`**
+    *   **Description:** Starts a new workout session, optionally based on a plan day.
+    *   **Summary:** Start session
+    *   **Tags:** Workout Sessions
+    *   **Authentication:** Required (Bearer Token)
     *   **Input:**
-        *   URL Params: `exerciseId` (UUID)
-        *   Query Params (Optional): `timePeriod?: TimePeriod`, `grouping?: Grouping`
+        *   Body (`StartSessionBodySchema`): `StartSessionBody`
     *   **Output:**
-        *   `200 OK`: `ExerciseStats`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Exercise not found or no stats available. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Error calculating stats. `{ error: string; message?: string }`
+        *   `201 Created` (`WorkoutSessionSchema`): `WorkoutSession` (The newly started session)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse` (e.g., Plan day not found)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`GET /api/stats/session/{sessionId}`**
-    *   **Purpose:** Get aggregated statistics for a completed workout session.
-    *   **Authentication:** Required.
+*   **`GET /current-state`**
+    *   **Description:** Gets the user's current workout state, including any active session, sessions started today, and the next planned workout.
+    *   **Summary:** Get current workout state
+    *   **Tags:** Workout Sessions
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:** None
+    *   **Output:**
+        *   `200 OK` (`CurrentWorkoutStateResponseSchema`): `CurrentWorkoutStateResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /{id}`**
+    *   **Description:** Retrieves the details of a specific workout session, including logged sets.
+    *   **Summary:** Get session details
+    *   **Tags:** Workout Sessions
+    *   **Authentication:** Required (Bearer Token)
     *   **Input:**
-        *   URL Params: `sessionId` (UUID)
+        *   URL Params (`UuidParamsSchema`): `GetSessionParams`
     *   **Output:**
-        *   `200 OK`: `SessionStats`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Session not found or doesn't belong to user. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Error calculating stats. `{ error: string; message?: string }`
+        *   `200 OK` (`SessionDetailsSchema`): `SessionDetails`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Session not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`GET /api/stats/user`**
-    *   **Purpose:** Get overall user performance statistics.
-    *   **Authentication:** Required.
+*   **`POST /{id}/finish`**
+    *   **Description:** Marks an active workout session as completed, optionally logs all sets performed during the session, and calculates progression/XP.
+    *   **Summary:** Finish session
+    *   **Tags:** Workout Sessions
+    *   **Authentication:** Required (Bearer Token)
     *   **Input:**
-        *   Query Params (Optional): `timePeriod?: TimePeriod`, `grouping?: Grouping`
+        *   URL Params (`UuidParamsSchema`): `GetSessionParams`
+        *   Body (`FinishSessionBodySchema`): `FinishSessionBody` (Includes optional `loggedSets` array)
     *   **Output:**
-        *   `200 OK`: `UserStats`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Error calculating stats. `{ error: string; message?: string }`
+        *   `200 OK` (`FinishSessionResponseSchema`): `FinishSessionResponse` (Includes updated session, XP, level status)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse` (e.g., Session not active)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Session not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`GET /api/stats/body`**
-    *   **Purpose:** Get statistics related to body measurements and muscle groups.
-    *   **Authentication:** Required.
+*   **`POST /{id}/skip`**
+    *   **Description:** Marks an active or paused workout session as skipped.
+    *   **Summary:** Skip session
+    *   **Tags:** Workout Sessions
+    *   **Authentication:** Required (Bearer Token)
     *   **Input:**
-        *   Query Params (Optional): `timePeriod?: TimePeriod` (might apply to trends not shown in `BodyStats` example)
+        *   URL Params (`UuidParamsSchema`): `GetSessionParams`
     *   **Output:**
-        *   `200 OK`: `BodyStats`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Error calculating stats. `{ error: string; message?: string }`
+        *   `200 OK` (`WorkoutSessionSchema`): `WorkoutSession` (The updated session with status 'skipped')
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse` (e.g., Session already completed)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Session not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`GET /api/stats/muscle/{muscleGroupName}`**
-    *   **Purpose:** Get performance statistics aggregated by primary muscle group.
-    *   **Authentication:** Required.
+*   **`POST /plan-days/{planDayId}/skip`**
+    *   **Description:** Creates a new session for a specific plan day and immediately marks it as skipped. Use this to skip a planned workout without starting it.
+    *   **Summary:** Skip planned day
+    *   **Tags:** Workout Sessions
+    *   **Authentication:** Required (Bearer Token)
     *   **Input:**
-        *   URL Params: `muscleGroupName` (string, e.g., "Chest", "Legs")
-        *   Query Params (Optional): `timePeriod?: TimePeriod`
+        *   URL Params (`SkipPlanDayParamsSchema`): `SkipPlanDayParams`
     *   **Output:**
-        *   `200 OK`: `MuscleStats`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Invalid muscle group name or no stats available. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Error calculating stats. `{ error: string; message?: string }`
+        *   `201 Created` (`WorkoutSessionSchema`): `WorkoutSession` (The newly created and skipped session)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Plan day not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
----
+*   **`POST /{sessionId}/log-set`** *(Removed)*
+    *   *(This route has been removed. Sets are now logged via the `loggedSets` array in the `POST /{id}/finish` request body.)*
 
-## Streaks (`/api/streaks`)
-
-```typescript
-// UserStreakResponse (Based on streaks.types.ts)
-interface UserStreakResponse {
-  current_streak: number;
-  longest_streak: number;
-  last_streak_activity_date: string | null; // YYYY-MM-DD format
-  streak_broken_at: string | null; // ISO 8601 Timestamp
-  streak_recovered_at: string | null; // ISO 8601 Timestamp
-  // days_until_expiry: number | null; // Calculated field, removed as not in schema
-}
-
-// RecoverStreakBody (Based on schema)
-interface RecoverStreakBody {
-  activity_date?: string; // YYYY-MM-DD (Date of missed activity)
-}
-```
-
-*   **`GET /api/streaks/me`**
-    *   **Purpose:** Get the current workout streak status for the authenticated user.
-    *   **Authentication:** Required.
-    *   **Input:** `(None)`
-    *   **Output:**
-        *   `200 OK`: `UserStreakResponse`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `404 Not Found`: Streak record not found. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`POST /api/streaks/recover`** *(Potential - Requires clear rules/logic)*
-    *   **Purpose:** Allow a user to recover a recently broken streak.
-    *   **Authentication:** Required.
+*   **`PUT /sets/{id}`**
+    *   **Description:** Updates the details of a previously logged set. Requires at least one field in the body. Can be used anytime after a set is logged.
+    *   **Summary:** Update logged set
+    *   **Tags:** Workout Sessions
+    *   **Authentication:** Required (Bearer Token)
     *   **Input:**
-        *   Body: `RecoverStreakBody` (Optional fields, see definition above)
+        *   URL Params (`UuidParamsSchema`): `SessionExerciseParams` (ID of the logged set)
+        *   Body (`UpdateSetBodySchema`): `UpdateSetBody`
     *   **Output:**
-        *   `200 OK`: `UserStreakResponse` (Updated streak status)
-        *   `400 Bad Request`: Recovery not possible. `{ error: string; message?: string }`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Error during recovery logic or DB update. `{ error: string; message?: string }`
+        *   `200 OK` (`SessionExerciseSchema`): `SessionExercise` (The updated set details)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Logged set not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
----
-
-## User Goals (`/api/goals`)
-
-```typescript
-// GoalType Enum (Example - Define in user-goals.types.ts)
-type GoalType = 'lose_weight' | 'gain_muscle' | 'maintain' | 'improve_strength' | 'improve_endurance' | 'general_fitness';
-
-// UserGoal (DB Schema: user_goals - Simplified Example)
-interface UserGoal {
-  id: string; // UUID, Primary Key
-  user_id: string; // UUID, Foreign Key to profiles
-  goal_type: GoalType | null; // Allow null based on schema
-  target_weight_kg: number | null;
-  target_muscle_kg: number | null; // Added from schema
-  target_body_fat_percentage: number | null; // Keep for now, though not in Create schema
-  start_date: string | null; // ISO 8601 Date, Added from schema
-  target_date: string | null; // ISO 8601 Date
-  estimated_completion_date: string | null; // ISO 8601 Date, Added from schema
-  is_active: boolean | null; // Allow null based on schema
-  created_at: string; // ISO 8601 Timestamp
-}
-
-// CreateUserGoalInput (Derived from UserGoal)
-interface CreateUserGoalInput {
-  goal_type: GoalType; // Required
-  target_weight_kg?: number | null;
-  target_muscle_kg?: number | null; // Added from schema
-  // target_body_fat_percentage?: number | null; // Removed as not in Create schema
-  target_date?: string | null; // ISO 8601 Date
-}
-```
-
-*   **`POST /api/goals`**
-    *   **Purpose:** Create a new primary fitness goal for the user or update the existing active goal. Sets `profiles.current_goal_id`.
-    *   **Authentication:** Required.
+*   **`DELETE /sets/{id}`**
+    *   **Description:** Deletes a previously logged set. Can be used anytime after a set is logged.
+    *   **Summary:** Delete logged set
+    *   **Tags:** Workout Sessions
+    *   **Authentication:** Required (Bearer Token)
     *   **Input:**
-        *   Body: `CreateUserGoalInput`
+        *   URL Params (`UuidParamsSchema`): `SessionExerciseParams` (ID of the logged set)
     *   **Output:**
-        *   `201 Created` (or `200 OK` if updating): `UserGoal` (The created or updated active goal)
-        *   `400 Bad Request`: Invalid input data. `{ error: string; message?: string }`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`GET /api/goals/current`**
-    *   **Purpose:** Get the user's currently active goal.
-    *   **Authentication:** Required.
-    *   **Input:** `(None)`
-    *   **Output:**
-        *   `200 OK`: `UserGoal | null` (The active goal or null if none is set)
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
-
-*   **`GET /api/goals/history`**
-    *   **Purpose:** Get a history of the user's past goals.
-    *   **Authentication:** Required.
-    *   **Input:**
-        *   Query Params (Optional): `limit`, `offset`
-    *   **Output:**
-        *   `200 OK`: `UserGoal[]`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+        *   `204 No Content`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Logged set not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
 ---
 
 ## Workout Plans (`/api/workout-plans`)
 
+**Base Path:** `/api/workout-plans`
+
+### Schemas
+
 ```typescript
-// Enums (Based on schemas)
-type GoalTypeWp = 'lose_weight' | 'gain_muscle' | 'maintain' | 'improve_strength' | 'improve_endurance' | 'general_fitness';
-type PlanType = 'full_body' | 'split' | 'upper_lower' | 'custom';
-type PlanCreator = 'user' | 'ai' | 'coach' | 'template';
-type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced';
+// GoalTypeWp (Based on GoalTypeEnumWp)
+type GoalTypeWp =
+  | "lose_weight"
+  | "gain_muscle"
+  | "maintain"
+  | "improve_strength"
+  | "improve_endurance"
+  | "general_fitness";
+
+// PlanType (Based on PlanTypeEnum)
+type PlanType = "full_body" | "split" | "upper_lower" | "custom";
+
+// PlanCreator (Based on PlanCreatorEnum)
+type PlanCreator = "user" | "ai" | "coach" | "template";
+
+// ExperienceLevel (Used in GeneratePlanBodySchema)
+type ExperienceLevel = "beginner" | "intermediate" | "advanced";
 
 // WorkoutPlan (Based on WorkoutPlanSchema)
 interface WorkoutPlan {
@@ -700,9 +317,9 @@ interface WorkoutPlan {
   source_description: string | null;
   is_active: boolean | null;
   created_at: string; // ISO 8601 Timestamp
-  approximate_workout_minutes: number | null; // Added
-  recommended_week_duration: number | null; // Added
-  start_date: string | null; // ISO 8601 Date, Added
+  approximate_workout_minutes: number | null;
+  recommended_week_duration: number | null;
+  start_date: string | null; // YYYY-MM-DD
 }
 
 // WorkoutPlanDay (Based on WorkoutPlanDaySchema)
@@ -722,20 +339,61 @@ interface WorkoutPlanDayExercise {
   exercise_id: string; // UUID
   order_in_workout: number;
   target_sets: number;
-  target_reps_min: number; // Added
-  target_reps_max: number | null; // Added
-  target_rest_seconds: number | null; // Added
-  current_suggested_weight_kg: number | null; // Added
-  on_success_weight_increase_kg: number | null; // Added
+  target_reps_min: number;
+  target_reps_max: number | null;
+  target_rest_seconds: number | null;
+  current_suggested_weight_kg: number | null;
+  on_success_weight_increase_kg: number | null;
 }
+
+// Exercise (Imported from exercisesSchemas - Assumed Definition)
+interface Exercise {
+  id: string; // UUID
+  name: string;
+  // ... other exercise fields
+}
+
+// WorkoutPlanDayExerciseDetails (Based on WorkoutPlanDayExerciseDetailsSchema)
+interface WorkoutPlanDayExerciseDetails extends WorkoutPlanDayExercise {
+  exercise: Exercise | null; // Full exercise details
+}
+
+// WorkoutPlanDayDetails (Based on WorkoutPlanDayDetailsSchema)
+interface WorkoutPlanDayDetails extends WorkoutPlanDay {
+  day_exercises: WorkoutPlanDayExerciseDetails[];
+}
+
+// WorkoutPlanDetails (Based on WorkoutPlanDetailsSchema)
+interface WorkoutPlanDetails extends WorkoutPlan {
+  days: WorkoutPlanDayDetails[];
+}
+
+// ListWorkoutPlansResponse (Based on ListWorkoutPlansResponseSchema)
+// Array of WorkoutPlan
+type ListWorkoutPlansResponse = WorkoutPlan[];
 
 // CreateWorkoutPlanBody (Based on CreateWorkoutPlanBodySchema)
 interface CreateWorkoutPlanBody {
   name: string;
-  description?: string | null;
+  description?: string;
+  goal_type?: GoalTypeWp;
+  plan_type?: PlanType;
+  days_per_week?: number;
+  created_by?: PlanCreator;
+}
+
+// GetWorkoutPlanParams (Based on UuidParamsSchema)
+interface GetWorkoutPlanParams {
+  id: string; // Plan UUID
+}
+
+// UpdateWorkoutPlanParams (Based on UuidParamsSchema)
+interface UpdateWorkoutPlanParams {
+  id: string; // Plan UUID
 }
 
 // UpdateWorkoutPlanBody (Based on UpdateWorkoutPlanBodySchema)
+// Requires at least one field
 interface UpdateWorkoutPlanBody {
   name?: string;
   description?: string | null;
@@ -743,7 +401,7 @@ interface UpdateWorkoutPlanBody {
   plan_type?: PlanType | null;
   days_per_week?: number | null;
   is_active?: boolean | null;
-  start_date?: string | null; // ISO 8601 Date
+  start_date?: string | null; // YYYY-MM-DD
   approximate_workout_minutes?: number | null;
   recommended_week_duration?: number | null;
 }
@@ -753,7 +411,7 @@ interface GeneratePlanBody {
   goal_type: GoalTypeWp;
   experience_level: ExperienceLevel;
   days_per_week: number; // 1-7
-  available_equipment_ids?: string[]; // Array of UUIDs
+  available_equipment_ids: string[]; // Array of Equipment UUIDs
   approximate_workout_minutes: number;
   preferred_plan_type?: PlanType;
 }
@@ -766,8 +424,91 @@ interface ImportPlanBody {
   goal_type?: GoalTypeWp;
 }
 
-// UpdatePlanDayExerciseBody (Based on UpdatePlanDayExerciseBodySchema)
-interface UpdatePlanDayExerciseBody {
+// CreateWorkoutPlanDayParams (Based on CreateWorkoutPlanDayParamsSchema)
+interface CreateWorkoutPlanDayParams {
+  planId: string; // Plan UUID
+}
+
+// CreateWorkoutPlanDayBody (Based on CreateWorkoutPlanDayBodySchema)
+interface CreateWorkoutPlanDayBody {
+  name: string;
+  day_of_week?: number | null; // 1-7
+  order_in_plan: number;
+  focus?: string | null;
+}
+
+// ListWorkoutPlanDaysParams (Based on ListWorkoutPlanDaysParamsSchema)
+interface ListWorkoutPlanDaysParams {
+  planId: string; // Plan UUID
+}
+
+// ListWorkoutPlanDaysResponse (Based on ListWorkoutPlanDaysResponseSchema)
+// Array of WorkoutPlanDay
+type ListWorkoutPlanDaysResponse = WorkoutPlanDay[];
+
+// GetWorkoutPlanDayParams (Based on GetWorkoutPlanDayParamsSchema)
+interface GetWorkoutPlanDayParams {
+  dayId: string; // Day UUID
+}
+
+// UpdateWorkoutPlanDayParams (Based on UpdateWorkoutPlanDayParamsSchema)
+interface UpdateWorkoutPlanDayParams {
+  dayId: string; // Day UUID
+}
+
+// UpdateWorkoutPlanDayBody (Based on UpdateWorkoutPlanDayBodySchema)
+// Requires at least one field
+interface UpdateWorkoutPlanDayBody {
+  name?: string;
+  day_of_week?: number | null; // 1-7
+  order_in_plan?: number;
+  focus?: string | null;
+}
+
+// DeleteWorkoutPlanDayParams (Based on DeleteWorkoutPlanDayParamsSchema)
+interface DeleteWorkoutPlanDayParams {
+  dayId: string; // Day UUID
+}
+
+// CreateWorkoutPlanDayExerciseParams (Based on CreateWorkoutPlanDayExerciseParamsSchema)
+interface CreateWorkoutPlanDayExerciseParams {
+  dayId: string; // Day UUID
+}
+
+// CreateWorkoutPlanDayExerciseBody (Based on CreateWorkoutPlanDayExerciseBodySchema)
+interface CreateWorkoutPlanDayExerciseBody {
+  exercise_id: string; // Exercise UUID
+  order_in_workout: number;
+  target_sets: number;
+  target_reps_min: number;
+  target_reps_max?: number | null;
+  target_rest_seconds?: number | null;
+  current_suggested_weight_kg?: number | null;
+  on_success_weight_increase_kg?: number | null;
+}
+
+// ListWorkoutPlanDayExercisesParams (Based on ListWorkoutPlanDayExercisesParamsSchema)
+interface ListWorkoutPlanDayExercisesParams {
+  dayId: string; // Day UUID
+}
+
+// ListWorkoutPlanDayExercisesResponse (Based on ListWorkoutPlanDayExercisesResponseSchema)
+// Array of WorkoutPlanDayExercise
+type ListWorkoutPlanDayExercisesResponse = WorkoutPlanDayExercise[];
+
+// GetWorkoutPlanDayExerciseParams (Based on GetWorkoutPlanDayExerciseParamsSchema)
+interface GetWorkoutPlanDayExerciseParams {
+  exerciseId: string; // WorkoutPlanDayExercise UUID
+}
+
+// UpdateWorkoutPlanDayExerciseParams (Based on UpdateWorkoutPlanDayExerciseParamsSchema)
+interface UpdateWorkoutPlanDayExerciseParams {
+  exerciseId: string; // WorkoutPlanDayExercise UUID
+}
+
+// UpdateWorkoutPlanDayExerciseBody (Based on UpdateWorkoutPlanDayExerciseBodySchema)
+// Requires at least one field
+interface UpdateWorkoutPlanDayExerciseBody {
   order_in_workout?: number;
   target_sets?: number;
   target_reps_min?: number;
@@ -775,376 +516,1269 @@ interface UpdatePlanDayExerciseBody {
   target_rest_seconds?: number | null;
   current_suggested_weight_kg?: number | null;
   on_success_weight_increase_kg?: number | null;
-  exercise_id?: string; // UUID
+  exercise_id?: string; // Allow changing the exercise UUID
 }
 
-// WorkoutPlanDetails (Based on WorkoutPlanDetailsSchema - Nested Structure)
-interface WorkoutPlanDetails extends WorkoutPlan {
-  plan_days: (WorkoutPlanDay & {
-    day_exercises: (WorkoutPlanDayExercise & {
-      exercises: Exercise | null; // Exercise from Exercises section
-    })[];
-  })[];
+// DeleteWorkoutPlanDayExerciseParams (Based on DeleteWorkoutPlanDayExerciseParamsSchema)
+interface DeleteWorkoutPlanDayExerciseParams {
+  exerciseId: string; // WorkoutPlanDayExercise UUID
 }
 
-// --- Other related types (e.g., AddWorkoutPlanDayInput) would be defined based on their schemas if available ---
-// For now, route descriptions will refer to the interfaces defined above.
+// MessageResponse (Common Schema - Assumed Definition)
+interface MessageResponse {
+  message: string;
+}
 
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
+}
 ```
 
-*   **`GET /api/workout-plans/`**
-    *   **Purpose:** Retrieves a list of workout plans associated with the user (basic details).
-    *   **Authentication:** Required.
-    *   **Input:** `(None)`
-    *   **Output:**
-        *   `200 OK`: `WorkoutPlan[]`
-        *   `401 Unauthorized`: Authentication failed.
-        *   `500 Internal Server Error`: Database error. `{ error: string; message?: string }`
+### Workout Plan Routes
 
-*   **`POST /api/workout-plans/`**
-    *   **Purpose:** Creates a new workout plan shell for the user (name required, description optional).
-    *   **Authentication:** Required.
-    *   **Input:** Body: `CreateWorkoutPlanBody`
+*   **`GET /`**
+    *   **Description:** Retrieves a list of workout plans associated with the user.
+    *   **Summary:** List workout plans
+    *   **Tags:** Workout Plans
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:** None
     *   **Output:**
-        *   `201 Created`: `WorkoutPlan` (The new plan's basic details)
-        *   `400 Bad Request`: Invalid input. `{ error: string; message?: string }`
-        *   `401 Unauthorized`.
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `200 OK` (`ListWorkoutPlansResponseSchema`): `ListWorkoutPlansResponse` (Array of `WorkoutPlan`)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`GET /api/workout-plans/{planId}`**
-    *   **Purpose:** Retrieves the detailed structure of a specific plan, including days and exercises.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID)
+*   **`GET /active`**
+    *   **Description:** Retrieves the user's currently active workout plan.
+    *   **Summary:** Get active plan
+    *   **Tags:** Workout Plans
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:** None
     *   **Output:**
-        *   `200 OK`: `WorkoutPlanDetails` (See definition above for full structure)
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `200 OK` (`WorkoutPlanSchema`): `WorkoutPlan`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (No active plan found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`PUT /api/workout-plans/{planId}`**
-    *   **Purpose:** Updates top-level details of a plan (name, description, type, etc.).
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID), Body: `UpdateWorkoutPlanBody` (Partial fields)
+*   **`POST /`**
+    *   **Description:** Creates a new workout plan shell for the user.
+    *   **Summary:** Create plan shell
+    *   **Tags:** Workout Plans
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Body (`CreateWorkoutPlanBodySchema`): `CreateWorkoutPlanBody`
     *   **Output:**
-        *   `200 OK`: `WorkoutPlan` (Updated plan's basic details)
-        *   `400 Bad Request`. `{ error: string; message?: string }`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `201 Created` (`WorkoutPlanSchema`): `WorkoutPlan` (The new plan)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`POST /api/workout-plans/{planId}/activate`**
-    *   **Purpose:** Sets a plan as the user's active plan.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID)
+*   **`GET /{id}`**
+    *   **Description:** Retrieves the detailed structure of a specific plan, including days and exercises.
+    *   **Summary:** Get plan details
+    *   **Tags:** Workout Plans
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `GetWorkoutPlanParams`
     *   **Output:**
-        *   `200 OK`: `{ message: string }`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `200 OK` (`WorkoutPlanDetailsSchema`): `WorkoutPlanDetails`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Plan not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`POST /api/workout-plans/generate`**
-    *   **Purpose:** Generates a new plan using AI based on user preferences.
-    *   **Authentication:** Required.
-    *   **Input:** Body: `GeneratePlanBody`
-    *   **Output:**
-        *   `201 Created`: `WorkoutPlan` (The new plan's basic details - full details might require a subsequent GET)
-        *   `400 Bad Request`. `{ error: string; message?: string }`
-        *   `401 Unauthorized`.
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
-
-*   **`POST /api/workout-plans/import`**
-    *   **Purpose:** Imports a plan from text or image content using AI.
-    *   **Authentication:** Required.
-    *   **Input:** Body: `ImportPlanBody`
-    *   **Output:**
-        *   `201 Created`: `WorkoutPlan` (The new plan's basic details - full details might require a subsequent GET)
-        *   `400 Bad Request`. `{ error: string; message?: string }`
-        *   `401 Unauthorized`.
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
-
-*   **`PUT /api/workout-plans/day-exercises/{id}`**
-    *   **Purpose:** Updates details (sets, reps, weight, etc.) of a specific exercise entry within a workout plan day.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `id` (UUID of the *workout_plan_day_exercise* record), Body: `UpdatePlanDayExerciseBody` (Partial fields)
-    *   **Output:**
-        *   `200 OK`: `WorkoutPlanDayExercise` (Updated exercise entry details)
-        *   `400 Bad Request`. `{ error: string; message?: string }`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
-
-*   **`DELETE /api/workout-plans/{planId}`**
-    *   **Purpose:** Deletes a plan and its associated data.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID)
+*   **`PUT /{id}`**
+    *   **Description:** Updates top-level details of a plan. Requires at least one field in the body.
+    *   **Summary:** Update plan
+    *   **Tags:** Workout Plans
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `UpdateWorkoutPlanParams`
+        *   Body (`UpdateWorkoutPlanBodySchema`): `UpdateWorkoutPlanBody`
     *   **Output:**
         *   `204 No Content`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Logged set not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-### Workout Plan Days (`/api/workout-plans/{planId}/days`)
-
-*   **`POST /api/workout-plans/{planId}/days`**
-    *   **Purpose:** Adds a new workout day to a specific plan.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID), Body: `{ name: string; day_of_week?: number | null; order_in_plan: number; focus?: string | null; }` (Based on `WorkoutPlanDaySchema` excluding IDs)
+*   **`POST /{id}/activate`**
+    *   **Description:** Sets a plan as the user's active plan.
+    *   **Summary:** Activate plan
+    *   **Tags:** Workout Plans
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `GetWorkoutPlanParams`
     *   **Output:**
-        *   `201 Created`: `WorkoutPlanDay` (The new day's details)
-        *   `400 Bad Request`. `{ error: string; message?: string }`
-        *   `401 Unauthorized`.
-        *   `404 Not Found` (Plan not found or user unauthorized). `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `200 OK` (`MessageResponseSchema`): `MessageResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Plan not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`GET /api/workout-plans/{planId}/days`**
-    *   **Purpose:** Lists all workout days (basic details) for a specific plan.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID)
+*   **`POST /generate`**
+    *   **Description:** Generates a new workout plan using AI based on user preferences.
+    *   **Summary:** Generate plan (AI)
+    *   **Tags:** Workout Plans, AI
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Body (`GeneratePlanBodySchema`): `GeneratePlanBody`
     *   **Output:**
-        *   `200 OK`: `WorkoutPlanDay[]`
-        *   `401 Unauthorized`.
-        *   `500 Internal Server Error`. `{ error: string; message?: string }` (Could also be 404 if plan ownership check fails)
+        *   `201 Created` (`WorkoutPlanSchema`): `WorkoutPlan` (Basic info of the generated plan)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`GET /api/workout-plans/{planId}/days/{dayId}`**
-    *   **Purpose:** Retrieves details of a specific workout day, including its planned exercises.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID)
+*   **`POST /import`**
+    *   **Description:** Imports a workout plan from text or image using AI.
+    *   **Summary:** Import plan (AI)
+    *   **Tags:** Workout Plans, AI
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Body (`ImportPlanBodySchema`): `ImportPlanBody`
     *   **Output:**
-        *   `200 OK`: `WorkoutPlanDayDetails` (WorkoutPlanDay & { day_exercises: (WorkoutPlanDayExercise & { exercises: Exercise | null })[] })
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `201 Created` (`WorkoutPlanSchema`): `WorkoutPlan` (Basic info of the imported plan)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`PUT /api/workout-plans/{planId}/days/{dayId}`**
-    *   **Purpose:** Updates details (name, focus, etc.) of a specific workout day.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID), Body: `Partial<WorkoutPlanDay>` (Fields like `name`, `day_of_week`, `order_in_plan`, `focus`)
-    *   **Output:**
-        *   `200 OK`: `WorkoutPlanDay` (Updated day's details)
-        *   `400 Bad Request`. `{ error: string; message?: string }`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
-
-*   **`DELETE /api/workout-plans/{planId}/days/{dayId}`**
-    *   **Purpose:** Deletes a specific workout day (and its exercises via cascade if configured).
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID)
-    *   **Output:**
-        *   `204 No Content`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
-
-### Workout Plan Day Exercises (`/api/workout-plans/{planId}/days/{dayId}/exercises`)
-
-*   **`POST /api/workout-plans/{planId}/days/{dayId}/exercises`**
-    *   **Purpose:** Adds an exercise entry to a specific workout day.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID), Body: `Omit<WorkoutPlanDayExercise, 'id' | 'workout_plan_day_id'>` (Requires `exercise_id`, `order_in_workout`, `target_sets`, `target_reps_min`, etc.)
-    *   **Output:**
-        *   `201 Created`: `WorkoutPlanDayExercise` (The new exercise entry's details)
-        *   `400 Bad Request`. `{ error: string; message?: string }`
-        *   `401 Unauthorized`.
-        *   `404 Not Found` (Plan day not found or user unauthorized). `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
-
-*   **`GET /api/workout-plans/{planId}/days/{dayId}/exercises`**
-    *   **Purpose:** Lists all exercise entries for a specific workout day, including full exercise details.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID)
-    *   **Output:**
-        *   `200 OK`: `(WorkoutPlanDayExercise & { exercises: Exercise | null })[]`
-        *   `401 Unauthorized`.
-        *   `404 Not Found` (Plan day not found or user unauthorized). `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
-
-*   **`GET /api/workout-plans/{planId}/days/{dayId}/exercises/{exerciseId}`**
-    *   **Purpose:** Retrieves details of a specific exercise entry within a workout day, including full exercise details.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID), `exerciseId` (UUID of the *workout_plan_day_exercise* record)
-    *   **Output:**
-        *   `200 OK`: `WorkoutPlanDayExercise & { exercises: Exercise | null }`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
-
-*   **`DELETE /api/workout-plans/{planId}/days/{dayId}/exercises/{exerciseId}`**
-    *   **Purpose:** Deletes a specific exercise entry from a workout day.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `planId` (UUID), `dayId` (UUID), `exerciseId` (UUID of the *workout_plan_day_exercise* record)
+*   **`DELETE /{id}`**
+    *   **Description:** Deletes a plan and its associated data (days, exercises).
+    *   **Summary:** Delete plan
+    *   **Tags:** Workout Plans
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `GetWorkoutPlanParams`
     *   **Output:**
         *   `204 No Content`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Logged set not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+### Workout Plan Day Routes
+
+*   **`POST /{planId}/days`**
+    *   **Description:** Adds a new workout day to a specific plan.
+    *   **Summary:** Create plan day
+    *   **Tags:** Workout Plan Days
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`CreateWorkoutPlanDayParamsSchema`): `CreateWorkoutPlanDayParams`
+        *   Body (`CreateWorkoutPlanDayBodySchema`): `CreateWorkoutPlanDayBody`
+    *   **Output:**
+        *   `200 OK` (`SessionExerciseSchema`): `SessionExercise` (The updated set details)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Logged set not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /{planId}/days`**
+    *   **Description:** Retrieves all workout days for a specific plan.
+    *   **Summary:** List plan days
+    *   **Tags:** Workout Plan Days
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`ListWorkoutPlanDaysParamsSchema`): `ListWorkoutPlanDaysParams`
+    *   **Output:**
+        *   `200 OK` (`ListWorkoutPlanDaysResponseSchema`): `ListWorkoutPlanDaysResponse` (Array of `WorkoutPlanDay`)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse` (Not plan owner)
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Plan not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /plan-days/{dayId}`**
+    *   **Description:** Retrieves details of a specific workout day, including its exercises.
+    *   **Summary:** Get plan day details
+    *   **Tags:** Workout Plan Days
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`GetWorkoutPlanDayParamsSchema`): `GetWorkoutPlanDayParams`
+    *   **Output:**
+        *   `200 OK` (`WorkoutPlanDayDetailsSchema`): `WorkoutPlanDayDetails`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse` (Not owner)
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Day not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`PUT /plan-days/{dayId}`**
+    *   **Description:** Updates details of a specific workout day. Requires at least one field in the body.
+    *   **Summary:** Update plan day
+    *   **Tags:** Workout Plan Days
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UpdateWorkoutPlanDayParamsSchema`): `UpdateWorkoutPlanDayParams`
+        *   Body (`UpdateWorkoutPlanDayBodySchema`): `UpdateWorkoutPlanDayBody`
+    *   **Output:**
+        *   `200 OK` (`SessionExerciseSchema`): `SessionExercise` (The updated set details)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Logged set not found or unauthorized)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`DELETE /plan-days/{dayId}`**
+    *   **Description:** Deletes a specific workout day and its associated exercises.
+    *   **Summary:** Delete plan day
+    *   **Tags:** Workout Plan Days
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`DeleteWorkoutPlanDayParamsSchema`): `DeleteWorkoutPlanDayParams`
+    *   **Output:**
+        *   `204 No Content`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse` (Not owner)
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Day not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+### Workout Plan Day Exercise Routes
+
+*   **`POST /plan-days/{dayId}/exercises`**
+    *   **Description:** Adds a new exercise to a specific workout day.
+    *   **Summary:** Add exercise to day
+    *   **Tags:** Workout Plan Day Exercises
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`CreateWorkoutPlanDayExerciseParamsSchema`): `CreateWorkoutPlanDayExerciseParams`
+        *   Body (`CreateWorkoutPlanDayExerciseBodySchema`): `CreateWorkoutPlanDayExerciseBody`
+    *   **Output:**
+        *   `201 Created` (`WorkoutPlanDayExerciseSchema`): `WorkoutPlanDayExercise`
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse` (Validation or invalid Exercise ID)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse` (Not owner of day)
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Day or Exercise not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /plan-days/{dayId}/exercises`**
+    *   **Description:** Retrieves all exercises for a specific workout day.
+    *   **Summary:** List day exercises
+    *   **Tags:** Workout Plan Day Exercises
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`ListWorkoutPlanDayExercisesParamsSchema`): `ListWorkoutPlanDayExercisesParams`
+    *   **Output:**
+        *   `200 OK` (`ListWorkoutPlanDayExercisesResponseSchema`): `ListWorkoutPlanDayExercisesResponse` (Array of `WorkoutPlanDayExercise`)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse` (Not owner of day)
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Day not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /plan-day-exercises/{exerciseId}`**
+    *   **Description:** Retrieves details of a specific exercise entry within a workout day.
+    *   **Summary:** Get plan day exercise
+    *   **Tags:** Workout Plan Day Exercises
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`GetWorkoutPlanDayExerciseParamsSchema`): `GetWorkoutPlanDayExerciseParams`
+    *   **Output:**
+        *   `200 OK` (`WorkoutPlanDayExerciseDetailsSchema`): `WorkoutPlanDayExerciseDetails`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse` (Not owner)
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Exercise entry not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`PUT /plan-day-exercises/{exerciseId}`**
+    *   **Description:** Updates details of a specific exercise within a workout plan day. Requires at least one field in the body.
+    *   **Summary:** Update plan day exercise
+    *   **Tags:** Workout Plan Day Exercises
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UpdateWorkoutPlanDayExerciseParamsSchema`): `UpdateWorkoutPlanDayExerciseParams`
+        *   Body (`UpdateWorkoutPlanDayExerciseBodySchema`): `UpdateWorkoutPlanDayExerciseBody`
+    *   **Output:**
+        *   `200 OK` (`WorkoutPlanDayExerciseSchema`): `WorkoutPlanDayExercise` (The updated exercise entry)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse` (Validation or invalid new Exercise ID)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse` (Not owner)
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Exercise entry or new Exercise ID not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`DELETE /plan-day-exercises/{exerciseId}`**
+    *   **Description:** Deletes a specific exercise entry from a workout day.
+    *   **Summary:** Delete plan day exercise
+    *   **Tags:** Workout Plan Day Exercises
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`DeleteWorkoutPlanDayExerciseParamsSchema`): `DeleteWorkoutPlanDayExerciseParams`
+    *   **Output:**
+        *   `204 No Content`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse` (Not owner)
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Exercise entry not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
 ---
 
-## Workout Sessions (`/api/workout-sessions`)
+## User Goals (`/api/user-goals`)
+
+**Base Path:** `/api/user-goals`
+
+### Schemas
 
 ```typescript
-// Enums (Based on schemas)
-type SessionStatus = 'active' | 'paused' | 'completed' | 'canceled' | 'skipped';
+// GoalType (Based on GoalTypeEnum)
+type GoalType =
+  | "lose_weight"
+  | "gain_muscle"
+  | "maintain"
+  | "improve_strength"
+  | "improve_endurance"
+  | "general_fitness";
 
-// WorkoutSession (Based on WorkoutSessionSchema)
-interface WorkoutSession {
+// UserGoal (Based on UserGoalSchema)
+interface UserGoal {
   id: string; // UUID
   user_id: string; // UUID
-  workout_plan_id: string | null; // UUID, Added
-  workout_plan_day_id: string | null; // UUID, Added
-  started_at: string; // ISO 8601 Timestamp
-  ended_at: string | null; // ISO 8601 Timestamp
-  status: SessionStatus; // Updated enum
-  notes: string | null;
-  created_at: string; // ISO 8601 Timestamp, Added
-  overall_feeling?: string | null; // Made optional
+  goal_type: GoalType | null;
+  target_weight_kg: number | null;
+  target_muscle_kg: number | null; // Target muscle gain
+  start_date: string | null; // YYYY-MM-DD
+  target_date: string | null; // YYYY-MM-DD
+  estimated_completion_date: string | null; // YYYY-MM-DD
+  is_active: boolean | null;
+  created_at: string; // ISO 8601 Timestamp
 }
 
-// SessionExercise (Based on SessionExerciseSchema - Represents a logged set)
-interface SessionExercise {
-  id: string; // UUID
-  workout_session_id: string; // UUID
-  exercise_id: string; // UUID
-  plan_workout_exercise_id: string | null; // UUID
-  set_order: number;
-  target_sets?: number | null; // Added, Optional
-  target_reps_min?: number | null; // Added, Optional
-  target_reps_max?: number | null; // Added, Optional
-  target_rest_seconds?: number | null; // Added, Optional
-  logged_sets?: number | null; // Added, Optional
-  logged_reps: number; // Required
-  logged_weight_kg: number | null; // Required (can be null/0)
-  logged_rest_seconds?: number | null; // Added, Optional
-  logged_notes?: string | null; // Renamed, Optional
-  is_completed?: boolean | null; // Added, Optional
-  created_at: string; // ISO 8601 Timestamp, Added
-  difficulty_rating?: number | null; // 1-10, Optional
-  was_successful_for_progression?: boolean | null; // Added, Optional
+// CreateUserGoalBody (Based on CreateUserGoalBodySchema)
+interface CreateUserGoalBody {
+  goal_type: GoalType; // Required
+  target_weight_kg?: number;
+  target_muscle_kg?: number;
+  target_date?: string; // YYYY-MM-DD
 }
 
-// StartSessionBody (Based on StartSessionBodySchema)
-interface StartSessionBody {
-  workoutPlanDayId?: string | null; // UUID
+// GetCurrentGoalResponse (Based on GetCurrentGoalResponseSchema)
+// Returns UserGoal or null
+type GetCurrentGoalResponse = UserGoal | null;
+
+// GetGoalHistoryResponse (Based on GetGoalHistoryResponseSchema)
+// Array of UserGoal
+type GetGoalHistoryResponse = UserGoal[];
+
+// PaginationQuery (Common Schema - Assumed Definition)
+interface PaginationQuery {
+  limit?: number; // Default: 100
+  offset?: number; // Default: 0
 }
 
-// LogSetBody (Based on LogSetBodySchema)
-interface LogSetBody {
-  exercise_id: string; // UUID
-  plan_workout_exercise_id?: string | null; // UUID
-  set_order: number;
-  logged_reps: number;
-  logged_weight_kg: number; // Changed to number
-  difficulty_rating?: number | null; // 1-10
-  notes?: string | null; // Renamed to logged_notes in schema, but keep notes for consistency? Check route handler. Assuming 'notes' based on schema name.
-}
-
-// UpdateSetBody (Based on UpdateSetBodySchema)
-interface UpdateSetBody {
-  logged_reps?: number;
-  logged_weight_kg?: number;
-  difficulty_rating?: number | null; // 1-10
-  notes?: string | null; // Renamed to logged_notes in schema. Assuming 'notes'.
-}
-
-// FinishSessionBody (Based on FinishSessionBodySchema)
-interface FinishSessionBody {
-  notes?: string | null;
-  overall_feeling?: string | null; // Assuming string enum
-}
-
-// SessionDetails (Based on SessionDetailsSchema - Nested Structure)
-interface SessionDetails extends WorkoutSession {
-  session_exercises: (SessionExercise & {
-    exercises: Exercise | null; // Exercise from Exercises section
-  })[];
-  profiles?: { // Optional profile info
-    id: string;
-    experience_points: number;
-    level: number;
-    username: string | null;
-  } | null;
-}
-
-// WorkoutSessionCompletionResult (Define in workout-sessions.types.ts - Keep existing definition)
-interface WorkoutSessionCompletionResult {
-  session: WorkoutSession; // Updated session
-  xp_awarded: number;
-  new_level: number | null; // User's new level if changed
-  progression_updates?: any; // Info about updated weight suggestions
-  message: string;
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
 }
 ```
 
-*   **`POST /api/workout-sessions/start`**
-    *   **Purpose:** Start a new workout session, optionally linked to a plan day.
-    *   **Authentication:** Required.
-    *   **Input:** Body: `StartSessionBody` (Optional)
-    *   **Output:**
-        *   `201 Created`: `WorkoutSession` (The newly started session)
-        *   `401 Unauthorized`.
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+### Routes
 
-*   **`GET /api/workout-sessions/{sessionId}`**
-    *   **Purpose:** Get details for a specific workout session, including logged sets and exercise info.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `sessionId` (UUID)
+*   **`POST /`**
+    *   **Description:** Create a new primary fitness goal for the user. Deactivates any previous active goal.
+    *   **Summary:** Set user goal
+    *   **Tags:** User Goals
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Body (`CreateUserGoalBodySchema`): `CreateUserGoalBody`
     *   **Output:**
-        *   `200 OK`: `SessionDetails` (See definition above for full structure)
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }` (Session not found or unauthorized)
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `201 Created` (`UserGoalSchema`): `UserGoal` (The newly created goal)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`POST /api/workout-sessions/{sessionId}/log-set`**
-    *   **Purpose:** Log a completed set within an active session.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `sessionId` (UUID), Body: `LogSetBody`
+*   **`GET /current`** *(Not Implemented)*
+    *   **Description:** Get the user's currently active goal.
+    *   **Summary:** Get current goal
+    *   **Tags:** User Goals
+    *   **Authentication:** Required (Bearer Token)
+    *   **Status:** Currently commented out in the routes file.
+
+*   **`GET /history`** *(Not Implemented)*
+    *   **Description:** Get a history of the user's past fitness goals.
+    *   **Summary:** Get goal history
+    *   **Tags:** User Goals
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Query Params (`PaginationQuerySchema`): `PaginationQuery`
+    *   **Status:** Currently commented out in the routes file.
+
+---
+
+## Streaks (`/api/streaks`)
+
+**Base Path:** `/api/streaks`
+
+### Schemas
+
+```typescript
+// UserStreakResponse (Based on UserStreakResponseSchema)
+interface UserStreakResponse {
+  current_streak: number;
+  longest_streak: number;
+  last_streak_activity_date: string | null; // YYYY-MM-DD
+  streak_broken_at: string | null; // ISO 8601 Timestamp
+  streak_recovered_at: string | null; // ISO 8601 Timestamp
+}
+
+// RecoverStreakBody (Based on RecoverStreakBodySchema)
+interface RecoverStreakBody {
+  activity_date?: string; // YYYY-MM-DD, Date of missed activity
+}
+
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
+}
+```
+
+### Routes
+
+*   **`GET /me`**
+    *   **Description:** Get the current workout streak status for the authenticated user.
+    *   **Summary:** Get my streak
+    *   **Tags:** Streaks
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:** None
     *   **Output:**
-        *   `201 Created`: `SessionExercise` (The details of the logged set)
-        *   `400 Bad Request`. `{ error: string; message?: string }`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }` (Session invalid/not started)
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `200 OK` (`UserStreakResponseSchema`): `UserStreakResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Streak record not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`PUT /api/workout-sessions/sets/{id}`**
-    *   **Purpose:** Update a previously logged set.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `id` (UUID of the *session_exercise* record), Body: `UpdateSetBody` (Partial fields)
+*   **`POST /recover`**
+    *   **Description:** Attempt to recover a recently broken streak (rules defined in service).
+    *   **Summary:** Recover streak
+    *   **Tags:** Streaks
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Body (`RecoverStreakBodySchema`): `RecoverStreakBody`
     *   **Output:**
-        *   `200 OK`: `SessionExercise` (Updated set details)
-        *   `400 Bad Request`. `{ error: string; message?: string }`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `200 OK` (`UserStreakResponseSchema`): `UserStreakResponse` (The updated streak status)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse` (Recovery not possible)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`DELETE /api/workout-sessions/sets/{id}`**
-    *   **Purpose:** Delete a previously logged set.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `id` (UUID of the *session_exercise* record)
+---
+
+## Stats (`/api/stats`)
+
+**Base Path:** `/api/stats`
+
+### Schemas
+
+```typescript
+// TimePeriod (Based on TimePeriodEnum)
+type TimePeriod = "day" | "week" | "month" | "year" | "all";
+
+// Grouping (Based on GroupingEnum)
+type Grouping = "day" | "week" | "month" | "year";
+
+// MuscleRank (Based on MuscleRankEnum)
+type MuscleRank = "Neophyte" | "Adept" | "Vanguard" | "Elite" | "Master" | "Champion" | "Legend";
+
+// GetExerciseStatsParams (Based on UuidParamsSchema)
+interface GetExerciseStatsParams {
+  id: string; // Exercise UUID
+}
+
+// GetExerciseStatsQuery (Based on GetExerciseStatsQuerySchema)
+interface GetExerciseStatsQuery {
+  timePeriod?: TimePeriod;
+  grouping?: Grouping;
+}
+
+// GroupedExerciseStat (Helper for ExerciseStatsSchema)
+interface GroupedExerciseStat {
+  total_reps: number;
+  total_weight_lifted: number; // Assuming KG
+  max_weight_lifted: number; // Assuming KG
+}
+
+// ExerciseStats (Based on ExerciseStatsSchema)
+interface ExerciseStats {
+  total_reps: number;
+  total_weight_lifted: number;
+  max_weight_lifted: number;
+  grouped_stats: Record<string, GroupedExerciseStat>; // Key: Group (e.g., 'YYYY-MM-DD')
+}
+
+// GetSessionStatsParams (Based on UuidParamsSchema)
+interface GetSessionStatsParams {
+  id: string; // Session UUID
+}
+
+// SessionExerciseStat (Helper for SessionStatsSchema)
+interface SessionExerciseStat {
+  exercise_name: string;
+  total_reps: number;
+  total_weight_lifted: number;
+  max_weight_lifted: number;
+  is_personal_record: boolean;
+}
+
+// SessionStats (Based on SessionStatsSchema)
+interface SessionStats {
+  session_id: string; // UUID
+  user_id: string; // UUID
+  total_reps: number;
+  total_weight_lifted: number;
+  max_weight_lifted_overall: number;
+  exercises: Record<string, SessionExerciseStat>; // Key: Exercise UUID
+}
+
+// GetUserStatsQuery (Based on GetUserStatsQuerySchema)
+interface GetUserStatsQuery {
+  timePeriod?: TimePeriod;
+  grouping?: Grouping;
+}
+
+// TopExerciseStat (Helper for UserStatsSchema)
+interface TopExerciseStat {
+  exercise_id: string; // UUID
+  name: string;
+  max_weight?: number; // For top_exercises_by_weight
+  count?: number; // For top_exercises_by_frequency
+}
+
+// UserStats (Based on UserStatsSchema)
+interface UserStats {
+  total_workouts: number;
+  total_weight_lifted: number;
+  top_exercises_by_weight: TopExerciseStat[];
+  top_exercises_by_frequency: TopExerciseStat[];
+  grouped_workouts: Record<string, number>; // Key: Group (e.g., 'YYYY-MM')
+}
+
+// GetBodyStatsQuery (Based on GetBodyStatsQuerySchema)
+interface GetBodyStatsQuery {
+  timePeriod?: TimePeriod; // Note: Currently unused by service
+}
+
+// MuscleGroupStat (Helper for BodyStatsSchema and MuscleStatsSchema)
+interface MuscleGroupStat {
+  name: string | null;
+  last_trained: string | null; // ISO 8601 Timestamp
+  muscle_ranking: MuscleRank | null;
+}
+
+// BodyStats (Based on BodyStatsSchema)
+interface BodyStats {
+  muscle_group_stats: Record<string, MuscleGroupStat>; // Key: Muscle group name or ID
+}
+
+// GetMuscleStatsParams (Based on GetMuscleStatsParamsSchema)
+interface GetMuscleStatsParams {
+  muscleGroupName: string; // Name of the muscle group (e.g., 'Chest')
+}
+
+// GetMuscleStatsQuery (Based on GetMuscleStatsQuerySchema)
+interface GetMuscleStatsQuery {
+  timePeriod?: TimePeriod;
+}
+
+// MuscleStats (Based on MuscleStatsSchema)
+interface MuscleStats extends MuscleGroupStat {
+  muscle_group_id: string; // ID or name identifying the group
+}
+
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
+}
+```
+
+### Routes
+
+*   **`GET /exercise/{id}`**
+    *   **Description:** Get performance statistics for a specific exercise for the user.
+    *   **Summary:** Get exercise stats
+    *   **Tags:** Stats
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `GetExerciseStatsParams`
+        *   Query Params (`GetExerciseStatsQuerySchema`): `GetExerciseStatsQuery`
+    *   **Output:**
+        *   `200 OK` (`ExerciseStatsSchema`): `ExerciseStats`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Exercise not found or no stats)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /session/{id}`**
+    *   **Description:** Get aggregated statistics for a completed workout session.
+    *   **Summary:** Get session stats
+    *   **Tags:** Stats
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `GetSessionStatsParams`
+    *   **Output:**
+        *   `200 OK` (`SessionStatsSchema`): `SessionStats`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Session not found or not owned by user)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /user`**
+    *   **Description:** Get overall user performance statistics.
+    *   **Summary:** Get user stats
+    *   **Tags:** Stats
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Query Params (`GetUserStatsQuerySchema`): `GetUserStatsQuery`
+    *   **Output:**
+        *   `200 OK` (`UserStatsSchema`): `UserStats`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /body`**
+    *   **Description:** Get statistics related to body measurements and muscle groups.
+    *   **Summary:** Get body stats
+    *   **Tags:** Stats
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Query Params (`GetBodyStatsQuerySchema`): `GetBodyStatsQuery`
+    *   **Output:**
+        *   `200 OK` (`BodyStatsSchema`): `BodyStats`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /muscle/{muscleGroupName}`**
+    *   **Description:** Get performance statistics aggregated by primary muscle group.
+    *   **Summary:** Get muscle group stats
+    *   **Tags:** Stats
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`GetMuscleStatsParamsSchema`): `GetMuscleStatsParams`
+        *   Query Params (`GetMuscleStatsQuerySchema`): `GetMuscleStatsQuery`
+    *   **Output:**
+        *   `200 OK` (`MuscleStatsSchema`): `MuscleStats`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Invalid muscle group name or no stats)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+---
+
+## Profile (`/api/profile`)
+
+**Base Path:** `/api/profile`
+
+### Schemas
+
+```typescript
+// UnitPreference (Based on UnitPreferenceEnum)
+type UnitPreference = "metric" | "imperial";
+
+// SubscriptionStatus (Based on SubscriptionStatusEnum)
+type SubscriptionStatus = "free" | "trial" | "active" | "canceled" | "past_due";
+
+// Profile (Based on ProfileSchema)
+interface Profile {
+  id: string; // UUID
+  username: string | null;
+  full_name: string | null;
+  avatar_url: string | null; // URI
+  onboarding_complete: boolean;
+  created_at: string; // ISO 8601 Timestamp
+  updated_at: string; // ISO 8601 Timestamp
+  experience_points: number;
+  level: number;
+  preferred_unit: UnitPreference | null;
+  height_cm: number | null;
+  current_goal_id: string | null; // UUID
+  subscription_status: SubscriptionStatus | null;
+  admin: boolean;
+}
+
+// UpdateProfileBody (Based on UpdateProfileBodySchema)
+// Requires at least one field
+interface UpdateProfileBody {
+  username?: string;
+  full_name?: string;
+  avatar_url?: string; // URI
+  preferred_unit?: UnitPreference;
+  height_cm?: number;
+}
+
+// GetProfileResponse (Based on GetProfileResponseSchema)
+// Returns the full Profile
+type GetProfileResponse = Profile;
+
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
+}
+```
+
+### Routes
+
+*   **`GET /`**
+    *   **Description:** Get the profile information for the currently authenticated user.
+    *   **Summary:** Get user profile
+    *   **Tags:** Profile
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:** None
+    *   **Output:**
+        *   `200 OK` (`GetProfileResponseSchema`): `GetProfileResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Profile not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`PUT /`**
+    *   **Description:** Update profile information for the currently authenticated user. Requires at least one field in the body.
+    *   **Summary:** Update user profile
+    *   **Tags:** Profile
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Body (`UpdateProfileBodySchema`): `UpdateProfileBody`
+    *   **Output:**
+        *   `200 OK` (`GetProfileResponseSchema`): `GetProfileResponse` (The updated profile)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse` (Validation errors)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+---
+
+## Onboarding (`/api/onboarding`)
+
+**Base Path:** `/api/onboarding`
+
+### Schemas
+
+```typescript
+// Profile (Placeholder based on ProfileSchemaPlaceholder)
+// Note: This is a simplified representation. The actual profile structure might be more complex.
+interface Profile {
+  id: string; // UUID
+  onboarding_complete: boolean;
+  username: string | null;
+  // ... other profile fields returned after onboarding
+}
+
+// OnboardingResponse (Based on PostOnboardingCompleteResponseSchema)
+interface OnboardingResponse {
+  message: string;
+  profile: Profile; // Updated user profile
+}
+
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
+}
+```
+
+### Routes
+
+*   **`POST /complete`**
+    *   **Description:** Mark the authenticated user's onboarding process as complete.
+    *   **Summary:** Complete onboarding
+    *   **Tags:** Onboarding
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:** None
+    *   **Output:**
+        *   `200 OK` (`PostOnboardingCompleteResponseSchema`): `OnboardingResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+---
+
+## Exercises (`/api/exercises`)
+
+**Base Path:** `/api/exercises`
+
+### Schemas
+
+```typescript
+// PrimaryMuscleGroup (Common Enum - Assumed Definition)
+type PrimaryMuscleGroup =
+  | "chest" | "back" | "legs" | "shoulders" | "biceps"
+  | "triceps" | "abs" | "full_body" | "other"; // Example values
+
+// ExerciseDifficulty (Common Enum - Assumed Definition)
+type ExerciseDifficulty = "beginner" | "intermediate" | "advanced";
+
+// Exercise (Based on ExerciseSchema)
+interface Exercise {
+  id: string; // UUID
+  name: string;
+  description: string | null;
+  primary_muscle_groups: string[] | null; // Array of Muscle Group UUIDs
+  secondary_muscle_groups?: string[] | null; // Array of Muscle Group UUIDs
+  equipment_required: string[] | null; // Array of Equipment UUIDs
+  image_url: string | null; // URI
+  difficulty?: ExerciseDifficulty | null;
+  created_at: string; // ISO 8601 Timestamp
+  updated_at: string; // ISO 8601 Timestamp
+}
+
+// ListExercisesQuery (Based on ListExercisesQuerySchema)
+interface ListExercisesQuery {
+  limit?: number; // Default: 100
+  offset?: number; // Default: 0
+  search?: string; // Search term for exercise name
+  primary_muscle_group?: PrimaryMuscleGroup; // Filter by primary group enum value
+  equipment_id?: string; // UUID, Filter by required equipment ID
+  // difficulty?: ExerciseDifficulty; // Filter by difficulty (if implemented)
+}
+
+// ListExercisesResponse (Based on ListExercisesResponseSchema)
+// Array of Exercise
+type ListExercisesResponse = Exercise[];
+
+// SearchExercisesQuery (Based on SearchExercisesQuerySchema)
+interface SearchExercisesQuery {
+  name?: string; // Search term for exercise name
+  // limit?: number; // Optional pagination
+  // offset?: number; // Optional pagination
+}
+
+// GetExerciseResponse (Based on GetExerciseResponseSchema)
+// Returns a single Exercise
+type GetExerciseResponse = Exercise;
+
+// GetExerciseAlternativesQuery (Based on GetExerciseAlternativesQuerySchema)
+interface GetExerciseAlternativesQuery {
+  // Currently empty, potential future filters like equipment_ids
+}
+
+// GetExerciseAlternativesResponse (Based on GetExerciseAlternativesResponseSchema)
+// Array of Exercise
+type GetExerciseAlternativesResponse = Exercise[];
+
+// CreateExerciseBody (Based on CreateExerciseBodySchema)
+interface CreateExerciseBody {
+  name: string;
+  description?: string | null;
+  primary_muscle_groups: string[]; // Array of Muscle Group UUIDs (minItems: 1)
+  secondary_muscle_groups?: string[] | null; // Array of Muscle Group UUIDs
+  equipment_required?: string[] | null; // Array of Equipment UUIDs
+  image_url?: string | null; // URI
+  difficulty?: ExerciseDifficulty | null;
+}
+
+// UpdateExerciseBody (Based on UpdateExerciseBodySchema)
+// Requires at least one field
+interface UpdateExerciseBody {
+  name?: string;
+  description?: string | null;
+  primary_muscle_groups?: string[]; // Array of Muscle Group UUIDs (minItems: 1)
+  secondary_muscle_groups?: string[] | null; // Array of Muscle Group UUIDs
+  equipment_required?: string[] | null; // Array of Equipment UUIDs
+  image_url?: string | null; // URI
+  difficulty?: ExerciseDifficulty | null;
+}
+
+// UuidParams (Common Schema - Assumed Definition)
+interface UuidParams {
+  id: string; // UUID
+}
+
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
+}
+
+// HealthCheckResponse (Example)
+interface HealthCheckResponse {
+  status: "OK";
+  module: string;
+}
+```
+
+### Routes
+
+*   **`GET /`**
+    *   **Description:** List exercises from the library, with optional filters.
+    *   **Summary:** List exercises
+    *   **Tags:** Exercises
+    *   **Authentication:** None (Public)
+    *   **Input:**
+        *   Query Params (`ListExercisesQuerySchema`): `ListExercisesQuery`
+    *   **Output:**
+        *   `200 OK` (`ListExercisesResponseSchema`): `ListExercisesResponse` (Array of `Exercise`)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /search`**
+    *   **Description:** Search exercises by name.
+    *   **Summary:** Search exercises
+    *   **Tags:** Exercises
+    *   **Authentication:** None (Public)
+    *   **Input:**
+        *   Query Params (`SearchExercisesQuerySchema`): `SearchExercisesQuery`
+    *   **Output:**
+        *   `200 OK` (`ListExercisesResponseSchema`): `ListExercisesResponse` (Array of `Exercise`)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /{id}`**
+    *   **Description:** Get details for a specific exercise by its ID.
+    *   **Summary:** Get exercise by ID
+    *   **Tags:** Exercises
+    *   **Authentication:** None (Public)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `UuidParams`
+    *   **Output:**
+        *   `200 OK` (`GetExerciseResponseSchema`): `GetExerciseResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /{id}/alternatives`**
+    *   **Description:** Suggest alternative exercises for a given exercise, considering user context (e.g., owned equipment).
+    *   **Summary:** Suggest alternatives
+    *   **Tags:** Exercises
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `UuidParams`
+        *   Query Params (`GetExerciseAlternativesQuerySchema`): `GetExerciseAlternativesQuery`
+    *   **Output:**
+        *   `200 OK` (`GetExerciseAlternativesResponseSchema`): `GetExerciseAlternativesResponse` (Array of `Exercise`)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Original exercise not found)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`POST /`** *(Admin Only)*
+    *   **Description:** ADMIN: Create a new exercise definition.
+    *   **Summary:** Create exercise
+    *   **Tags:** Exercises, Admin
+    *   **Authentication:** Required (Bearer Token, Admin Role)
+    *   **Input:**
+        *   Body (`CreateExerciseBodySchema`): `CreateExerciseBody`
+    *   **Output:**
+        *   `201 Created` (`GetExerciseResponseSchema`): `GetExerciseResponse` (The created exercise)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`PUT /{id}`** *(Admin Only)*
+    *   **Description:** ADMIN: Update an existing exercise definition. Requires at least one field in the body.
+    *   **Summary:** Update exercise
+    *   **Tags:** Exercises, Admin
+    *   **Authentication:** Required (Bearer Token, Admin Role)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `UuidParams`
+        *   Body (`UpdateExerciseBodySchema`): `UpdateExerciseBody`
+    *   **Output:**
+        *   `200 OK` (`GetExerciseResponseSchema`): `GetExerciseResponse` (The updated exercise)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`DELETE /{id}`** *(Admin Only)*
+    *   **Description:** ADMIN: Delete an exercise definition.
+    *   **Summary:** Delete exercise
+    *   **Tags:** Exercises, Admin
+    *   **Authentication:** Required (Bearer Token, Admin Role)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `UuidParams`
     *   **Output:**
         *   `204 No Content`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }`
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `403 Forbidden` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
-*   **`POST /api/workout-sessions/{sessionId}/finish`**
-    *   **Purpose:** Mark a workout session as completed, calculate results (XP, progression).
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `sessionId` (UUID), Body: `FinishSessionBody` (Optional)
+*   **`GET /health`**
+    *   **Description:** Health check endpoint for the exercises module.
+    *   **Summary:** Health check
+    *   **Tags:** Exercises, Health
+    *   **Authentication:** None (Public)
+    *   **Input:** None
     *   **Output:**
-        *   `200 OK`: `WorkoutSessionCompletionResult`
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }` (Session invalid/not started)
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `200 OK`: `HealthCheckResponse` (e.g., `{ status: "OK", module: "exercises" }`)
 
-*   **`POST /api/workout-sessions/{id}/skip`**
-    *   **Purpose:** Mark a workout session as skipped.
-    *   **Authentication:** Required.
-    *   **Input:** URL Params: `id` (UUID of the session)
+---
+
+## Equipment (`/api/equipment`)
+
+**Base Path:** `/api/equipment`
+
+### Schemas
+
+```typescript
+// Equipment (Based on EquipmentSchema)
+interface Equipment {
+  id: string; // UUID
+  name: string;
+  image_url: string | null; // URI
+  created_at: string; // ISO 8601 Timestamp
+}
+
+// GetEquipmentResponse (Based on GetEquipmentResponseSchema)
+// Array of Equipment
+type GetEquipmentResponse = Equipment[];
+
+// PutUserEquipmentBody (Based on PutUserEquipmentBodySchema)
+interface PutUserEquipmentBody {
+  equipment_ids: string[]; // Array of Equipment UUIDs the user owns (minItems: 0)
+}
+
+// PutUserEquipmentResponse (Based on PutUserEquipmentResponseSchema)
+interface PutUserEquipmentResponse {
+  message: string;
+  count: number; // Number of equipment items now linked to the user
+}
+
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
+}
+```
+
+### Routes
+
+*   **`PUT /user-equipment`**
+    *   **Description:** Set or replace the list of equipment the authenticated user owns.
+    *   **Summary:** Set user equipment
+    *   **Tags:** Equipment, Profile
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Body (`PutUserEquipmentBodySchema`): `PutUserEquipmentBody`
     *   **Output:**
-        *   `200 OK`: `WorkoutSession` (The updated session with status 'skipped')
-        *   `401 Unauthorized`.
-        *   `404 Not Found`. `{ error: string; message?: string }` (Session invalid)
-        *   `500 Internal Server Error`. `{ error: string; message?: string }`
+        *   `200 OK` (`PutUserEquipmentResponseSchema`): `PutUserEquipmentResponse`
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /equipment`**
+    *   **Description:** Get the master list of all available equipment.
+    *   **Summary:** List all equipment
+    *   **Tags:** Equipment, Exercises
+    *   **Authentication:** None (Public)
+    *   **Input:** None
+    *   **Output:**
+        *   `200 OK` (`GetEquipmentResponseSchema`): `GetEquipmentResponse` (Array of `Equipment`)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /user-equipment`**
+    *   **Description:** Get the list of equipment the authenticated user has indicated they own.
+    *   **Summary:** Get user equipment
+    *   **Tags:** Equipment, Profile
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:** None
+    *   **Output:**
+        *   `200 OK` (`GetEquipmentResponseSchema`): `GetEquipmentResponse` (Array of `Equipment`)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+---
+
+## Body Measurements (`/api/body-measurements`)
+
+**Base Path:** `/api/body-measurements`
+
+### Schemas
+
+```typescript
+// BodyMeasurement (Based on BodyMeasurementSchema)
+interface BodyMeasurement {
+  id: string; // UUID
+  user_id: string; // UUID
+  logged_at: string; // ISO 8601 Timestamp
+  weight_kg: number | null;
+  body_fat_percentage: number | null; // 0-100
+  other_metrics: Record<string, string | number> | null; // JSONB
+}
+
+// PostBodyMeasurementsBody (Based on PostBodyMeasurementsBodySchema)
+interface PostBodyMeasurementsBody {
+  logged_at?: string; // ISO 8601 Timestamp, Defaults to current time
+  weight_kg?: number;
+  body_fat_percentage?: number; // 0-100
+  other_metrics?: Record<string, string | number>;
+}
+
+// PostBodyMeasurementsResponse (Based on PostBodyMeasurementsResponseSchema)
+// Returns the created BodyMeasurement
+type PostBodyMeasurementsResponse = BodyMeasurement;
+
+// UpdateBodyMeasurementsBody (Based on UpdateBodyMeasurementsBodySchema)
+// Requires at least one field
+interface UpdateBodyMeasurementsBody {
+  logged_at?: string; // ISO 8601 Timestamp
+  weight_kg?: number;
+  body_fat_percentage?: number; // 0-100
+  other_metrics?: Record<string, string | number>;
+}
+
+// UuidParams (Common Schema - Assumed Definition)
+interface UuidParams {
+  id: string; // UUID
+}
+
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
+}
+```
+
+### Routes
+
+*   **`POST /`**
+    *   **Description:** Log a new body measurement entry for the authenticated user.
+    *   **Summary:** Log measurement
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Body (`PostBodyMeasurementsBodySchema`): `PostBodyMeasurementsBody`
+    *   **Output:**
+        *   `201 Created` (`PostBodyMeasurementsResponseSchema`): `PostBodyMeasurementsResponse`
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse` (e.g., if no measurement fields provided)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /{id}`**
+    *   **Description:** Get a specific body measurement record by its ID.
+    *   **Summary:** Get measurement by ID
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `UuidParams`
+    *   **Output:**
+        *   `200 OK` (`BodyMeasurementSchema`): `BodyMeasurement`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Measurement not found or not owned by user)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`PUT /{id}`**
+    *   **Description:** Update an existing body measurement record. Requires at least one field in the body.
+    *   **Summary:** Update measurement
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `UuidParams`
+        *   Body (`UpdateBodyMeasurementsBodySchema`): `UpdateBodyMeasurementsBody`
+    *   **Output:**
+        *   `200 OK` (`BodyMeasurementSchema`): `BodyMeasurement` (The updated record)
+        *   `400 Bad Request` (`ErrorResponseSchema`): `ErrorResponse` (e.g., no fields provided)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Measurement not found or not owned by user)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`DELETE /{id}`**
+    *   **Description:** Delete a specific body measurement record.
+    *   **Summary:** Delete measurement
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`UuidParamsSchema`): `UuidParams`
+    *   **Output:**
+        *   `204 No Content`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse` (Measurement not found or not owned by user)
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+---
+
+## AI Coach Messages (`/api/ai-coach-messages`)
+
+**Base Path:** `/api/ai-coach-messages`
+
+### Schemas
+
+```typescript
+// AiCoachMessage (Based on AiCoachMessageSchema)
+interface AiCoachMessage {
+  id: string; // UUID
+  user_id: string; // UUID
+  session_id: string; // Identifier for the chat session
+  sender: "user" | "ai";
+  content: string;
+  created_at: string; // ISO 8601 Timestamp
+}
+
+// AiCoachSessionSummary (Based on AiCoachSessionSummarySchema)
+interface AiCoachSessionSummary {
+  session_id: string;
+  last_message_at: string; // ISO 8601 Timestamp
+  first_message_preview: string;
+}
+
+// PostChatBody (Based on PostChatBodySchema)
+interface PostChatBody {
+  message: string;
+  sessionId?: string; // Provide to continue an existing session
+}
+
+// PostChatResponse (Based on PostChatResponseSchema)
+interface PostChatResponse {
+  ai_message: AiCoachMessage;
+  ai_function_response_data?: unknown; // Placeholder for potential structured data
+  session_id: string; // The session ID for the conversation
+}
+
+// GetChatHistoryParams (Based on GetChatHistoryParamsSchema)
+interface GetChatHistoryParams {
+  sessionId: string; // ID of the chat session to retrieve
+}
+
+// GetChatHistoryQuery (Based on GetChatHistoryQuerySchema)
+interface GetChatHistoryQuery {
+  limit?: number; // Default: 100
+  offset?: number; // Default: 0
+  before_message_id?: string; // UUID, Fetch messages created before this message ID
+}
+
+// GetChatHistoryResponse (Based on GetChatHistoryResponseSchema)
+// Array of AiCoachMessage
+type GetChatHistoryResponse = AiCoachMessage[];
+
+// GetSessionsResponse (Based on GetSessionsResponseSchema)
+// Array of AiCoachSessionSummary
+type GetSessionsResponse = AiCoachSessionSummary[];
+
+// MessageResponse (Common Schema - Assumed Definition)
+interface MessageResponse {
+  message: string;
+}
+
+// ErrorResponse (Common Schema - Assumed Definition)
+interface ErrorResponse {
+  error: string;
+  message?: string;
+}
+```
+
+### Routes
+
+*   **`POST /chat`**
+    *   **Description:** Send a message to the AI coach and get a response.
+    *   **Summary:** Send chat message
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   Body (`PostChatBodySchema`): `PostChatBody`
+    *   **Output:**
+        *   `200 OK` (`PostChatResponseSchema`): `PostChatResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /chat/{sessionId}`**
+    *   **Description:** Get the message history for a specific AI coaching session.
+    *   **Summary:** Get chat history
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`GetChatHistoryParamsSchema`): `GetChatHistoryParams`
+        *   Query Params (`GetChatHistoryQuerySchema`): `GetChatHistoryQuery`
+    *   **Output:**
+        *   `200 OK` (`GetChatHistoryResponseSchema`): `GetChatHistoryResponse` (Array of `AiCoachMessage`)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`GET /sessions`**
+    *   **Description:** Get summaries of all AI coaching chat sessions for the authenticated user.
+    *   **Summary:** List chat sessions
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:** None
+    *   **Output:**
+        *   `200 OK` (`GetSessionsResponseSchema`): `GetSessionsResponse` (Array of `AiCoachSessionSummary`)
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
+
+*   **`DELETE /chat/{sessionId}`**
+    *   **Description:** Delete a specific AI coaching chat session and its messages.
+    *   **Summary:** Delete chat session
+    *   **Authentication:** Required (Bearer Token)
+    *   **Input:**
+        *   URL Params (`GetChatHistoryParamsSchema`): `GetChatHistoryParams`
+    *   **Output:**
+        *   `200 OK` (`MessageResponseSchema`): `MessageResponse`
+        *   `401 Unauthorized` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `404 Not Found` (`ErrorResponseSchema`): `ErrorResponse`
+        *   `500 Internal Server Error` (`ErrorResponseSchema`): `ErrorResponse`
 
 ---

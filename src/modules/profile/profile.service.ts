@@ -37,7 +37,11 @@ export const getProfile = async (fastify: FastifyInstance, userId: string): Prom
     height_cm: data.height_cm,
     current_goal_id: data.current_goal_id,
     subscription_status: data.subscription_status,
-    admin: data.admin, // Add admin mapping
+    admin: data.admin,
+    // Added based on backend changes log 2025-05-03
+    experience_level: data.experience_level,
+    age: data.age,
+    gender: data.gender,
   };
 
   return profile;
@@ -96,7 +100,11 @@ export const updateProfile = async (
     height_cm: data.height_cm,
     current_goal_id: data.current_goal_id,
     subscription_status: data.subscription_status,
-    admin: data.admin, // Add admin mapping
+    admin: data.admin,
+    // Added based on backend changes log 2025-05-03
+    experience_level: data.experience_level,
+    age: data.age,
+    gender: data.gender,
   };
 
   return updatedProfile;

@@ -4,8 +4,9 @@ import {
   startWorkoutSession,
   getWorkoutSessionById, // Renamed from getWorkoutSessionDetails
   finishWorkoutSession, // Renamed from completeWorkoutSession
-  skipWorkoutSession, // Added missing service function
-  logWorkoutSet, // Added missing service function
+  skipWorkoutSession, // Skips an *existing* active/paused session
+  createAndSkipPlannedDaySession, // Creates and skips a session for a plan day
+  // logWorkoutSet, // Removed as sets are now logged via finishWorkoutSession
   updateLoggedSet, // Added missing service function
   deleteLoggedSet, // Added missing service function
   getCurrentActiveSession, // Refactored function
@@ -18,12 +19,13 @@ import {
   type StartSessionBody,
   type SessionDetails,
   type GetSessionParams,
-  type FinishSessionBody, // Added schema
-  type LogSetParams, // Renamed from AddSessionExerciseParams
-  type LogSetBody, // Renamed from AddSessionExerciseBody
-  type SessionExercise, // For Log/Update response
+  type FinishSessionBody, // Added schema, includes loggedSets now
+  // type LogSetParams, // Removed
+  // type LogSetBody, // Removed
+  type SessionExercise, // For Update response
   type SessionExerciseParams, // Renamed from UpdateSessionExerciseParams
   type UpdateSetBody, // Renamed from UpdateSessionExerciseBody
+  type SkipPlanDayParams, // Added for the new skip route
   type WorkoutSession, // For skip response type
   // Import new/renamed schemas and types
   FinishSessionResponseSchema, // Schema for finish response
@@ -200,46 +202,43 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
     },
   });
 
-  // --- POST /{sessionId}/log-set --- (Log a set) - Added route
-  fastify.post<{ Params: LogSetParams; Body: LogSetBody; Reply: SessionExercise | ErrorResponse }>(
-    "/:sessionId/log-set", // Use sessionId from schema
-    {
-      preHandler: [fastify.authenticate],
-      schema: {
-        description: "Logs a single completed set for an exercise within an active session.",
-        tags: ["Workout Sessions"],
-        summary: "Log workout set",
-        security: [{ bearerAuth: [] }],
-        params: { $ref: "LogSetParamsSchema#" },
-        body: { $ref: "LogSetBodySchema#" },
-        response: {
-          201: { $ref: "SessionExerciseSchema#" },
-          400: { $ref: "ErrorResponseSchema#" }, // e.g., session not active
-          401: { $ref: "ErrorResponseSchema#" },
-          404: { $ref: "ErrorResponseSchema#" }, // Session or exercise not found
-          500: { $ref: "ErrorResponseSchema#" },
-        },
+  // --- POST /plan-days/{planDayId}/skip --- (Skip a planned day directly) - New route
+  fastify.post<{ Params: SkipPlanDayParams; Reply: WorkoutSession | ErrorResponse }>("/plan-days/:planDayId/skip", {
+    preHandler: [fastify.authenticate],
+    schema: {
+      description: "Creates a new session for a specific plan day and immediately marks it as skipped.",
+      tags: ["Workout Sessions"],
+      summary: "Skip planned day",
+      security: [{ bearerAuth: [] }],
+      params: { $ref: "SkipPlanDayParamsSchema#" }, // Use the new params schema
+      response: {
+        201: { $ref: "WorkoutSessionSchema#" }, // Returns the newly created (skipped) session
+        400: { $ref: "ErrorResponseSchema#" }, // e.g., plan day not found
+        401: { $ref: "ErrorResponseSchema#" },
+        404: { $ref: "ErrorResponseSchema#" }, // Plan day not found (handled by service potentially)
+        500: { $ref: "ErrorResponseSchema#" },
       },
-      handler: async (request: FastifyRequest<{ Params: LogSetParams; Body: LogSetBody }>, reply: FastifyReply) => {
-        const userId = request.user?.id;
-        const { sessionId } = request.params; // Correct param name
-        if (!userId) {
-          return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+    },
+    handler: async (request: FastifyRequest<{ Params: SkipPlanDayParams }>, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      const { planDayId } = request.params;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
+      try {
+        const skippedSession = await createAndSkipPlannedDaySession(fastify, userId, planDayId);
+        // Use 201 Created as we are creating a new resource
+        return reply.code(201).send(skippedSession);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed creating and skipping session for plan day ID: ${planDayId}`);
+        if (error.message.includes("not found")) {
+          // Service throws specific error for not found plan day
+          return reply.code(404).send({ error: "Not Found", message: error.message });
         }
-        try {
-          // Cast body to service input type if needed
-          const loggedSet = await logWorkoutSet(fastify, userId, sessionId, request.body as LogSetBody);
-          return reply.code(201).send(loggedSet);
-        } catch (error: any) {
-          fastify.log.error(error, `Failed logging set for session ID: ${sessionId}`);
-          if (error.message.includes("not found") || error.message.includes("not in a state")) {
-            return reply.code(404).send({ error: "Not Found or Bad Request", message: error.message });
-          }
-          return reply.code(500).send({ error: "Internal Server Error", message: "Failed to log set." });
-        }
-      },
-    }
-  );
+        return reply.code(500).send({ error: "Internal Server Error", message: "Failed to skip planned day." });
+      }
+    },
+  });
 
   // --- PUT /sets/{id} --- (Update logged set) - Renamed from /exercises/{id}
   fastify.put<{ Params: SessionExerciseParams; Body: UpdateSetBody; Reply: SessionExercise | ErrorResponse }>(

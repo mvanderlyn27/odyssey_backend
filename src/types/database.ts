@@ -163,11 +163,14 @@ export type Database = {
       profiles: {
         Row: {
           admin: boolean
+          age: number | null
           avatar_url: string | null
           created_at: string
           current_goal_id: string | null
+          experience_level: string | null
           experience_points: number
           full_name: string | null
+          gender: string | null
           height_cm: number | null
           id: string
           level: number
@@ -179,11 +182,14 @@ export type Database = {
         }
         Insert: {
           admin?: boolean
+          age?: number | null
           avatar_url?: string | null
           created_at?: string
           current_goal_id?: string | null
+          experience_level?: string | null
           experience_points?: number
           full_name?: string | null
+          gender?: string | null
           height_cm?: number | null
           id: string
           level?: number
@@ -195,11 +201,14 @@ export type Database = {
         }
         Update: {
           admin?: boolean
+          age?: number | null
           avatar_url?: string | null
           created_at?: string
           current_goal_id?: string | null
+          experience_level?: string | null
           experience_points?: number
           full_name?: string | null
+          gender?: string | null
           height_cm?: number | null
           id?: string
           level?: number

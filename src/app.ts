@@ -73,7 +73,12 @@ import {
   UpdateExerciseBodySchema,
 } from "./schemas/exercisesSchemas";
 // Onboarding
-import { PostOnboardingCompleteResponseSchema } from "./schemas/onboardingSchemas";
+import {
+  PostOnboardingCompleteResponseSchema,
+  OnboardingStep1BodySchema, // Added Step 1 Schema
+  OnboardingStep3BodySchema, // Added Step 3 Schema
+  OnboardingStep4BodySchema, // Added Step 4 Schema
+} from "./schemas/onboardingSchemas";
 // Profile
 import { ProfileSchema, UpdateProfileBodySchema, GetProfileResponseSchema } from "./schemas/profileSchemas";
 // Stats
@@ -376,6 +381,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   // Onboarding
   app.addSchema(PostOnboardingCompleteResponseSchema);
+  +app.addSchema(OnboardingStep1BodySchema); // Added Step 1 Schema
+  +app.addSchema(OnboardingStep3BodySchema); // Added Step 3 Schema
+  +app.addSchema(OnboardingStep4BodySchema); // Added Step 4 Schema
 
   // Profile
   app.addSchema(UpdateProfileBodySchema);

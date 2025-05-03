@@ -33,6 +33,10 @@ export const ProfileSchema = Type.Object(
     current_goal_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]),
     subscription_status: Type.Union([SubscriptionStatusEnum, Type.Null()]), // Allow null based on DB
     admin: Type.Boolean(), // Added based on DB schema
+    // Added based on backend changes log 2025-05-03
+    experience_level: Type.Union([Type.String(), Type.Null()]), // e.g., 'beginner', 'intermediate', 'advanced'
+    age: Type.Union([Type.Integer(), Type.Null()]),
+    gender: Type.Union([Type.String(), Type.Null()]),
   },
   { $id: "ProfileSchema", description: "User profile data" }
 );

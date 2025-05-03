@@ -66,6 +66,21 @@ export type SessionExercise = Static<typeof SessionExerciseSchema>;
 
 // --- Route Specific Schemas ---
 
+// Input schema for a single set logged by the client before saving
+export const LoggedSetInputSchema = Type.Object(
+  {
+    exercise_id: Type.String({ format: "uuid" }),
+    plan_workout_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])), // Optional link to plan
+    set_order: Type.Integer({ minimum: 1 }), // Order of the set for this exercise in the session
+    logged_reps: Type.Integer({ minimum: 0 }),
+    logged_weight_kg: Type.Number({ minimum: 0 }),
+    difficulty_rating: Type.Optional(Type.Union([Type.Integer({ minimum: 1, maximum: 5 }), Type.Null()])), // 1-5 scale, adjust if needed
+    notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  },
+  { $id: "LoggedSetInputSchema", description: "Data for a single set logged by the client" }
+);
+export type LoggedSetInput = Static<typeof LoggedSetInputSchema>;
+
 // POST /workout-sessions/start
 export const StartSessionBodySchema = Type.Object(
   {
@@ -116,8 +131,13 @@ export const FinishSessionBodySchema = Type.Object(
   {
     notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     overall_feeling: Type.Optional(Type.String()), // Assuming string enum for now
+    loggedSets: Type.Optional(
+      Type.Array(Type.Ref(LoggedSetInputSchema), {
+        description: "Array of all sets logged during the session on the client.",
+      })
+    ),
   },
-  { $id: "FinishSessionBodySchema", description: "Optional notes and feeling when completing a session" }
+  { $id: "FinishSessionBodySchema", description: "Optional notes, feeling, and logged sets when completing a session" }
 );
 export type FinishSessionBody = Static<typeof FinishSessionBodySchema>;
 
@@ -140,6 +160,16 @@ export type FinishSessionResponse = Static<typeof FinishSessionResponseSchema>;
 // POST /workout-sessions/{id}/skip
 // Params use GetSessionParamsSchema
 // Response uses WorkoutSessionSchema (returns the updated session)
+
+// POST /workout-sessions/plan-days/{planDayId}/skip (New route)
+export const SkipPlanDayParamsSchema = Type.Object(
+  {
+    planDayId: Type.String({ format: "uuid", description: "The ID of the workout plan day to skip." }),
+  },
+  { $id: "SkipPlanDayParamsSchema" }
+);
+export type SkipPlanDayParams = Static<typeof SkipPlanDayParamsSchema>;
+// Response uses WorkoutSessionSchema (returns the newly created and skipped session)
 
 // POST /workout-sessions/{sessionId}/log-set
 export const LogSetParamsSchema = Type.Object(

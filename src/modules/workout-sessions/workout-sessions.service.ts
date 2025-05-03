@@ -2,13 +2,14 @@ import { FastifyInstance } from "fastify";
 import { Database, Tables, TablesInsert, TablesUpdate } from "../../types/database";
 import { PostgrestError } from "@supabase/supabase-js";
 import {
-  LogSetBody,
+  // LogSetBody, // Keep for reference if needed, but LoggedSetInput is used in FinishSessionBody
   UpdateSetBody,
   FinishSessionBody,
   SessionDetails,
   SessionStatus,
   WorkoutSession,
   SessionExercise,
+  LoggedSetInput, // Import the new type for the logged sets array
 } from "@/schemas/workoutSessionsSchemas";
 import { updateUserMuscleGroupStatsAfterSession } from "../stats/stats.service"; // Import the new helper
 // Assuming types for request bodies are defined here or in a shared types file
@@ -414,77 +415,6 @@ export const startWorkoutSession = async (
   return data;
 };
 
-export const logWorkoutSet = async (
-  fastify: FastifyInstance,
-  userId: string,
-  sessionId: string,
-  logData: LogSetBody
-): Promise<SessionExercise> => {
-  fastify.log.info(`Logging set for session: ${sessionId}, user: ${userId}`, { data: logData }); // Avoid logging potentially large data directly if sensitive
-  if (!fastify.supabase) {
-    throw new Error("Supabase client not available");
-  }
-  const supabase = fastify.supabase;
-
-  try {
-    // 1. Verify the session belongs to the user and is 'active' or 'paused'
-    const { data: session, error: sessionError } = await supabase
-      .from("workout_sessions")
-      .select("id, status")
-      .eq("id", sessionId)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (sessionError) {
-      fastify.log.error({ error: sessionError, userId, sessionId }, "Error verifying workout session ownership");
-      throw new Error(`Failed to verify session: ${sessionError.message}`);
-    }
-    if (!session) {
-      throw new Error(`Workout session ${sessionId} not found or does not belong to user ${userId}.`);
-    }
-    if (session.status !== "active" && session.status !== "paused") {
-      throw new Error(
-        `Workout session ${sessionId} is not in a state where sets can be logged (status: ${session.status}).`
-      );
-    }
-
-    // 2. Prepare data for insertion
-    const setData = {
-      workout_session_id: sessionId,
-      exercise_id: logData.exercise_id,
-      plan_workout_exercise_id: logData.plan_workout_exercise_id ?? null,
-      set_order: logData.set_order,
-      logged_reps: logData.logged_reps,
-      logged_weight_kg: logData.logged_weight_kg,
-      difficulty_rating: logData.difficulty_rating ?? null,
-      notes: logData.notes ?? null,
-      // logged_at is handled by the database default
-      // was_successful_for_progression will be updated on session finish
-    };
-
-    // 3. Insert the logged set
-    const { data: loggedSet, error: insertError } = await supabase
-      .from("session_exercises")
-      .insert(setData)
-      .select("*")
-      .single();
-
-    if (insertError) {
-      fastify.log.error({ error: insertError, userId, sessionId, setData }, "Error logging workout set");
-      throw new Error(`Failed to log workout set: ${insertError.message}`);
-    }
-
-    if (!loggedSet) {
-      throw new Error("Failed to retrieve logged workout set after insert.");
-    }
-
-    return loggedSet;
-  } catch (error: any) {
-    fastify.log.error(error, `Unexpected error logging set for session ${sessionId}`);
-    throw error;
-  }
-};
-
 export const updateLoggedSet = async (
   fastify: FastifyInstance,
   userId: string,
@@ -523,11 +453,7 @@ export const updateLoggedSet = async (
       throw new Error(`Logged set ${sessionExerciseId} not found or does not belong to user ${userId}.`);
     }
 
-    // Check if session is in editable state
-    const sessionStatus = (verificationData.workout_sessions as any)?.status;
-    if (sessionStatus !== "active" && sessionStatus !== "paused") {
-      throw new Error(`Cannot update set because workout session is not active (status: ${sessionStatus}).`);
-    }
+    // Removed session status check to allow updates anytime
 
     // 2. Prepare update data safely
     const finalUpdateData: SessionExerciseUpdate = {};
@@ -610,10 +536,7 @@ export const deleteLoggedSet = async (
       throw new Error(`Logged set ${sessionExerciseId} not found or does not belong to user ${userId}. Cannot delete.`);
     }
 
-    const sessionStatus = (verificationData.workout_sessions as any)?.status;
-    if (sessionStatus !== "active" && sessionStatus !== "paused") {
-      throw new Error(`Cannot delete set because workout session is not active (status: ${sessionStatus}).`);
-    }
+    // Removed session status check to allow deletion anytime
 
     // 2. Delete the logged set
     const { error: deleteError, count } = await supabase.from("session_exercises").delete().eq("id", sessionExerciseId);
@@ -755,6 +678,60 @@ export const skipWorkoutSession = async (
   }
 };
 
+/**
+ * Creates a new workout session for a specific plan day and immediately marks it as 'skipped'.
+ * This is used when a user decides to skip a planned workout without starting it.
+ * @param fastify - Fastify instance.
+ * @param userId - The ID of the user skipping the session.
+ * @param workoutPlanDayId - The ID of the workout plan day being skipped.
+ * @returns The newly created and skipped workout session object.
+ */
+export const createAndSkipPlannedDaySession = async (
+  fastify: FastifyInstance,
+  userId: string,
+  workoutPlanDayId: string
+): Promise<WorkoutSession> => {
+  fastify.log.info(`Creating and skipping session for plan day: ${workoutPlanDayId}, user: ${userId}`);
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+  const supabase = fastify.supabase;
+  const now = new Date().toISOString();
+
+  // Optional: Verify workoutPlanDayId exists and belongs to the user's active plan?
+  // For simplicity, we'll assume the ID is valid for now. Add verification if needed.
+
+  const sessionData: TablesInsert<"workout_sessions"> = {
+    user_id: userId,
+    workout_plan_day_id: workoutPlanDayId,
+    status: "skipped", // Mark as skipped immediately
+    started_at: now, // Set start and end times to now
+    ended_at: now,
+  };
+
+  const { data: skippedSession, error } = await supabase.from("workout_sessions").insert(sessionData).select().single();
+
+  if (error) {
+    fastify.log.error({ error, userId, workoutPlanDayId, sessionData }, "Error creating and skipping workout session");
+    // Handle potential constraint errors, e.g., invalid workoutPlanDayId foreign key
+    if (error.code === "23503") {
+      // Foreign key violation
+      throw new Error(`Workout Plan Day with ID ${workoutPlanDayId} not found.`);
+    }
+    throw new Error(`Failed to create and skip workout session: ${error.message}`);
+  }
+
+  if (!skippedSession) {
+    // Should be caught by error, but safety check
+    throw new Error("Failed to retrieve created and skipped workout session after insert.");
+  }
+
+  fastify.log.info(
+    `Workout session ${skippedSession.id} created and marked as skipped for plan day ${workoutPlanDayId}, user ${userId}.`
+  );
+  return skippedSession;
+};
+
 export const finishWorkoutSession = async (
   fastify: FastifyInstance,
   userId: string,
@@ -775,6 +752,33 @@ export const finishWorkoutSession = async (
   // Consider a database function (RPC) for true atomicity if critical.
 
   try {
+    // --- Pre-step: Insert logged sets if provided ---
+    if (finishData.loggedSets && finishData.loggedSets.length > 0) {
+      fastify.log.info(`Inserting ${finishData.loggedSets.length} logged sets for session ${sessionId}`);
+      const setsToInsert: TablesInsert<"session_exercises">[] = finishData.loggedSets.map((set) => ({
+        workout_session_id: sessionId,
+        exercise_id: set.exercise_id,
+        plan_workout_exercise_id: set.plan_workout_exercise_id ?? null,
+        set_order: set.set_order,
+        logged_reps: set.logged_reps,
+        logged_weight_kg: set.logged_weight_kg,
+        difficulty_rating: set.difficulty_rating ?? null,
+        logged_notes: set.notes ?? null, // Map notes from input to logged_notes in DB
+        // was_successful_for_progression will be calculated later
+      }));
+
+      const { error: insertError } = await supabase.from("session_exercises").insert(setsToInsert);
+
+      if (insertError) {
+        fastify.log.error({ error: insertError, userId, sessionId }, "Error inserting bulk logged sets");
+        // Decide if this is fatal. Let's make it fatal for now.
+        throw new Error(`Failed to insert logged sets: ${insertError.message}`);
+      }
+      fastify.log.info(`Successfully inserted ${setsToInsert.length} sets for session ${sessionId}`);
+    } else {
+      fastify.log.info(`No logged sets provided in finish request for session ${sessionId}`);
+    }
+
     // --- 1. Verify Session and Fetch Initial Data ---
     const { data: sessionData, error: verificationError } = await supabase
       .from("workout_sessions")
@@ -819,10 +823,37 @@ export const finishWorkoutSession = async (
       fastify.log.error({ error: exercisesError, sessionId }, "Error fetching session exercises");
       throw new Error(`Failed to fetch exercises for session: ${exercisesError.message}`);
     }
-    // Use sessionExercisesData which is correctly typed now
-    if (!sessionExercisesData) {
-      // Should not happen if error is null, but check anyway
-      fastify.log.warn(`No session exercises found for session ${sessionId}, proceeding.`);
+    // Use sessionExercisesData which is correctly typed now.
+    // It's possible sessionExercisesData is null/empty if ONLY loggedSets were provided and the fetch happens *after* insert
+    // OR if no sets were logged at all. The logic below handles the case where sessionExercisesData might be empty.
+    // Let's re-fetch AFTER the potential insert to ensure we have the complete picture for progression calculation.
+
+    const { data: refetchedSessionExercisesData, error: refetchError } = (await supabase
+      .from("session_exercises")
+      .select(
+        `
+        *,
+        exercises ( id, primary_muscle_groups, secondary_muscle_groups )
+      `
+      )
+      .eq("workout_session_id", sessionId)) as {
+      data: SessionExerciseWithDetails[] | null;
+      error: PostgrestError | null;
+    };
+
+    if (refetchError) {
+      fastify.log.error(
+        { error: refetchError, sessionId },
+        "Error re-fetching session exercises after potential insert"
+      );
+      throw new Error(`Failed to re-fetch exercises for session: ${refetchError.message}`);
+    }
+
+    // Now use refetchedSessionExercisesData for progression logic
+    const finalSessionExercisesData = refetchedSessionExercisesData ?? []; // Use empty array if null
+
+    if (finalSessionExercisesData.length === 0) {
+      fastify.log.warn(`No session exercises found for session ${sessionId} after potential insert, proceeding.`);
       // Allow finishing a workout with 0 exercises logged
     }
 
@@ -848,11 +879,11 @@ export const finishWorkoutSession = async (
     const planExerciseUpdates: { id: string; update: PlanWorkoutExerciseUpdate }[] = [];
     let successfulExercisesCount = 0;
 
-    // Use sessionExercisesData here
-    if (planWorkoutId && planExercisesMap.size > 0 && sessionExercisesData && sessionExercisesData.length > 0) {
+    // Use finalSessionExercisesData (re-fetched data) here
+    if (planWorkoutId && planExercisesMap.size > 0 && finalSessionExercisesData.length > 0) {
       // Group session exercises by plan_workout_exercise_id
       const groupedSessionExercises: { [key: string]: SessionExerciseWithDetails[] } = {}; // Use correct type
-      sessionExercisesData.forEach((se) => {
+      finalSessionExercisesData.forEach((se) => {
         if (se.plan_workout_exercise_id) {
           if (!groupedSessionExercises[se.plan_workout_exercise_id]) {
             groupedSessionExercises[se.plan_workout_exercise_id] = [];
@@ -1034,8 +1065,9 @@ export const finishWorkoutSession = async (
     // --- 8. Update User Muscle Group Stats (after session is marked completed) ---
     // Run this asynchronously in the background, don't await it to avoid delaying the response.
     // Use sessionUpdatePayload.ended_at! as it's guaranteed to be set.
-    if (sessionExercisesData && sessionExercisesData.length > 0) {
-      updateUserMuscleGroupStatsAfterSession(fastify, userId, sessionUpdatePayload.ended_at!, sessionExercisesData)
+    // Use finalSessionExercisesData for muscle stats calculation
+    if (finalSessionExercisesData.length > 0) {
+      updateUserMuscleGroupStatsAfterSession(fastify, userId, sessionUpdatePayload.ended_at!, finalSessionExercisesData)
         .then(() => {
           fastify.log.info(`Successfully updated muscle group stats for user ${userId} in background.`);
         })
