@@ -150,6 +150,7 @@ import {
 
 // --- Import Route Handlers ---
 import statusRoutes from "./routes/status";
+import aiCoachMessagesRoutes from "./modules/ai-coach-messages/ai-coach-messages.routes"; // Import AI routes for potential manual registration in test
 // Removed deprecated workout route imports
 
 // Define a more specific type for logger options
@@ -442,6 +443,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // Removed deprecated workout route registrations
 
   // --- Register New Module Routes ---
+  // Rely solely on autoload now
   app.register(fastifyAutoload, {
     dir: path.join(__dirname, "modules"),
     options: { prefix: "/api" }, // Set a common prefix for all modules

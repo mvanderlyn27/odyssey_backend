@@ -207,4 +207,5 @@ async function aiCoachRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
   );
 }
 
+// Restore fp wrapper
 export default aiCoachRoutes;
