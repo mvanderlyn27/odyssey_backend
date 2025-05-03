@@ -5,13 +5,17 @@
 # Example:
 #
 # Create a weekly exercise plan for a user with the following profile:
-# Fitness Level: {{FITNESS_LEVEL}}
+# Fitness Level: {{EXPERIENCE}}
 # Goal: {{GOAL}}
 # Available Equipment: {{EQUIPMENT}}
 # Days per week: {{DAYS_PER_WEEK}}
-# Time per session: {{TIME_PER_SESSION}}
+# Time per session: {{TIME_PER_SESSION}} (Optional)
 #
-# Provide the output as structured JSON including exercises, sets, reps, and rest periods.
+# IMPORTANT: Only use exercises from the provided list below. For each exercise in the plan, you MUST return its corresponding UUID ('exerciseLibraryId') from the list.
+# Available Exercises (Name - UUID):
+# {{AVAILABLE_EXERCISES_LIST_WITH_IDS}}
+#
+# Provide the output as structured JSON matching the schema provided previously. Ensure you include 'exerciseLibraryId' (the UUID from the list above), 'sets', 'repMin', 'repMax', and optionally 'restSeconds' and 'notes' for each exercise.
 #
 # --- USER DATA ---
 # {{USER_DATA_JSON}}

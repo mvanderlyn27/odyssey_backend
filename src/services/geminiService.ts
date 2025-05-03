@@ -15,7 +15,12 @@ import {
 import { nutritionSchema } from "../types/geminiSchemas/nutritionSchema";
 import { alternativesSchema } from "../types/geminiSchemas/alternativesSchema";
 import { mealPlanMetadataSchema } from "../types/geminiSchemas/mealPlanMetadataSchema";
-import { exercisePlanSchema } from "../types/geminiSchemas/exercisePlanSchema"; // Import new schema
+import { v4 as uuidv4 } from "uuid"; // Import uuid
+import { exercisePlanSchema } from "../types/geminiSchemas/exercisePlanSchema";
+import { UpdatedWorkoutPlanResponse } from "../modules/ai-coach-messages/ai-coach-messages.types"; // For plan return type
+import { Equipment } from "@/schemas/equipmentSchemas";
+import { Exercise } from "@/schemas/exercisesSchemas";
+import { WorkoutPlanDetails } from "@/schemas/workoutPlansSchemas";
 
 // Helper function to convert buffer/mimetype to Gemini Part format
 function fileToGenerativePart(buffer: Buffer, mimeType: string): Part {
@@ -460,3 +465,186 @@ Example response format:
 
   // Add other Gemini-related methods here if needed (e.g., chat, embeddings)
 }
+
+// --- New Functions for AI Coach ---
+
+/**
+ * Generates an updated workout plan based on user request.
+ * @param fastify - Fastify instance.
+ * @param userId - ID of the user requesting the update.
+ * @param options - Options containing the current detailed plan and modification description.
+ * @param options.currentPlanDetails - The user's current active workout plan details object.
+ * @param options.modificationDescription - The user's text request for changes.
+ * @returns The raw JSON plan structure from Gemini and a text summary, or an Error.
+ */
+export const generateUpdatedWorkoutPlan = async (
+  fastify: FastifyInstance,
+  userId: string, // Keep for logging/context
+  options: { currentPlanDetails: WorkoutPlanDetails; modificationDescription: string } // Expect WorkoutPlanDetails
+): Promise<{ planJson: any; text: string } | Error> => {
+  // Return raw JSON and text
+  const { log, gemini } = fastify;
+  if (!gemini) {
+    return new Error("Gemini client is not initialized.");
+  }
+
+  const modelName = process.env.GEMINI_MODEL_NAME!; // Use standard model
+  log.debug(
+    { modelName, userId, planId: options.currentPlanDetails.id }, // Use ID from details
+    "Generating updated workout plan with Gemini (structured)"
+  );
+
+  // Define the generation config using the imported schema
+  const generationConfig: GenerationConfig = {
+    responseMimeType: "application/json",
+    responseSchema: exercisePlanSchema as any, // Use imported schema
+  };
+
+  // Construct the prompt using the detailed plan structure
+  const prompt = `Given the following current detailed workout plan:
+${JSON.stringify(options.currentPlanDetails, null, 2)}
+
+Please modify this plan based on the user's request: "${options.modificationDescription}".
+
+Generate a complete, new workout plan structure based on these modifications.
+Respond ONLY with the JSON object matching the provided schema. Include a brief summary of the changes made within the 'description' field of the new plan. Ensure all required fields from the schema are present in your response.`;
+
+  try {
+    const model = gemini.getGenerativeModel({ model: modelName });
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig,
+    });
+    const response = result.response;
+    const responseText = response.text();
+
+    log.debug({ modelName, userId }, "Gemini workout plan update successful (structured)");
+
+    try {
+      const parsedJson = JSON.parse(responseText);
+      // TODO: Add more robust validation based on the exercisePlanSchema
+      if (!parsedJson.planName || !Array.isArray(parsedJson.dailyWorkouts)) {
+        throw new Error("Parsed JSON does not match expected exercise plan schema.");
+      }
+
+      // Return the raw JSON and the description text
+      return {
+        planJson: parsedJson,
+        text: parsedJson.description || "Workout plan updated.", // Use description as summary text
+      };
+    } catch (e: any) {
+      log.error(
+        { error: e.message, responseText, userId },
+        "Failed to parse structured JSON response for workout plan update"
+      );
+      return new Error(`Failed to parse updated plan from AI response: ${e.message}`);
+    }
+  } catch (error: any) {
+    log.error(error, `Gemini API error during generateUpdatedWorkoutPlan (model: ${modelName})`);
+    return new Error(`Gemini API error updating workout plan: ${error.message}`);
+  }
+};
+
+/**
+ * Suggests alternative exercises based on user criteria.
+ * @param fastify - Fastify instance.
+ * @param userId - ID of the user requesting alternatives.
+ * @param options - Options containing the exercise to replace, requirements, etc.
+ * @param options.exerciseToReplace - The full Exercise object to find alternatives for.
+ * @param options.requirements - User's text description of requirements for alternatives.
+ * @param options.availableExercises - Full list of available exercises for context.
+ * @param options.userEquipment - List of equipment the user has available.
+ * @returns An array of suggested Exercise objects, or an Error.
+ */
+export const suggestExerciseAlternatives = async (
+  fastify: FastifyInstance,
+  userId: string, // Keep for logging/context
+  options: {
+    exerciseToReplace: Exercise;
+    requirements: string;
+    availableExercises: Exercise[];
+    userEquipment: Equipment[];
+  }
+): Promise<Exercise[] | Error> => {
+  const { log, gemini } = fastify;
+  if (!gemini) {
+    return new Error("Gemini client is not initialized.");
+  }
+
+  // Use light model if available, otherwise standard
+  const modelName = process.env.GEMINI_LIGHT_MODEL_NAME || process.env.GEMINI_MODEL_NAME!;
+  log.debug(
+    { modelName, userId, exerciseId: options.exerciseToReplace.id },
+    "Generating exercise alternatives with Gemini (structured)"
+  );
+
+  // Define the generation config using the updated alternatives schema
+  const generationConfig: GenerationConfig = {
+    responseMimeType: "application/json",
+    responseSchema: alternativesSchema as any, // Use updated schema
+  };
+
+  // Prepare context for the prompt
+  const availableExerciseNames = options.availableExercises.map((e) => e.name).join(", ");
+  const userEquipmentNames = options.userEquipment.map((e) => e.name).join(", ") || "None";
+
+  // Construct the prompt
+  const prompt = `The user wants alternative exercises for "${options.exerciseToReplace.name}".
+This exercise primarily targets: ${options.exerciseToReplace.primary_muscle_groups?.join(", ") || "N/A"}.
+The user's specific requirements for alternatives are: "${options.requirements || "None specified"}".
+The user has the following equipment available: ${userEquipmentNames}.
+Consider the full list of potentially available exercises: ${availableExerciseNames}.
+
+Suggest 3-5 suitable alternative exercises based *only* on the available equipment and user requirements.
+For each suggestion, provide the exercise details matching the schema (name is required, others are optional but helpful). Include a brief 'reason' explaining why it's a good alternative.
+Respond ONLY with the JSON object matching the provided schema. Ensure the 'alternatives' array contains objects with at least the 'name' field.`;
+
+  try {
+    const model = gemini.getGenerativeModel({ model: modelName });
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig,
+    });
+    const response = result.response;
+    const responseText = response.text();
+
+    log.debug({ modelName, userId }, "Gemini exercise alternatives suggestion successful (structured)");
+
+    try {
+      const parsedJson = JSON.parse(responseText);
+      // Basic validation
+      if (!parsedJson.alternatives || !Array.isArray(parsedJson.alternatives)) {
+        throw new Error("Parsed JSON does not contain a valid 'alternatives' array.");
+      }
+
+      // The schema asks for Exercise fields, so we can potentially cast/map this.
+      // For now, assume the structure matches Exercise closely enough.
+      // We might need more robust mapping/validation here in a real scenario.
+      const alternatives: Exercise[] = parsedJson.alternatives
+        .map((alt: any) => ({
+          // Map fields from Gemini response (which follows alternativesSchema) to Exercise type
+          id: alt.id || uuidv4(), // Generate a new UUID if Gemini doesn't provide one
+          name: alt.name,
+          description: alt.description || null,
+          primary_muscle_groups: alt.primary_muscle_groups || null,
+          secondary_muscle_groups: alt.secondary_muscle_groups || null,
+          equipment_required: alt.equipment_required || null,
+          image_url: alt.image_url || null,
+          difficulty: alt.difficulty || null,
+          // 'reason' field from schema is ignored here as it's not part of Exercise type
+        }))
+        .filter((alt: Exercise) => alt.name); // Filter out any suggestions missing a name
+
+      return alternatives;
+    } catch (e: any) {
+      log.error(
+        { error: e.message, responseText, userId },
+        "Failed to parse structured JSON response for exercise alternatives"
+      );
+      return new Error(`Failed to parse exercise alternatives from AI response: ${e.message}`);
+    }
+  } catch (error: any) {
+    log.error(error, `Gemini API error during suggestExerciseAlternatives (model: ${modelName})`);
+    return new Error(`Gemini API error suggesting alternatives: ${error.message}`);
+  }
+};
