@@ -180,6 +180,11 @@ export const GeneratePlanBodySchema = Type.Object(
     available_equipment_ids: Type.Array(Type.String({ format: "uuid" })),
     approximate_workout_minutes: Type.Integer(),
     preferred_plan_type: Type.Optional(PlanTypeEnum),
+    // Optional user physical details
+    age: Type.Optional(Type.Integer({ minimum: 1, description: "User's age" })),
+    height_cm: Type.Optional(Type.Number({ minimum: 1, description: "User's height in centimeters" })),
+    weight_kg: Type.Optional(Type.Number({ minimum: 1, description: "User's weight in kilograms" })),
+    gender: Type.Optional(Type.String({ description: "User's gender" })),
   },
   { $id: "GeneratePlanBodySchema", description: "Preferences for AI workout plan generation" }
 );

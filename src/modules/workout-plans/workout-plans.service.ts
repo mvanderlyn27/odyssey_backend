@@ -870,6 +870,16 @@ export const generateWorkoutPlan = async (
     const allExercisesString = allExercises.map((ex) => `- ${ex.name} (ID: ${ex.id})`).join("\n");
 
     // 2. Construct Refined Prompt
+    // Build physical details string conditionally
+    let physicalDetailsString = "";
+    if (preferences.age || preferences.gender || preferences.height_cm || preferences.weight_kg) {
+      physicalDetailsString = "\n**User Physical Details:**\n";
+      if (preferences.age) physicalDetailsString += `- Age: ${preferences.age}\n`;
+      if (preferences.gender) physicalDetailsString += `- Gender: ${preferences.gender}\n`;
+      if (preferences.height_cm) physicalDetailsString += `- Height: ${preferences.height_cm} cm\n`;
+      if (preferences.weight_kg) physicalDetailsString += `- Weight: ${preferences.weight_kg} kg\n`;
+    }
+
     const prompt = `
 Generate a personalized workout plan based on the following user details and available resources. Structure the output strictly according to the provided JSON schema.
 
@@ -880,7 +890,7 @@ Generate a personalized workout plan based on the following user details and ava
 - Approxiate Workout Time Length (minutes): ${preferences.approximate_workout_minutes}
 ${preferences.preferred_plan_type ? `- Preferred Plan Type: ${preferences.preferred_plan_type}` : ""}
 - Available Equipment: ${equipmentNamesString}
-
+${physicalDetailsString}
 **Available Exercises (Use these exact IDs for 'exerciseLibraryId'):**
 ${allExercisesString}
 
@@ -897,6 +907,7 @@ ${allExercisesString}
         - Use the exact 'exerciseLibraryId' (UUID) from the 'Available Exercises' list above. Ensure this ID exists in the list.
         - Specify the number of sets.
         - Specify the minimum (repMin) and maximum (repMax) target repetitions (e.g., repMin: 8, repMax: 12).
+        - Specify the predicted start weight based on user experience level, height, weight, sex, gender
         - Specify the rest time in seconds (restSeconds). Use null if rest is not applicable or variable.
         - Add brief optional notes on form or execution if relevant.
 - Ensure the output conforms precisely to the provided JSON schema. Do not add any extra text before or after the JSON object.

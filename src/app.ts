@@ -146,11 +146,13 @@ import {
   GetSessionParamsSchema,
   FinishSessionBodySchema,
   FinishSessionResponseSchema,
+  LoggedSetInputSchema,
   LogSetParamsSchema,
   LogSetBodySchema,
   SessionExerciseParamsSchema,
   UpdateSetBodySchema,
   CurrentWorkoutStateResponseSchema,
+  SkipPlanDayParamsSchema, // Added missing import
 } from "./schemas/workoutSessionsSchemas";
 
 // --- Import Route Handlers ---
@@ -353,13 +355,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(StartSessionBodySchema);
   app.addSchema(SessionDetailsSchema);
   // GetSessionParamsSchema uses UuidParamsSchema (already registered)
-  app.addSchema(FinishSessionBodySchema);
-  app.addSchema(FinishSessionResponseSchema);
+  app.addSchema(LoggedSetInputSchema);
   app.addSchema(LogSetParamsSchema);
   app.addSchema(LogSetBodySchema);
+  app.addSchema(FinishSessionBodySchema);
+  app.addSchema(FinishSessionResponseSchema);
   // SessionExerciseParamsSchema uses UuidParamsSchema (already registered)
   app.addSchema(UpdateSetBodySchema);
   app.addSchema(CurrentWorkoutStateResponseSchema);
+  app.addSchema(SkipPlanDayParamsSchema); // Added missing schema registration
 
   // AI Coach Messages
   app.addSchema(PostChatBodySchema);

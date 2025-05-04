@@ -48,6 +48,11 @@ export const exercisePlanSchema = {
                 target_sets: { type: "number", description: "Number of sets." },
                 target_reps_min: { type: "number", description: "Minimum target repetitions for each set." },
                 target_reps_max: { type: "number", description: "Maximum target repetitions for each set." },
+                current_suggested_weight_kg: {
+                  type: "number",
+                  description:
+                    "the suggested start weight based on user inputs, if not enough info guess a safe starting number based on the user's height, weight, age, and sex",
+                },
                 on_success_weight_increase_kg: {
                   type: "number",
                   description:
