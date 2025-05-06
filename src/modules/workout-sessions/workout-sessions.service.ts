@@ -9,9 +9,11 @@ import {
   SessionStatus,
   WorkoutSession,
   SessionExercise,
-  LoggedSetInput, // Import the new type for the logged sets array
+  LoggedSetInput,
+  FinishSessionResponse, // Import the new type for the logged sets array
 } from "@/schemas/workoutSessionsSchemas";
 import { updateUserMuscleGroupStatsAfterSession } from "../stats/stats.service"; // Import the new helper
+import { v4 } from "uuid";
 // Assuming types for request bodies are defined here or in a shared types file
 
 // Define XP and Level constants (adjust as needed)
@@ -84,10 +86,11 @@ const sendLevelUpMessage = async (
     const result = await model.generateContent(prompt);
     const response = result.response;
     const text = response.text();
+    const newSessionId = v4();
 
     const messageData: AiCoachMessageInsert = {
       user_id: userId,
-      session_id: `level-up-${userId}-${new Date().toISOString()}`, // Unique session ID for this message type
+      session_id: newSessionId, // Unique session ID for this message type
       sender: "ai",
       content: text,
     };
@@ -737,7 +740,7 @@ export const finishWorkoutSession = async (
   userId: string,
   sessionId: string,
   finishData: FinishSessionBody
-): Promise<WorkoutSession & { xpAwarded: number; levelUp: boolean }> => {
+): Promise<FinishSessionResponse> => {
   // Enhanced return type
   fastify.log.info(`Finishing workout session: ${sessionId}, user: ${userId}`, { data: finishData });
   if (!fastify.supabase) {
@@ -758,12 +761,12 @@ export const finishWorkoutSession = async (
       const setsToInsert: TablesInsert<"session_exercises">[] = finishData.loggedSets.map((set) => ({
         workout_session_id: sessionId,
         exercise_id: set.exercise_id,
-        plan_workout_exercise_id: set.plan_workout_exercise_id ?? null,
+        workout_plan_day_exercise_id: set.workout_plan_day_exercise_id ?? null,
         set_order: set.set_order,
         logged_reps: set.logged_reps,
         logged_weight_kg: set.logged_weight_kg,
         difficulty_rating: set.difficulty_rating ?? null,
-        logged_notes: set.notes ?? null, // Map notes from input to logged_notes in DB
+        notes: set.notes ?? null, // Map notes from input to logged_notes in DB
         // was_successful_for_progression will be calculated later
       }));
 
@@ -881,14 +884,14 @@ export const finishWorkoutSession = async (
 
     // Use finalSessionExercisesData (re-fetched data) here
     if (planWorkoutId && planExercisesMap.size > 0 && finalSessionExercisesData.length > 0) {
-      // Group session exercises by plan_workout_exercise_id
+      // Group session exercises by workout_plan_day_exercise_id
       const groupedSessionExercises: { [key: string]: SessionExerciseWithDetails[] } = {}; // Use correct type
       finalSessionExercisesData.forEach((se) => {
-        if (se.plan_workout_exercise_id) {
-          if (!groupedSessionExercises[se.plan_workout_exercise_id]) {
-            groupedSessionExercises[se.plan_workout_exercise_id] = [];
+        if (se.workout_plan_day_exercise_id) {
+          if (!groupedSessionExercises[se.workout_plan_day_exercise_id]) {
+            groupedSessionExercises[se.workout_plan_day_exercise_id] = [];
           }
-          groupedSessionExercises[se.plan_workout_exercise_id].push(se);
+          groupedSessionExercises[se.workout_plan_day_exercise_id].push(se);
         }
       });
 
@@ -962,7 +965,9 @@ export const finishWorkoutSession = async (
       // Batch update plan exercises for weight progression
       if (planExerciseUpdates.length > 0) {
         const results = await Promise.allSettled(
-          planExerciseUpdates.map((upd) => supabase.from("plan_workout_exercises").update(upd.update).eq("id", upd.id))
+          planExerciseUpdates.map((upd) =>
+            supabase.from("workout_plan_day_exercises").update(upd.update).eq("id", upd.id)
+          )
         );
         results.forEach((result, index) => {
           if (result.status === "rejected") {
@@ -989,6 +994,16 @@ export const finishWorkoutSession = async (
       level: newLevel,
       updated_at: new Date().toISOString(), // Keep updated_at fresh
     };
+    const { error: sessionExperienceUpdateError } = await supabase
+      .from("workout_sessions")
+      .update({ experience_gained: awardedXp })
+      .eq("id", sessionId);
+    if (sessionExperienceUpdateError) {
+      fastify.log.error(
+        { error: sessionExperienceUpdateError, userId, profileUpdate },
+        "Error updating user profile with XP/Level"
+      );
+    }
 
     const { error: profileUpdateError } = await supabase.from("profiles").update(profileUpdate).eq("id", userId);
 

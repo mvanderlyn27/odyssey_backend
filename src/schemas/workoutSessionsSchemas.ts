@@ -44,7 +44,7 @@ export const SessionExerciseSchema = Type.Object(
     id: Type.String({ format: "uuid" }),
     workout_session_id: Type.String({ format: "uuid" }),
     exercise_id: Type.String({ format: "uuid" }),
-    plan_workout_exercise_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]), // Renamed from workout_plan_day_exercise_id based on service
+    workout_plan_day_exercise_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]), // Renamed from workout_plan_day_exercise_id based on service
     set_order: Type.Integer(), // Added based on LogSetBody
     target_sets: Type.Optional(Type.Integer()), // Make optional as it might not exist for ad-hoc sets
     target_reps_min: Type.Optional(Type.Integer()), // Make optional
@@ -70,7 +70,7 @@ export type SessionExercise = Static<typeof SessionExerciseSchema>;
 export const LoggedSetInputSchema = Type.Object(
   {
     exercise_id: Type.String({ format: "uuid" }),
-    plan_workout_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])), // Optional link to plan
+    workout_plan_day_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])), // Optional link to plan
     set_order: Type.Integer({ minimum: 1 }), // Order of the set for this exercise in the session
     logged_reps: Type.Integer({ minimum: 0 }),
     logged_weight_kg: Type.Number({ minimum: 0 }),
@@ -185,7 +185,7 @@ export const LogSetBodySchema = Type.Object(
   // Renamed from AddSessionExerciseBodySchema
   {
     exercise_id: Type.String({ format: "uuid" }),
-    plan_workout_exercise_id: Type.Optional(Type.String({ format: "uuid" })), // Renamed based on service
+    workout_plan_day_exercise_id: Type.Optional(Type.String({ format: "uuid" })), // Renamed based on service
     set_order: Type.Integer(),
     logged_reps: Type.Integer(),
     logged_weight_kg: Type.Number(), // Assuming required, use number

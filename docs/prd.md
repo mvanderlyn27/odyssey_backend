@@ -85,7 +85,7 @@ Okay, let's break down a backend plan for your fitness app using Supabase, Fasti
     *   `day_of_week` (integer, nullable) // 1-7, or null if flexible
     *   `order_in_plan` (integer, not null) // Sequence within the plan week/cycle
 
-*   **`plan_workout_exercises` (Specific exercises in a specific plan workout)**
+*   **`workout_plan_day_exercises` (Specific exercises in a specific plan workout)**
     *   `id` (UUID, PK, default: uuid_generate_v4())
     *   `plan_workout_id` (UUID, FK to `workout_plan_days`, not null)
     *   `exercise_id` (UUID, FK to `exercises`, not null)
@@ -110,7 +110,7 @@ Okay, let's break down a backend plan for your fitness app using Supabase, Fasti
     *   `id` (UUID, PK, default: uuid_generate_v4())
     *   `workout_session_id` (UUID, FK to `workout_sessions`, not null)
     *   `exercise_id` (UUID, FK to `exercises`, not null)
-    *   `plan_workout_exercise_id` (UUID, FK to `plan_workout_exercises`, nullable) // Link back to the planned exercise
+    *   `workout_plan_day_exercise_id` (UUID, FK to `workout_plan_day_exercises`, nullable) // Link back to the planned exercise
     *   `set_order` (integer, not null)
     *   `logged_reps` (integer, not null)
     *   `logged_weight_kg` (numeric, not null)
@@ -164,11 +164,11 @@ Okay, let's break down a backend plan for your fitness app using Supabase, Fasti
 *   **Workout Plans:**
     *   `GET /plans` (List user's plans)
     *   `POST /plans` (Create a new custom plan shell)
-    *   `GET /plans/{planId}` (Get details of a specific plan, including its `workout_plan_days` and `plan_workout_exercises`)
+    *   `GET /plans/{planId}` (Get details of a specific plan, including its `workout_plan_days` and `workout_plan_day_exercises`)
     *   `PUT /plans/{planId}` (Update plan details)
     *   `DELETE /plans/{planId}`
     *   `POST /plans/{planId}/activate` (Set `is_active` = true for this plan, false for others)
-    *   `POST /plans/generate` (Premium) (Takes user prefs, calls Gemini, creates `workout_plans`, `workout_plan_days`, `plan_workout_exercises`)
+    *   `POST /plans/generate` (Premium) (Takes user prefs, calls Gemini, creates `workout_plans`, `workout_plan_days`, `workout_plan_day_exercises`)
     *   `POST /plans/import` (Premium) (Takes text/image data, calls Gemini for parsing, creates plan structure)
     *   `PUT /plans/exercises/{planExerciseId}` (Modify a specific exercise within a plan - sets/reps/etc.)
 *   **Workout Tracking:**
@@ -205,9 +205,9 @@ Okay, let's break down a backend plan for your fitness app using Supabase, Fasti
 1.  **Workout Progression:**
     *   When a workout session is finished (`POST /workouts/{sessionId}/finish`):
     *   Iterate through `session_exercises` linked to that session.
-    *   Compare logged sets/reps/weight against the `target_sets`/`target_reps` from the corresponding `plan_workout_exercises`.
+    *   Compare logged sets/reps/weight against the `target_sets`/`target_reps` from the corresponding `workout_plan_day_exercises`.
     *   Determine if the exercise was "successful" based on predefined rules (e.g., hit all reps on all target sets). Mark `session_exercises.was_successful_for_progression`.
-    *   If successful, update the `plan_workout_exercises.current_suggested_weight_kg` (or reps) for the *next* time this exercise appears in the plan, increase by the on_success_weight_increase. 
+    *   If successful, update the `workout_plan_day_exercises.current_suggested_weight_kg` (or reps) for the *next* time this exercise appears in the plan, increase by the on_success_weight_increase. 
     *   
 2.  **XP & Leveling:**
     *   Define XP rewards (e.g., complete workout, log exercise, hit PR, maintain streak).
