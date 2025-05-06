@@ -16,7 +16,13 @@ const GoalTypeEnum = Type.Union(
 );
 
 const PlanTypeEnum = Type.Union(
-  [Type.Literal("full_body"), Type.Literal("split"), Type.Literal("upper_lower"), Type.Literal("custom")],
+  [
+    Type.Literal("full_body"),
+    Type.Literal("split"),
+    Type.Literal("upper_lower"),
+    Type.Literal("push_pull_legs"),
+    Type.Literal("other"),
+  ],
   { $id: "PlanTypeEnum", description: "Type or structure of the workout plan" }
 );
 
