@@ -150,7 +150,7 @@ import {
 
 // --- Import Route Handlers ---
 import statusRoutes from "./routes/status";
-import aiCoachMessagesRoutes from "./modules/ai-coach-messages/ai-coach-messages.routes"; // Import AI routes for potential manual registration in test
+// import aiCoachMessagesRoutes from "./modules/ai-coach-messages/ai-coach-messages.routes"; // Import AI routes for potential manual registration in test
 // Removed deprecated workout route imports
 
 // Define a more specific type for logger options
