@@ -20,6 +20,18 @@ const SessionStatusEnum = Type.Union(
 );
 export type SessionStatus = Static<typeof SessionStatusEnum>;
 
+export const OverallFeelingEnum = Type.Union(
+  [
+    Type.Literal("GREAT"),
+    Type.Literal("GOOD"),
+    Type.Literal("OK"),
+    Type.Literal("TIRED"),
+    // Add any other relevant values, e.g., "BAD", "EXCELLENT"
+  ],
+  { $id: "OverallFeelingEnum", description: "User's overall feeling after the session" }
+);
+export type OverallFeeling = Static<typeof OverallFeelingEnum>;
+
 // --- Base Schemas (Reflecting DB Tables) ---
 
 export const WorkoutSessionSchema = Type.Object(
@@ -66,174 +78,80 @@ export type SessionExercise = Static<typeof SessionExerciseSchema>;
 
 // --- Route Specific Schemas ---
 
-// Input schema for a single set logged by the client before saving
-export const LoggedSetInputSchema = Type.Object(
+export const SessionSetInputSchema = Type.Object(
+  {
+    id: Type.String({ description: "Client-generated UUID for this specific set instance" }),
+    order_index: Type.Integer({ minimum: 0 }),
+    planned_min_reps: Type.Optional(Type.Integer({ minimum: 0 })), // New field
+    planned_max_reps: Type.Optional(Type.Integer({ minimum: 0 })), // New field
+    target_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+    actual_reps: Type.Integer(),
+    actual_weight_kg: Type.Number(),
+    is_completed: Type.Boolean(),
+    is_success: Type.Optional(Type.Boolean()), // Replaces is_failure, matches DB
+    is_warmup: Type.Optional(Type.Boolean()),
+    rest_time_seconds: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
+    user_notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  },
+  { $id: "SessionSetInputSchema", description: "Input for a single set within a finished exercise" }
+);
+export type SessionSetInput = Static<typeof SessionSetInputSchema>;
+
+export const SessionExerciseInputSchema = Type.Object(
   {
     exercise_id: Type.String({ format: "uuid" }),
-    workout_plan_day_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])), // Optional link to plan
-    set_order: Type.Integer({ minimum: 1 }), // Order of the set for this exercise in the session
-    logged_reps: Type.Integer({ minimum: 0 }),
-    logged_weight_kg: Type.Number({ minimum: 0 }),
-    difficulty_rating: Type.Optional(Type.Union([Type.Integer({ minimum: 1, maximum: 5 }), Type.Null()])), // 1-5 scale, adjust if needed
-    notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    workout_plan_day_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
+    order_index: Type.Integer({ minimum: 0 }),
+    user_notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    sets: Type.Array(Type.Ref(SessionSetInputSchema)),
   },
-  { $id: "LoggedSetInputSchema", description: "Data for a single set logged by the client" }
+  { $id: "SessionExerciseInputSchema", description: "Input for a single exercise within a finished session" }
 );
-export type LoggedSetInput = Static<typeof LoggedSetInputSchema>;
+export type SessionExerciseInput = Static<typeof SessionExerciseInputSchema>;
 
-// POST /workout-sessions/start
-export const StartSessionBodySchema = Type.Object(
+export const NewFinishSessionBodySchema = Type.Object(
   {
-    // plan_id: Type.Optional(Type.String({ format: "uuid" })), // Service doesn't use plan_id directly
-    workoutPlanDayId: Type.Optional(Type.String({ format: "uuid" })), // Matches service param name
-  },
-  { $id: "StartSessionBodySchema", description: "Optional plan day ID to start session from" }
-);
-export type StartSessionBody = Static<typeof StartSessionBodySchema>;
-
-// Define nested structure for session details response
-const SessionExerciseDetailsSchema = Type.Intersect([
-  SessionExerciseSchema,
-  Type.Object({
-    exercises: Type.Union([ExerciseSchema, Type.Null()]), // Include full exercise details
-  }),
-]);
-export const SessionDetailsSchema = Type.Intersect(
-  [
-    Type.Ref(WorkoutSessionSchema), // Use Type.Ref()
-    Type.Object({
-      session_exercises: Type.Array(SessionExerciseDetailsSchema),
-      // Optionally include profile details if needed (like in finishWorkoutSession)
-      profiles: Type.Optional(
-        Type.Object({
-          // Placeholder for profile data if returned
-          id: Type.String(),
-          experience_points: Type.Integer(),
-          level: Type.Integer(),
-          username: Type.Union([Type.String(), Type.Null()]),
-        })
-      ),
-    }),
-  ],
-  { $id: "SessionDetailsSchema", description: "Full details of a workout session including exercises" }
-);
-export type SessionDetails = Static<typeof SessionDetailsSchema>;
-// Response for POST /start, GET /{id}, POST /{id}/complete, POST /{id}/skip uses SessionDetailsSchema (or WorkoutSessionSchema for skip)
-
-// GET /workout-sessions/{id}
-export const GetSessionParamsSchema = UuidParamsSchema;
-export type GetSessionParams = Static<typeof GetSessionParamsSchema>;
-// Response uses SessionDetailsSchema
-
-// POST /workout-sessions/{id}/complete
-// Params use GetSessionParamsSchema
-export const FinishSessionBodySchema = Type.Object(
-  {
-    notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-    overall_feeling: Type.Optional(Type.String()), // Assuming string enum for now
-    loggedSets: Type.Optional(
-      Type.Array(Type.Ref(LoggedSetInputSchema), {
-        description: "Array of all sets logged during the session on the client.",
+    existing_session_id: Type.Optional(
+      Type.String({
+        format: "uuid",
+        description: "ID of an existing session to finish. If null or undefined, a new session is created.",
       })
     ),
+    // sessionId: Type.String({ description: "Client-generated UUID for the session" }), // Replaced by existing_session_id, client-gen ID for log event not stored on session directly
+    workout_plan_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
+    workout_plan_day_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
+    started_at: Type.String({ format: "date-time" }), // Remains mandatory: needed for new session creation
+    ended_at: Type.String({ format: "date-time" }),
+    duration_seconds: Type.Integer({ minimum: 0 }),
+    notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    overall_feeling: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Allow any string or null, aligning with service/response
+    exercises: Type.Array(Type.Ref(SessionExerciseInputSchema)),
   },
-  { $id: "FinishSessionBodySchema", description: "Optional notes, feeling, and logged sets when completing a session" }
-);
-export type FinishSessionBody = Static<typeof FinishSessionBodySchema>;
-
-// Define response schema for POST /workout-sessions/{id}/finish
-export const FinishSessionResponseSchema = Type.Intersect(
-  [
-    Type.Ref(WorkoutSessionSchema), // Use Type.Ref()
-    Type.Object({
-      xpAwarded: Type.Number({ description: "Experience points awarded for completing the session." }),
-      levelUp: Type.Boolean({ description: "Indicates if the user leveled up after this session." }),
-    }),
-  ],
   {
-    $id: "FinishSessionResponseSchema",
-    description: "Response after successfully finishing a workout session, including XP and level status.",
+    $id: "NewFinishSessionBodySchema",
+    description: "Request body for finishing a workout session with detailed exercise and set data",
   }
 );
-export type FinishSessionResponse = Static<typeof FinishSessionResponseSchema>;
+export type NewFinishSessionBody = Static<typeof NewFinishSessionBodySchema>;
 
-// POST /workout-sessions/{id}/skip
-// Params use GetSessionParamsSchema
-// Response uses WorkoutSessionSchema (returns the updated session)
-
-// POST /workout-sessions/plan-days/{planDayId}/skip (New route)
-export const SkipPlanDayParamsSchema = Type.Object(
-  {
-    planDayId: Type.String({ format: "uuid", description: "The ID of the workout plan day to skip." }),
-  },
-  { $id: "SkipPlanDayParamsSchema" }
-);
-export type SkipPlanDayParams = Static<typeof SkipPlanDayParamsSchema>;
-// Response uses WorkoutSessionSchema (returns the newly created and skipped session)
-
-// POST /workout-sessions/{sessionId}/log-set
-export const LogSetParamsSchema = Type.Object(
-  // Renamed from AddSessionExerciseParamsSchema
+// Schema for the new detailed finish session response based on user feedback
+export const DetailedFinishSessionResponseSchema = Type.Object(
   {
     sessionId: Type.String({ format: "uuid" }),
-  },
-  { $id: "LogSetParamsSchema" }
-);
-export type LogSetParams = Static<typeof LogSetParamsSchema>;
-
-export const LogSetBodySchema = Type.Object(
-  // Renamed from AddSessionExerciseBodySchema
-  {
-    exercise_id: Type.String({ format: "uuid" }),
-    workout_plan_day_exercise_id: Type.Optional(Type.String({ format: "uuid" })), // Renamed based on service
-    set_order: Type.Integer(),
-    logged_reps: Type.Integer(),
-    logged_weight_kg: Type.Number(), // Assuming required, use number
-    difficulty_rating: Type.Optional(Type.Union([Type.Integer({ minimum: 1, maximum: 10 }), Type.Null()])),
-    notes: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Renamed based on service
-  },
-  { $id: "LogSetBodySchema", description: "Data for logging a single set" }
-);
-export type LogSetBody = Static<typeof LogSetBodySchema>;
-// Response uses SessionExerciseSchema
-
-// PUT /workout-sessions/sets/{sessionExerciseId}
-export const SessionExerciseParamsSchema = UuidParamsSchema; // Renamed from UpdateSessionExerciseParamsSchema
-export type SessionExerciseParams = Static<typeof SessionExerciseParamsSchema>;
-
-export const UpdateSetBodySchema = Type.Object(
-  // Renamed from UpdateSessionExerciseBodySchema
-  {
-    logged_reps: Type.Optional(Type.Integer()),
-    logged_weight_kg: Type.Optional(Type.Number()),
-    difficulty_rating: Type.Optional(Type.Union([Type.Integer({ minimum: 1, maximum: 10 }), Type.Null()])),
+    xpAwarded: Type.Number(),
+    levelUp: Type.Boolean(),
+    durationSeconds: Type.Integer({ minimum: 0 }),
+    totalVolumeKg: Type.Number({ minimum: 0 }),
+    totalReps: Type.Integer({ minimum: 0 }),
+    totalSets: Type.Integer({ minimum: 0 }),
+    completedAt: Type.String({ format: "date-time" }),
     notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    overallFeeling: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Assuming string for now, could be OverallFeelingEnum
+    exercisesPerformed: Type.String({ description: "Comma-separated list of unique exercise names performed." }),
   },
-  { $id: "UpdateSetBodySchema", minProperties: 1, description: "Fields to update for a logged set" }
-);
-export type UpdateSetBody = Static<typeof UpdateSetBodySchema>;
-// Response uses SessionExerciseSchema
-
-// DELETE /workout-sessions/sets/{sessionExerciseId}
-// Params use SessionExerciseParamsSchema
-// Response is 204 No Content
-
-// GET /workout-sessions/current-state (Renamed from /status)
-export const CurrentWorkoutStateResponseSchema = Type.Object(
   {
-    currentSession: Type.Union([Type.Ref(WorkoutSessionSchema), Type.Null()], {
-      // Use Type.Ref()
-      description: "The currently active or paused session, if any.",
-    }),
-    todaysWorkouts: Type.Array(Type.Ref(WorkoutSessionSchema), {
-      // Use Type.Ref()
-      description: "List of workout sessions started today.",
-    }),
-    nextPlannedWorkout: Type.Union([Type.Ref(WorkoutPlanDaySchema), Type.Null()], {
-      // Also use Type.Ref for consistency
-      description: "The next suggested workout day from the active plan, if any.",
-    }),
-  },
-  { $id: "CurrentWorkoutStateResponseSchema", description: "Combined status of current, today's, and next workouts" } // Renamed $id
+    $id: "DetailedFinishSessionResponseSchema",
+    description: "Detailed response after successfully finishing or logging a workout session.",
+  }
 );
-export type CurrentWorkoutStateResponse = Static<typeof CurrentWorkoutStateResponseSchema>; // Renamed type
+export type DetailedFinishSessionResponse = Static<typeof DetailedFinishSessionResponseSchema>;

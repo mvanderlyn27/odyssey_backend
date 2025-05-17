@@ -140,19 +140,12 @@ import {
 // Workout Sessions
 import {
   WorkoutSessionSchema,
-  SessionExerciseSchema,
-  StartSessionBodySchema,
-  SessionDetailsSchema,
-  GetSessionParamsSchema,
-  FinishSessionBodySchema,
-  FinishSessionResponseSchema,
-  LoggedSetInputSchema,
-  LogSetParamsSchema,
-  LogSetBodySchema,
-  SessionExerciseParamsSchema,
-  UpdateSetBodySchema,
-  CurrentWorkoutStateResponseSchema,
-  SkipPlanDayParamsSchema, // Added missing import
+  SessionExerciseSchema, // This is the DB model schema
+  NewFinishSessionBodySchema,
+  DetailedFinishSessionResponseSchema,
+  OverallFeelingEnum,
+  SessionSetInputSchema, // Added for explicit registration
+  SessionExerciseInputSchema, // Added for explicit registration
 } from "./schemas/workoutSessionsSchemas";
 
 // --- Import Route Handlers ---
@@ -307,7 +300,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(WorkoutPlanDaySchema);
   app.addSchema(WorkoutPlanDayExerciseSchema);
   app.addSchema(WorkoutSessionSchema);
-  app.addSchema(SessionExerciseSchema);
+  app.addSchema(SessionExerciseSchema); // This is the DB model schema, distinct from SessionExerciseInputSchema
   app.addSchema(AiCoachMessageSchema);
   app.addSchema(BodyMeasurementSchema);
   app.addSchema(AiCoachSessionSummarySchema);
@@ -351,19 +344,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(UpdateWorkoutPlanDayExerciseBodySchema);
   app.addSchema(DeleteWorkoutPlanDayExerciseParamsSchema);
 
-  // Workout Sessions
-  app.addSchema(StartSessionBodySchema);
-  app.addSchema(SessionDetailsSchema);
-  // GetSessionParamsSchema uses UuidParamsSchema (already registered)
-  app.addSchema(LoggedSetInputSchema);
-  app.addSchema(LogSetParamsSchema);
-  app.addSchema(LogSetBodySchema);
-  app.addSchema(FinishSessionBodySchema);
-  app.addSchema(FinishSessionResponseSchema);
-  // SessionExerciseParamsSchema uses UuidParamsSchema (already registered)
-  app.addSchema(UpdateSetBodySchema);
-  app.addSchema(CurrentWorkoutStateResponseSchema);
-  app.addSchema(SkipPlanDayParamsSchema); // Added missing schema registration
+  // Session Schemas (ensure dependencies are registered first)
+  app.addSchema(OverallFeelingEnum); // Dependency for NewFinishSessionBodySchema
+  app.addSchema(SessionSetInputSchema); // Dependency for SessionExerciseInputSchema
+  app.addSchema(SessionExerciseInputSchema); // Dependency for NewFinishSessionBodySchema
+  app.addSchema(NewFinishSessionBodySchema); // Uses SessionExerciseInputSchema & OverallFeelingEnum
+  app.addSchema(DetailedFinishSessionResponseSchema);
 
   // AI Coach Messages
   app.addSchema(PostChatBodySchema);

@@ -18,6 +18,25 @@ export type Grouping = Static<typeof GroupingEnum>; // Export static type
 
 // --- Muscle Ranking (Zod Schemas) ---
 // Define the enum values in Zod for validation and type generation
+
+export const MuscleGroupEnum = Type.Union(
+  [
+    Type.Literal("Chest"),
+    Type.Literal("Back"),
+    Type.Literal("Shoulders"),
+    Type.Literal("Biceps"),
+    Type.Literal("Triceps"),
+    Type.Literal("Forearms"),
+    Type.Literal("Abs"),
+    Type.Literal("Quads"),
+    Type.Literal("Hamstrings"),
+    Type.Literal("Glutes"),
+    Type.Literal("Calves"),
+  ],
+  { $id: "MuscleGroupEnum", description: "Major muscle groups" }
+);
+export type MuscleGroup = Static<typeof MuscleGroupEnum>;
+
 export const MuscleRankEnum = Type.Enum({
   Neophyte: "Neophyte",
   Adept: "Adept",
@@ -138,6 +157,7 @@ export const GetBodyStatsQuerySchema = Type.Object(
   },
   { $id: "GetBodyStatsQuerySchema" }
 );
+
 export type GetBodyStatsQuery = Static<typeof GetBodyStatsQuerySchema>;
 
 // Update MuscleGroupStatSchema to use the Zod enum type for muscle_ranking
