@@ -419,40 +419,49 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          age: number | null
           avatar_url: string | null
           created_at: string
           deleted: boolean
           experience_points: number
           full_name: string | null
+          gender: string | null
           id: string
           onboard_complete: boolean
           theme_preference: string | null
           updated_at: string
           username: string | null
+          weight_preference: Database["public"]["Enums"]["unit_type"]
         }
         Insert: {
+          age?: number | null
           avatar_url?: string | null
           created_at?: string
           deleted?: boolean
           experience_points?: number
           full_name?: string | null
+          gender?: string | null
           id: string
           onboard_complete?: boolean
           theme_preference?: string | null
           updated_at?: string
           username?: string | null
+          weight_preference?: Database["public"]["Enums"]["unit_type"]
         }
         Update: {
+          age?: number | null
           avatar_url?: string | null
           created_at?: string
           deleted?: boolean
           experience_points?: number
           full_name?: string | null
+          gender?: string | null
           id?: string
           onboard_complete?: boolean
           theme_preference?: string | null
           updated_at?: string
           username?: string | null
+          weight_preference?: Database["public"]["Enums"]["unit_type"]
         }
         Relationships: []
       }
@@ -498,53 +507,109 @@ export type Database = {
         }
         Relationships: []
       }
-      workout_plan_day_exercises: {
+      workout_plan_day_exercise_sets: {
         Row: {
           created_at: string
-          deleted: boolean
-          exercise_id: string
-          exercise_order: number
           id: string
+          is_amrap: boolean | null
           max_reps: number | null
           min_reps: number | null
           notes: string | null
           rest_seconds: number | null
-          sets: number | null
+          set_order: number
+          target_reps_text: string | null
           target_weight: number | null
           target_weight_increase: number | null
           updated_at: string
-          workout_plan_day_id: string
+          workout_plan_exercise_id: string
         }
         Insert: {
           created_at?: string
-          deleted?: boolean
-          exercise_id: string
-          exercise_order: number
           id?: string
+          is_amrap?: boolean | null
           max_reps?: number | null
           min_reps?: number | null
           notes?: string | null
           rest_seconds?: number | null
-          sets?: number | null
+          set_order: number
+          target_reps_text?: string | null
           target_weight?: number | null
           target_weight_increase?: number | null
           updated_at?: string
-          workout_plan_day_id: string
+          workout_plan_exercise_id: string
         }
         Update: {
           created_at?: string
-          deleted?: boolean
-          exercise_id?: string
-          exercise_order?: number
           id?: string
+          is_amrap?: boolean | null
           max_reps?: number | null
           min_reps?: number | null
           notes?: string | null
           rest_seconds?: number | null
-          sets?: number | null
+          set_order?: number
+          target_reps_text?: string | null
           target_weight?: number | null
           target_weight_increase?: number | null
           updated_at?: string
+          workout_plan_exercise_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_plan_day_exercise_sets_workout_plan_exercise_id_fkey"
+            columns: ["workout_plan_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "workout_plan_day_exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workout_plan_day_exercises: {
+        Row: {
+          auto_progression_enabled: boolean | null
+          created_at: string
+          deleted: boolean
+          edit_sets_individually: boolean | null
+          exercise_id: string
+          exercise_order: number
+          id: string
+          notes: string | null
+          post_exercise_rest_seconds: number | null
+          rest_timer_enabled: boolean | null
+          rest_timer_seconds: number | null
+          updated_at: string
+          warmup_sets_enabled: boolean | null
+          workout_plan_day_id: string
+        }
+        Insert: {
+          auto_progression_enabled?: boolean | null
+          created_at?: string
+          deleted?: boolean
+          edit_sets_individually?: boolean | null
+          exercise_id: string
+          exercise_order: number
+          id?: string
+          notes?: string | null
+          post_exercise_rest_seconds?: number | null
+          rest_timer_enabled?: boolean | null
+          rest_timer_seconds?: number | null
+          updated_at?: string
+          warmup_sets_enabled?: boolean | null
+          workout_plan_day_id: string
+        }
+        Update: {
+          auto_progression_enabled?: boolean | null
+          created_at?: string
+          deleted?: boolean
+          edit_sets_individually?: boolean | null
+          exercise_id?: string
+          exercise_order?: number
+          id?: string
+          notes?: string | null
+          post_exercise_rest_seconds?: number | null
+          rest_timer_enabled?: boolean | null
+          rest_timer_seconds?: number | null
+          updated_at?: string
+          warmup_sets_enabled?: boolean | null
           workout_plan_day_id?: string
         }
         Relationships: [
@@ -607,32 +672,56 @@ export type Database = {
       }
       workout_plans: {
         Row: {
+          approximate_workout_minutes: number | null
           created_at: string
+          created_by: string | null
+          days_per_week: number | null
           deleted: boolean
           description: string | null
           goal: string | null
           id: string
+          is_active: boolean | null
           name: string
+          plan_type: string | null
+          recommended_week_duration: number | null
+          source_description: string | null
+          start_date: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          approximate_workout_minutes?: number | null
           created_at?: string
+          created_by?: string | null
+          days_per_week?: number | null
           deleted?: boolean
           description?: string | null
           goal?: string | null
           id?: string
+          is_active?: boolean | null
           name: string
+          plan_type?: string | null
+          recommended_week_duration?: number | null
+          source_description?: string | null
+          start_date?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          approximate_workout_minutes?: number | null
           created_at?: string
+          created_by?: string | null
+          days_per_week?: number | null
           deleted?: boolean
           description?: string | null
           goal?: string | null
           id?: string
+          is_active?: boolean | null
           name?: string
+          plan_type?: string | null
+          recommended_week_duration?: number | null
+          source_description?: string | null
+          start_date?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -834,6 +923,7 @@ export type Database = {
         | "pending"
         | "no_plan"
         | "no_workouts"
+      unit_type: "metric" | "imperial"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -970,6 +1060,7 @@ export const Constants = {
         "no_plan",
         "no_workouts",
       ],
+      unit_type: ["metric", "imperial"],
     },
   },
 } as const

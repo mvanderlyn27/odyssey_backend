@@ -259,7 +259,7 @@ async function _updateWorkoutPlanProgression(
   fastify.log.info(`Checking for progression on workout_plan_day_id: ${workoutPlanDayId}`);
   const { data: planDayExercises, error: pdeError } = await supabase
     .from("workout_plan_day_exercises")
-    .select("*")
+    .select("*, auto_progression_enabled") // Ensure auto_progression_enabled is selected
     .eq("workout_plan_day_id", workoutPlanDayId);
 
   if (pdeError) {
@@ -274,31 +274,80 @@ async function _updateWorkoutPlanProgression(
     fastify.log.info(`Found ${planDayExercises.length} exercises in plan day for progression check.`);
     for (const planDayEx of planDayExercises) {
       const setsForThisPlanExercise = loggedSets.filter((ls) => ls.exercise_id === planDayEx.exercise_id);
-      if (setsForThisPlanExercise.length === 0) continue;
+      if (setsForThisPlanExercise.length === 0) {
+        fastify.log.info(
+          `No logged sets for plan exercise ID ${planDayEx.id} (exercise_id: ${planDayEx.exercise_id}). Skipping progression for this exercise.`
+        );
+        continue;
+      }
 
-      let exerciseShouldProgress = true; // Assume progression unless a set is not successful
+      let wasOverallExerciseSuccessful = true;
       for (const set of setsForThisPlanExercise) {
         if (set.is_success !== true) {
-          exerciseShouldProgress = false;
+          wasOverallExerciseSuccessful = false;
           break;
         }
       }
 
-      if (exerciseShouldProgress && planDayEx.target_weight_increase && planDayEx.target_weight !== null) {
-        const newTargetWeight = planDayEx.target_weight + planDayEx.target_weight_increase;
-        fastify.log.info(
-          `Exercise ${planDayEx.exercise_id} was successful. Increasing target weight from ${planDayEx.target_weight} to ${newTargetWeight}.`
-        );
-        const { error: updatePdeError } = await supabase
-          .from("workout_plan_day_exercises")
-          .update({ target_weight: newTargetWeight })
-          .eq("id", planDayEx.id);
-        if (updatePdeError) {
-          fastify.log.error(
-            { error: updatePdeError, planDayExerciseId: planDayEx.id },
-            "Failed to update target_weight for plan day exercise."
+      if (planDayEx.auto_progression_enabled === true) {
+        if (wasOverallExerciseSuccessful) {
+          fastify.log.info(
+            `Auto-progression enabled and exercise ${planDayEx.exercise_id} (planDayEx ID: ${planDayEx.id}) was successful. Fetching its sets from workout_plan_day_exercise_sets.`
+          );
+          const { data: planExerciseSets, error: fetchSetsError } = await supabase
+            .from("workout_plan_day_exercise_sets")
+            .select("*")
+            .eq("workout_plan_exercise_id", planDayEx.id);
+
+          if (fetchSetsError) {
+            fastify.log.error(
+              { error: fetchSetsError, planDayExerciseId: planDayEx.id },
+              "Failed to fetch workout_plan_day_exercise_sets for progression."
+            );
+            continue; // Skip to next planDayEx
+          }
+
+          if (planExerciseSets && planExerciseSets.length > 0) {
+            for (const setInstance of planExerciseSets) {
+              if (
+                setInstance.target_weight_increase &&
+                setInstance.target_weight_increase > 0 &&
+                setInstance.target_weight !== null
+              ) {
+                const newTargetWeightForSet = setInstance.target_weight + setInstance.target_weight_increase;
+                fastify.log.info(
+                  `Increasing target_weight for set ${setInstance.id} (planDayEx ID: ${planDayEx.id}) from ${setInstance.target_weight} to ${newTargetWeightForSet}.`
+                );
+                const { error: updateSetError } = await supabase
+                  .from("workout_plan_day_exercise_sets")
+                  .update({ target_weight: newTargetWeightForSet })
+                  .eq("id", setInstance.id);
+
+                if (updateSetError) {
+                  fastify.log.error(
+                    { error: updateSetError, setId: setInstance.id },
+                    "Failed to update target_weight for workout_plan_day_exercise_set."
+                  );
+                }
+              } else {
+                fastify.log.info(
+                  `Set ${setInstance.id} (planDayEx ID: ${planDayEx.id}) does not have a valid target_weight_increase or target_weight. Skipping weight increase for this set.`
+                );
+              }
+            }
+          } else {
+            fastify.log.info(`No sets found in workout_plan_day_exercise_sets for planDayEx ID: ${planDayEx.id}.`);
+          }
+        } else {
+          fastify.log.info(
+            `Exercise ${planDayEx.exercise_id} (planDayEx ID: ${planDayEx.id}) was not entirely successful or auto_progression_enabled is not true. Skipping workout_plan_day_exercise_sets update.`
           );
         }
+      } else {
+        // If auto_progression_enabled is false or null, do nothing.
+        fastify.log.info(
+          `Auto-progression NOT enabled for planDayEx ID: ${planDayEx.id} (exercise_id: ${planDayEx.exercise_id}). Skipping progression updates for this exercise.`
+        );
       }
     }
   }
