@@ -4,6 +4,24 @@ import { WorkoutPlanSchema, WorkoutPlanDaySchema } from "./workoutPlansSchemas";
 import { ExerciseSchema } from "./exercisesSchemas"; // Import Exercise schema
 
 // --- Enums ---
+// Define RankLabelEnum based on database.ts
+export const RankLabelEnum = Type.Union(
+  // Added export
+  [
+    Type.Literal("F"),
+    Type.Literal("E"),
+    Type.Literal("D"),
+    Type.Literal("C"),
+    Type.Literal("B"),
+    Type.Literal("A"),
+    Type.Literal("S"),
+    Type.Literal("Elite"),
+    Type.Null(), // To represent cases where rank is not applicable or not yet achieved
+  ],
+  { $id: "RankLabelEnum", description: "Represents F-Elite ranking labels or null" }
+);
+export type RankLabelType = Static<typeof RankLabelEnum>; // Exporting the type for service usage
+
 const SessionStatusEnum = Type.Union(
   [
     Type.Literal("pending"),
@@ -134,6 +152,56 @@ export const NewFinishSessionBodySchema = Type.Object(
 );
 export type NewFinishSessionBody = Static<typeof NewFinishSessionBodySchema>;
 
+// Schemas for richer response details
+export const ExerciseRankUpSchema = Type.Object(
+  // Added export
+  {
+    exercise_id: Type.String({ format: "uuid" }),
+    exercise_name: Type.String(),
+    old_rank_label: Type.Ref(RankLabelEnum),
+    new_rank_label: Type.Ref(RankLabelEnum), // Should not be null if it's a rank up
+  },
+  { $id: "ExerciseRankUpSchema" }
+);
+
+export const MuscleGroupRankUpSchema = Type.Object(
+  // Added export
+  {
+    muscle_group_id: Type.String({ format: "uuid" }),
+    muscle_group_name: Type.String(),
+    old_rank_label: Type.Ref(RankLabelEnum),
+    new_rank_label: Type.Ref(RankLabelEnum), // Should not be null if it's a rank up
+  },
+  { $id: "MuscleGroupRankUpSchema" }
+);
+
+export const LoggedSetSummaryItemSchema = Type.Object(
+  // Added export
+  {
+    exercise_id: Type.String({ format: "uuid" }),
+    exercise_name: Type.String(),
+    set_order: Type.Integer(),
+    actual_reps: Type.Union([Type.Number(), Type.Null()]),
+    actual_weight_kg: Type.Union([Type.Number(), Type.Null()]),
+    is_success: Type.Union([Type.Boolean(), Type.Null()]),
+    calculated_1rm: Type.Union([Type.Number(), Type.Null()]),
+    calculated_swr: Type.Union([Type.Number(), Type.Null()]),
+  },
+  { $id: "LoggedSetSummaryItemSchema" }
+);
+
+export const PlanWeightIncreaseItemSchema = Type.Object(
+  // Added export
+  {
+    plan_day_exercise_id: Type.String({ format: "uuid" }),
+    exercise_name: Type.String(),
+    plan_set_order: Type.Integer(),
+    old_target_weight: Type.Number(),
+    new_target_weight: Type.Number(),
+  },
+  { $id: "PlanWeightIncreaseItemSchema" }
+);
+
 // Schema for the new detailed finish session response based on user feedback
 export const DetailedFinishSessionResponseSchema = Type.Object(
   {
@@ -148,6 +216,11 @@ export const DetailedFinishSessionResponseSchema = Type.Object(
     notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     overallFeeling: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Assuming string for now, could be OverallFeelingEnum
     exercisesPerformed: Type.String({ description: "Comma-separated list of unique exercise names performed." }),
+    // New fields for richer summary
+    exerciseRankUps: Type.Array(Type.Ref(ExerciseRankUpSchema)),
+    muscleGroupRankUps: Type.Array(Type.Ref(MuscleGroupRankUpSchema)),
+    loggedSetsSummary: Type.Array(Type.Ref(LoggedSetSummaryItemSchema)),
+    planWeightIncreases: Type.Array(Type.Ref(PlanWeightIncreaseItemSchema)),
   },
   {
     $id: "DetailedFinishSessionResponseSchema",

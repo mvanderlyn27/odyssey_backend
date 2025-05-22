@@ -578,8 +578,6 @@ export type Database = {
           id: string
           last_worked_date: string
           muscle_group_id: string
-          total_sets_last_session: number | null
-          total_volume_last_session: number | null
           updated_at: string
           user_id: string
           workout_session_id: string | null
@@ -589,8 +587,6 @@ export type Database = {
           id?: string
           last_worked_date: string
           muscle_group_id: string
-          total_sets_last_session?: number | null
-          total_volume_last_session?: number | null
           updated_at?: string
           user_id: string
           workout_session_id?: string | null
@@ -600,8 +596,6 @@ export type Database = {
           id?: string
           last_worked_date?: string
           muscle_group_id?: string
-          total_sets_last_session?: number | null
-          total_volume_last_session?: number | null
           updated_at?: string
           user_id?: string
           workout_session_id?: string | null
@@ -1068,11 +1062,15 @@ export type Database = {
           created_at: string
           deleted: boolean
           duration_seconds: number | null
+          exercises_performed_summary: string | null
           id: string
           notes: string | null
           session_name: string | null
           started_at: string
           status: string
+          total_reps: number | null
+          total_sets: number | null
+          total_volume_kg: number | null
           updated_at: string
           user_id: string
           workout_plan_day_id: string | null
@@ -1083,11 +1081,15 @@ export type Database = {
           created_at?: string
           deleted?: boolean
           duration_seconds?: number | null
+          exercises_performed_summary?: string | null
           id?: string
           notes?: string | null
           session_name?: string | null
           started_at?: string
           status?: string
+          total_reps?: number | null
+          total_sets?: number | null
+          total_volume_kg?: number | null
           updated_at?: string
           user_id: string
           workout_plan_day_id?: string | null
@@ -1098,11 +1100,15 @@ export type Database = {
           created_at?: string
           deleted?: boolean
           duration_seconds?: number | null
+          exercises_performed_summary?: string | null
           id?: string
           notes?: string | null
           session_name?: string | null
           started_at?: string
           status?: string
+          total_reps?: number | null
+          total_sets?: number | null
+          total_volume_kg?: number | null
           updated_at?: string
           user_id?: string
           workout_plan_day_id?: string | null

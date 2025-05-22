@@ -146,6 +146,12 @@ import {
   OverallFeelingEnum,
   SessionSetInputSchema, // Added for explicit registration
   SessionExerciseInputSchema, // Added for explicit registration
+  // New schemas for richer response
+  RankLabelEnum, // Enum itself for registration
+  ExerciseRankUpSchema,
+  MuscleGroupRankUpSchema,
+  LoggedSetSummaryItemSchema,
+  PlanWeightIncreaseItemSchema,
 } from "./schemas/workoutSessionsSchemas";
 
 // --- Import Route Handlers ---
@@ -346,10 +352,16 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   // Session Schemas (ensure dependencies are registered first)
   app.addSchema(OverallFeelingEnum); // Dependency for NewFinishSessionBodySchema
+  app.addSchema(RankLabelEnum); // Register RankLabelEnum itself
   app.addSchema(SessionSetInputSchema); // Dependency for SessionExerciseInputSchema
   app.addSchema(SessionExerciseInputSchema); // Dependency for NewFinishSessionBodySchema
   app.addSchema(NewFinishSessionBodySchema); // Uses SessionExerciseInputSchema & OverallFeelingEnum
-  app.addSchema(DetailedFinishSessionResponseSchema);
+  // New response detail schemas
+  app.addSchema(ExerciseRankUpSchema);
+  app.addSchema(MuscleGroupRankUpSchema);
+  app.addSchema(LoggedSetSummaryItemSchema);
+  app.addSchema(PlanWeightIncreaseItemSchema);
+  app.addSchema(DetailedFinishSessionResponseSchema); // Now includes Refs to the above
 
   // AI Coach Messages
   app.addSchema(PostChatBodySchema);
