@@ -61,6 +61,45 @@ export type Database = {
           },
         ]
       }
+      active_workout_sessions: {
+        Row: {
+          created_at: string
+          id: string
+          started_at: string | null
+          user_id: string
+          workout_session_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          started_at?: string | null
+          user_id: string
+          workout_session_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          started_at?: string | null
+          user_id?: string
+          workout_session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "active_workout_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "active_workout_sessions_workout_session_id_fkey"
+            columns: ["workout_session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       equipment: {
         Row: {
           created_at: string
@@ -139,7 +178,7 @@ export type Database = {
           deleted: boolean
           exercise_id: string
           id: string
-          intensity: string | null
+          intensity: Database["public"]["Enums"]["muscle_intensity"] | null
           muscle_group_id: string
           updated_at: string
         }
@@ -148,7 +187,7 @@ export type Database = {
           deleted?: boolean
           exercise_id: string
           id?: string
-          intensity?: string | null
+          intensity?: Database["public"]["Enums"]["muscle_intensity"] | null
           muscle_group_id: string
           updated_at?: string
         }
@@ -157,7 +196,7 @@ export type Database = {
           deleted?: boolean
           exercise_id?: string
           id?: string
-          intensity?: string | null
+          intensity?: Database["public"]["Enums"]["muscle_intensity"] | null
           muscle_group_id?: string
           updated_at?: string
         }
@@ -178,6 +217,44 @@ export type Database = {
           },
         ]
       }
+      exercise_swr_benchmarks: {
+        Row: {
+          benchmark_id: string
+          created_at: string | null
+          exercise_id: string
+          gender: Database["public"]["Enums"]["gender_enum"]
+          min_swr_threshold: number
+          rank_label: Database["public"]["Enums"]["rank_label"]
+          updated_at: string | null
+        }
+        Insert: {
+          benchmark_id?: string
+          created_at?: string | null
+          exercise_id: string
+          gender: Database["public"]["Enums"]["gender_enum"]
+          min_swr_threshold: number
+          rank_label: Database["public"]["Enums"]["rank_label"]
+          updated_at?: string | null
+        }
+        Update: {
+          benchmark_id?: string
+          created_at?: string | null
+          exercise_id?: string
+          gender?: Database["public"]["Enums"]["gender_enum"]
+          min_swr_threshold?: number
+          rank_label?: Database["public"]["Enums"]["rank_label"]
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_swr_benchmarks_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       exercises: {
         Row: {
           created_at: string
@@ -185,6 +262,7 @@ export type Database = {
           deleted: boolean
           description: string | null
           difficulty: string | null
+          exercise_type: Database["public"]["Enums"]["exercise_type"] | null
           id: string
           instructions: string | null
           is_public: boolean | null
@@ -198,6 +276,7 @@ export type Database = {
           deleted?: boolean
           description?: string | null
           difficulty?: string | null
+          exercise_type?: Database["public"]["Enums"]["exercise_type"] | null
           id?: string
           instructions?: string | null
           is_public?: boolean | null
@@ -211,6 +290,7 @@ export type Database = {
           deleted?: boolean
           description?: string | null
           difficulty?: string | null
+          exercise_type?: Database["public"]["Enums"]["exercise_type"] | null
           id?: string
           instructions?: string | null
           is_public?: boolean | null
@@ -220,83 +300,192 @@ export type Database = {
         }
         Relationships: []
       }
-      muscle_groups: {
+      muscle_group_swr_benchmarks: {
         Row: {
-          created_at: string
-          deleted: boolean
-          description: string | null
-          id: string
-          image_url: string | null
-          name: string
-          parent_muscle_group_id: string | null
-          updated_at: string
+          benchmark_id: string
+          created_at: string | null
+          gender: Database["public"]["Enums"]["gender_enum"]
+          min_swr_threshold: number
+          muscle_group_id: string
+          rank_label: Database["public"]["Enums"]["rank_label"]
+          updated_at: string | null
         }
         Insert: {
-          created_at?: string
-          deleted?: boolean
-          description?: string | null
-          id?: string
-          image_url?: string | null
-          name: string
-          parent_muscle_group_id?: string | null
-          updated_at?: string
+          benchmark_id?: string
+          created_at?: string | null
+          gender: Database["public"]["Enums"]["gender_enum"]
+          min_swr_threshold: number
+          muscle_group_id: string
+          rank_label: Database["public"]["Enums"]["rank_label"]
+          updated_at?: string | null
         }
         Update: {
-          created_at?: string
-          deleted?: boolean
-          description?: string | null
-          id?: string
-          image_url?: string | null
-          name?: string
-          parent_muscle_group_id?: string | null
-          updated_at?: string
+          benchmark_id?: string
+          created_at?: string | null
+          gender?: Database["public"]["Enums"]["gender_enum"]
+          min_swr_threshold?: number
+          muscle_group_id?: string
+          rank_label?: Database["public"]["Enums"]["rank_label"]
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "muscle_groups_parent_muscle_group_id_fkey"
-            columns: ["parent_muscle_group_id"]
+            foreignKeyName: "muscle_group_swr_benchmarks_muscle_group_id_fkey"
+            columns: ["muscle_group_id"]
             isOneToOne: false
             referencedRelation: "muscle_groups"
             referencedColumns: ["id"]
           },
         ]
       }
-      user_exercise_prs: {
+      muscle_groups: {
         Row: {
-          achieved_at: string
+          body_side: Database["public"]["Enums"]["enum_body_side"] | null
           created_at: string
           deleted: boolean
-          exercise_id: string
+          description: string | null
           id: string
-          pr_type: string
-          pr_value: number
+          image_url: string | null
+          muscle_group_key:
+            | Database["public"]["Enums"]["muscle_group_type"]
+            | null
+          name: string
           updated_at: string
-          user_id: string
-          workout_session_set_id: string | null
         }
         Insert: {
-          achieved_at: string
+          body_side?: Database["public"]["Enums"]["enum_body_side"] | null
           created_at?: string
           deleted?: boolean
-          exercise_id: string
+          description?: string | null
           id?: string
-          pr_type: string
-          pr_value: number
+          image_url?: string | null
+          muscle_group_key?:
+            | Database["public"]["Enums"]["muscle_group_type"]
+            | null
+          name: string
           updated_at?: string
-          user_id: string
-          workout_session_set_id?: string | null
         }
         Update: {
-          achieved_at?: string
+          body_side?: Database["public"]["Enums"]["enum_body_side"] | null
           created_at?: string
           deleted?: boolean
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          muscle_group_key?:
+            | Database["public"]["Enums"]["muscle_group_type"]
+            | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      muscles: {
+        Row: {
+          body_side: Database["public"]["Enums"]["enum_body_side"] | null
+          created_at: string
+          deleted: boolean | null
+          id: string
+          muscle_group_id: string | null
+          muscle_key: Database["public"]["Enums"]["muscle_type"] | null
+          name: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          body_side?: Database["public"]["Enums"]["enum_body_side"] | null
+          created_at?: string
+          deleted?: boolean | null
+          id?: string
+          muscle_group_id?: string | null
+          muscle_key?: Database["public"]["Enums"]["muscle_type"] | null
+          name?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          body_side?: Database["public"]["Enums"]["enum_body_side"] | null
+          created_at?: string
+          deleted?: boolean | null
+          id?: string
+          muscle_group_id?: string | null
+          muscle_key?: Database["public"]["Enums"]["muscle_type"] | null
+          name?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "muscles_muscle_group_id_fkey"
+            columns: ["muscle_group_id"]
+            isOneToOne: false
+            referencedRelation: "muscle_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_body_measurements: {
+        Row: {
+          body_weight: number | null
+          created_at: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          body_weight?: number | null
+          created_at?: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          body_weight?: number | null
+          created_at?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_body_measurements_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_exercise_prs: {
+        Row: {
+          achieved_at: string | null
+          best_1rm: number | null
+          best_swr: number | null
+          created_at: string | null
+          current_rank_label: Database["public"]["Enums"]["rank_label"] | null
+          exercise_id: string
+          id: string
+          source_set_id: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          achieved_at?: string | null
+          best_1rm?: number | null
+          best_swr?: number | null
+          created_at?: string | null
+          current_rank_label?: Database["public"]["Enums"]["rank_label"] | null
+          exercise_id: string
+          id?: string
+          source_set_id?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          achieved_at?: string | null
+          best_1rm?: number | null
+          best_swr?: number | null
+          created_at?: string | null
+          current_rank_label?: Database["public"]["Enums"]["rank_label"] | null
           exercise_id?: string
           id?: string
-          pr_type?: string
-          pr_value?: number
-          updated_at?: string
+          source_set_id?: string | null
+          updated_at?: string | null
           user_id?: string
-          workout_session_set_id?: string | null
         }
         Relationships: [
           {
@@ -307,10 +496,78 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_exercise_prs_workout_session_set_id_fkey"
-            columns: ["workout_session_set_id"]
+            foreignKeyName: "user_exercise_prs_source_set_id_fkey"
+            columns: ["source_set_id"]
             isOneToOne: false
             referencedRelation: "workout_session_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_prs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_muscle_group_scores: {
+        Row: {
+          achieved_at: string | null
+          contributing_exercise_id: string | null
+          contributing_exercise_swr: number | null
+          created_at: string | null
+          current_rank_label: Database["public"]["Enums"]["rank_label"] | null
+          id: string
+          muscle_group_id: string
+          muscle_group_swr_score: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          achieved_at?: string | null
+          contributing_exercise_id?: string | null
+          contributing_exercise_swr?: number | null
+          created_at?: string | null
+          current_rank_label?: Database["public"]["Enums"]["rank_label"] | null
+          id?: string
+          muscle_group_id: string
+          muscle_group_swr_score?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          achieved_at?: string | null
+          contributing_exercise_id?: string | null
+          contributing_exercise_swr?: number | null
+          created_at?: string | null
+          current_rank_label?: Database["public"]["Enums"]["rank_label"] | null
+          id?: string
+          muscle_group_id?: string
+          muscle_group_swr_score?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_muscle_group_scores_contributing_exercise_id_fkey"
+            columns: ["contributing_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_muscle_group_scores_muscle_group_id_fkey"
+            columns: ["muscle_group_id"]
+            isOneToOne: false
+            referencedRelation: "muscle_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_muscle_group_scores_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -372,8 +629,6 @@ export type Database = {
           id: string
           muscle_group_id: string
           muscle_rank: string
-          total_sets_last_session: number | null
-          total_volume_last_session: number | null
           updated_at: string
           user_id: string
           workout_session_id: string | null
@@ -383,8 +638,6 @@ export type Database = {
           id?: string
           muscle_group_id: string
           muscle_rank: string
-          total_sets_last_session?: number | null
-          total_volume_last_session?: number | null
           updated_at?: string
           user_id: string
           workout_session_id?: string | null
@@ -394,8 +647,6 @@ export type Database = {
           id?: string
           muscle_group_id?: string
           muscle_rank?: string
-          total_sets_last_session?: number | null
-          total_volume_last_session?: number | null
           updated_at?: string
           user_id?: string
           workout_session_id?: string | null
@@ -425,9 +676,10 @@ export type Database = {
           deleted: boolean
           experience_points: number
           full_name: string | null
-          gender: string | null
+          gender: Database["public"]["Enums"]["gender"] | null
           id: string
           onboard_complete: boolean
+          reset_persist: boolean
           theme_preference: string | null
           updated_at: string
           username: string | null
@@ -440,9 +692,10 @@ export type Database = {
           deleted?: boolean
           experience_points?: number
           full_name?: string | null
-          gender?: string | null
+          gender?: Database["public"]["Enums"]["gender"] | null
           id: string
           onboard_complete?: boolean
+          reset_persist?: boolean
           theme_preference?: string | null
           updated_at?: string
           username?: string | null
@@ -455,9 +708,10 @@ export type Database = {
           deleted?: boolean
           experience_points?: number
           full_name?: string | null
-          gender?: string | null
+          gender?: Database["public"]["Enums"]["gender"] | null
           id?: string
           onboard_complete?: boolean
+          reset_persist?: boolean
           theme_preference?: string | null
           updated_at?: string
           username?: string | null
@@ -672,6 +926,7 @@ export type Database = {
       }
       workout_plans: {
         Row: {
+          admin_plan: boolean
           approximate_workout_minutes: number | null
           created_at: string
           created_by: string | null
@@ -690,6 +945,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          admin_plan?: boolean
           approximate_workout_minutes?: number | null
           created_at?: string
           created_by?: string | null
@@ -708,6 +964,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          admin_plan?: boolean
           approximate_workout_minutes?: number | null
           created_at?: string
           created_by?: string | null
@@ -731,6 +988,8 @@ export type Database = {
         Row: {
           actual_reps: number | null
           actual_weight_kg: number | null
+          calculated_1rm: number | null
+          calculated_swr: number | null
           deleted: boolean
           exercise_id: string
           id: string
@@ -749,6 +1008,8 @@ export type Database = {
         Insert: {
           actual_reps?: number | null
           actual_weight_kg?: number | null
+          calculated_1rm?: number | null
+          calculated_swr?: number | null
           deleted?: boolean
           exercise_id: string
           id?: string
@@ -767,6 +1028,8 @@ export type Database = {
         Update: {
           actual_reps?: number | null
           actual_weight_kg?: number | null
+          calculated_1rm?: number | null
+          calculated_swr?: number | null
           deleted?: boolean
           exercise_id?: string
           id?: string
@@ -904,7 +1167,84 @@ export type Database = {
       }
     }
     Enums: {
+      enum_body_side: "left" | "right" | "center" | "front" | "back"
+      exercise_type:
+        | "cardio"
+        | "N/A"
+        | "body_weight"
+        | "free_weights"
+        | "barbell"
+        | "calisthenics"
+        | "machine"
+      gender: "male" | "female"
+      gender_enum: "male" | "female"
       meal_type: "breakfast" | "lunch" | "dinner" | "snack"
+      muscle_group_type:
+        | "BackLeftHead"
+        | "BackLeftNeck"
+        | "BackLeftTrapezius"
+        | "BackLeftLatissimusDorsi"
+        | "BackLeftInfraspinatus"
+        | "BackLeftDeltoid"
+        | "BackLeftTriceps"
+        | "BackLeftForearm"
+        | "BackLeftHand"
+        | "BackLeftGlutes"
+        | "BackLeftHamstrings"
+        | "BackLeftKnee"
+        | "BackLeftCalves"
+        | "BackLeftShin"
+        | "BackLeftFoot"
+        | "BackLeftFiller"
+        | "BackRightHead"
+        | "BackRightNeck"
+        | "BackRightTrapezius"
+        | "BackRightLatissimusDorsi"
+        | "BackRightInfraspinatus"
+        | "BackRightDeltoid"
+        | "BackRightTriceps"
+        | "BackRightForearm"
+        | "BackRightHand"
+        | "BackRightGlutes"
+        | "BackRightHamstrings"
+        | "BackRightKnee"
+        | "BackRightCalves"
+        | "BackRightShin"
+        | "BackRightFoot"
+        | "BackRightFiller"
+        | "FrontLeftHead"
+        | "FrontLeftNeck"
+        | "FrontLeftTrapezius"
+        | "FrontLeftChest"
+        | "FrontLeftDeltoid"
+        | "FrontLeftBicep"
+        | "FrontLeftForearm"
+        | "FrontLeftHand"
+        | "FrontLeftUpperAbs"
+        | "FrontLeftLowerAbs"
+        | "FrontLeftObliques"
+        | "FrontLeftQuadriceps"
+        | "FrontLeftKnee"
+        | "FrontLeftCalves"
+        | "FrontLeftShin"
+        | "FrontLeftFoot"
+        | "FrontRightHead"
+        | "FrontRightNeck"
+        | "FrontRightTrapezius"
+        | "FrontRightChest"
+        | "FrontRightDeltoid"
+        | "FrontRightBicep"
+        | "FrontRightForearm"
+        | "FrontRightHand"
+        | "FrontRightUpperAbs"
+        | "FrontRightLowerAbs"
+        | "FrontRightObliques"
+        | "FrontRightQuadriceps"
+        | "FrontRightKnee"
+        | "FrontRightCalves"
+        | "FrontRightShin"
+        | "FrontRightFoot"
+      muscle_intensity: "primary" | "secondary" | "accessory"
       muscle_rank:
         | "Neophyte"
         | "Adept"
@@ -913,6 +1253,128 @@ export type Database = {
         | "Master"
         | "Champion"
         | "Legend"
+      muscle_type:
+        | "BackLeftFoot"
+        | "BackLeftShin2"
+        | "BackLeftShin1"
+        | "BackLeftCalve2"
+        | "BackLeftCalve1"
+        | "BackLeftKneeFiller"
+        | "BackLeftSemitendinosus"
+        | "BackLeftBicepsFemoris"
+        | "BackLeftAdductorMagnus"
+        | "BackLeftIlotibialBand1"
+        | "BackLeftIlotibialBand2"
+        | "BackLeftGluteusMaximus"
+        | "BackLeftGluteusMedius"
+        | "BackLeftLatissimusDorsi3"
+        | "BackLeftLatissimusDorsi2"
+        | "BackLeftLatissimusDorsi1"
+        | "BackLeftInfraspinatus"
+        | "BackLeftHand"
+        | "BackLeftForearm"
+        | "BackLeftLateralHead"
+        | "BackLeftBrachiiLongHead"
+        | "BackLeftMedialHead"
+        | "BackLeftDeltoid"
+        | "BackLeftTrapezius"
+        | "BackLeftFiller"
+        | "BackLeftNeck"
+        | "BackLeftHead"
+        | "BackRightFoot"
+        | "BackRightShin2"
+        | "BackRightShin1"
+        | "BackRightCalve2"
+        | "BackRightCalve1"
+        | "BackRightKneeFiller"
+        | "BackRightSemitendinosus"
+        | "BackRightBicepsFemoris"
+        | "BackRightAdductorMagnus"
+        | "BackRightIlotibialBand1"
+        | "BackRightIlotibialBand2"
+        | "BackRightGluteusMaximus"
+        | "BackRightGluteusMedius"
+        | "BackRightLatissimusDorsi3"
+        | "BackRightLatissimusDorsi2"
+        | "BackRightLatissimusDorsi1"
+        | "BackRightInfraspinatus"
+        | "BackRightHand"
+        | "BackRightForearm"
+        | "BackRightLateralHead"
+        | "BackRightBrachiiLongHead"
+        | "BackRightMedialHead"
+        | "BackRightDeltoid"
+        | "BackRightTrapezius"
+        | "BackRightFiller"
+        | "BackRightNeck"
+        | "BackRightHead"
+        | "FrontRightFoot"
+        | "FrontRightGastrocnemius"
+        | "FrontRightPeroneusLongus"
+        | "FrontRightShin"
+        | "FrontRightKnee4"
+        | "FrontRightKnee3"
+        | "FrontRightKnee2"
+        | "FrontRightKnee1"
+        | "FrontRightVastusLateralis"
+        | "FrontRightVastusMedialis"
+        | "FrontRightRectusFemoris"
+        | "FrontRightSartorius"
+        | "FrontRightTensorFasciaeLatae"
+        | "FrontRightInnerThigh"
+        | "FrontRightRectusAbdominis"
+        | "FrontRightTendinousInscriptions"
+        | "FrontRightAbs2"
+        | "FrontRightAbs1"
+        | "FrontRightWaist2"
+        | "FrontRightExternalOblique2"
+        | "FrontRightExternalOblique1"
+        | "FrontRightSerratusAnterior"
+        | "FrontRightHand"
+        | "FrontRightBrachioradialis"
+        | "FrontRightPalmarisLongus"
+        | "FrontRightBicep"
+        | "FrontRightDeltoid"
+        | "FrontRightChestFiller2"
+        | "FrontRightChestFiller1"
+        | "FrontRightChest2"
+        | "FrontRightTrapezius"
+        | "FrontRightNeck"
+        | "FrontRightHead"
+        | "FrontLeftFoot"
+        | "FrontLeftGastrocnemius"
+        | "FrontLeftPeroneusLongus"
+        | "FrontLeftShin"
+        | "FrontLeftKnee4"
+        | "FrontLeftKnee3"
+        | "FrontLeftKnee2"
+        | "FrontLeftKnee1"
+        | "FrontLeftVastusLateralis"
+        | "FrontLeftVastusMedialis"
+        | "FrontLeftRectusFemoris"
+        | "FrontLeftSartorius"
+        | "FrontLeftTensorFasciaeLatae"
+        | "FrontLeftInnerThigh"
+        | "FrontLeftRectusAbdominis"
+        | "FrontLeftTendinousInscriptions"
+        | "FrontLeftAbs2"
+        | "FrontLeftAbs1"
+        | "FrontLeftWaist"
+        | "FrontLeftExternalOblique2"
+        | "FrontLeftExternalOblique1"
+        | "FrontLeftSerratusAnterior"
+        | "FrontLeftHand"
+        | "FrontLeftBrachioradialis"
+        | "FrontLeftPalmarisLongus"
+        | "FrontLeftBicep"
+        | "FrontLeftDeltoid"
+        | "FrontLeftChestFiller2"
+        | "FrontLeftChestFiller1"
+        | "FrontLeftChest"
+        | "FrontLeftTrapezius"
+        | "FrontLeftNeck"
+        | "FrontLeftHead"
+      rank_label: "F" | "E" | "D" | "C" | "B" | "A" | "S" | "Elite"
       session_status:
         | "active"
         | "paused"
@@ -1039,7 +1501,86 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      enum_body_side: ["left", "right", "center", "front", "back"],
+      exercise_type: [
+        "cardio",
+        "N/A",
+        "body_weight",
+        "free_weights",
+        "barbell",
+        "calisthenics",
+        "machine",
+      ],
+      gender: ["male", "female"],
+      gender_enum: ["male", "female"],
       meal_type: ["breakfast", "lunch", "dinner", "snack"],
+      muscle_group_type: [
+        "BackLeftHead",
+        "BackLeftNeck",
+        "BackLeftTrapezius",
+        "BackLeftLatissimusDorsi",
+        "BackLeftInfraspinatus",
+        "BackLeftDeltoid",
+        "BackLeftTriceps",
+        "BackLeftForearm",
+        "BackLeftHand",
+        "BackLeftGlutes",
+        "BackLeftHamstrings",
+        "BackLeftKnee",
+        "BackLeftCalves",
+        "BackLeftShin",
+        "BackLeftFoot",
+        "BackLeftFiller",
+        "BackRightHead",
+        "BackRightNeck",
+        "BackRightTrapezius",
+        "BackRightLatissimusDorsi",
+        "BackRightInfraspinatus",
+        "BackRightDeltoid",
+        "BackRightTriceps",
+        "BackRightForearm",
+        "BackRightHand",
+        "BackRightGlutes",
+        "BackRightHamstrings",
+        "BackRightKnee",
+        "BackRightCalves",
+        "BackRightShin",
+        "BackRightFoot",
+        "BackRightFiller",
+        "FrontLeftHead",
+        "FrontLeftNeck",
+        "FrontLeftTrapezius",
+        "FrontLeftChest",
+        "FrontLeftDeltoid",
+        "FrontLeftBicep",
+        "FrontLeftForearm",
+        "FrontLeftHand",
+        "FrontLeftUpperAbs",
+        "FrontLeftLowerAbs",
+        "FrontLeftObliques",
+        "FrontLeftQuadriceps",
+        "FrontLeftKnee",
+        "FrontLeftCalves",
+        "FrontLeftShin",
+        "FrontLeftFoot",
+        "FrontRightHead",
+        "FrontRightNeck",
+        "FrontRightTrapezius",
+        "FrontRightChest",
+        "FrontRightDeltoid",
+        "FrontRightBicep",
+        "FrontRightForearm",
+        "FrontRightHand",
+        "FrontRightUpperAbs",
+        "FrontRightLowerAbs",
+        "FrontRightObliques",
+        "FrontRightQuadriceps",
+        "FrontRightKnee",
+        "FrontRightCalves",
+        "FrontRightShin",
+        "FrontRightFoot",
+      ],
+      muscle_intensity: ["primary", "secondary", "accessory"],
       muscle_rank: [
         "Neophyte",
         "Adept",
@@ -1049,6 +1590,129 @@ export const Constants = {
         "Champion",
         "Legend",
       ],
+      muscle_type: [
+        "BackLeftFoot",
+        "BackLeftShin2",
+        "BackLeftShin1",
+        "BackLeftCalve2",
+        "BackLeftCalve1",
+        "BackLeftKneeFiller",
+        "BackLeftSemitendinosus",
+        "BackLeftBicepsFemoris",
+        "BackLeftAdductorMagnus",
+        "BackLeftIlotibialBand1",
+        "BackLeftIlotibialBand2",
+        "BackLeftGluteusMaximus",
+        "BackLeftGluteusMedius",
+        "BackLeftLatissimusDorsi3",
+        "BackLeftLatissimusDorsi2",
+        "BackLeftLatissimusDorsi1",
+        "BackLeftInfraspinatus",
+        "BackLeftHand",
+        "BackLeftForearm",
+        "BackLeftLateralHead",
+        "BackLeftBrachiiLongHead",
+        "BackLeftMedialHead",
+        "BackLeftDeltoid",
+        "BackLeftTrapezius",
+        "BackLeftFiller",
+        "BackLeftNeck",
+        "BackLeftHead",
+        "BackRightFoot",
+        "BackRightShin2",
+        "BackRightShin1",
+        "BackRightCalve2",
+        "BackRightCalve1",
+        "BackRightKneeFiller",
+        "BackRightSemitendinosus",
+        "BackRightBicepsFemoris",
+        "BackRightAdductorMagnus",
+        "BackRightIlotibialBand1",
+        "BackRightIlotibialBand2",
+        "BackRightGluteusMaximus",
+        "BackRightGluteusMedius",
+        "BackRightLatissimusDorsi3",
+        "BackRightLatissimusDorsi2",
+        "BackRightLatissimusDorsi1",
+        "BackRightInfraspinatus",
+        "BackRightHand",
+        "BackRightForearm",
+        "BackRightLateralHead",
+        "BackRightBrachiiLongHead",
+        "BackRightMedialHead",
+        "BackRightDeltoid",
+        "BackRightTrapezius",
+        "BackRightFiller",
+        "BackRightNeck",
+        "BackRightHead",
+        "FrontRightFoot",
+        "FrontRightGastrocnemius",
+        "FrontRightPeroneusLongus",
+        "FrontRightShin",
+        "FrontRightKnee4",
+        "FrontRightKnee3",
+        "FrontRightKnee2",
+        "FrontRightKnee1",
+        "FrontRightVastusLateralis",
+        "FrontRightVastusMedialis",
+        "FrontRightRectusFemoris",
+        "FrontRightSartorius",
+        "FrontRightTensorFasciaeLatae",
+        "FrontRightInnerThigh",
+        "FrontRightRectusAbdominis",
+        "FrontRightTendinousInscriptions",
+        "FrontRightAbs2",
+        "FrontRightAbs1",
+        "FrontRightWaist2",
+        "FrontRightExternalOblique2",
+        "FrontRightExternalOblique1",
+        "FrontRightSerratusAnterior",
+        "FrontRightHand",
+        "FrontRightBrachioradialis",
+        "FrontRightPalmarisLongus",
+        "FrontRightBicep",
+        "FrontRightDeltoid",
+        "FrontRightChestFiller2",
+        "FrontRightChestFiller1",
+        "FrontRightChest2",
+        "FrontRightTrapezius",
+        "FrontRightNeck",
+        "FrontRightHead",
+        "FrontLeftFoot",
+        "FrontLeftGastrocnemius",
+        "FrontLeftPeroneusLongus",
+        "FrontLeftShin",
+        "FrontLeftKnee4",
+        "FrontLeftKnee3",
+        "FrontLeftKnee2",
+        "FrontLeftKnee1",
+        "FrontLeftVastusLateralis",
+        "FrontLeftVastusMedialis",
+        "FrontLeftRectusFemoris",
+        "FrontLeftSartorius",
+        "FrontLeftTensorFasciaeLatae",
+        "FrontLeftInnerThigh",
+        "FrontLeftRectusAbdominis",
+        "FrontLeftTendinousInscriptions",
+        "FrontLeftAbs2",
+        "FrontLeftAbs1",
+        "FrontLeftWaist",
+        "FrontLeftExternalOblique2",
+        "FrontLeftExternalOblique1",
+        "FrontLeftSerratusAnterior",
+        "FrontLeftHand",
+        "FrontLeftBrachioradialis",
+        "FrontLeftPalmarisLongus",
+        "FrontLeftBicep",
+        "FrontLeftDeltoid",
+        "FrontLeftChestFiller2",
+        "FrontLeftChestFiller1",
+        "FrontLeftChest",
+        "FrontLeftTrapezius",
+        "FrontLeftNeck",
+        "FrontLeftHead",
+      ],
+      rank_label: ["F", "E", "D", "C", "B", "A", "S", "Elite"],
       session_status: [
         "active",
         "paused",

@@ -85,8 +85,8 @@ export const SessionSetInputSchema = Type.Object(
     planned_min_reps: Type.Optional(Type.Integer({ minimum: 0 })), // New field
     planned_max_reps: Type.Optional(Type.Integer({ minimum: 0 })), // New field
     target_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-    actual_reps: Type.Integer(),
-    actual_weight_kg: Type.Number(),
+    actual_reps: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+    actual_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     is_completed: Type.Boolean(),
     is_success: Type.Optional(Type.Boolean()), // Replaces is_failure, matches DB
     is_warmup: Type.Optional(Type.Boolean()),
