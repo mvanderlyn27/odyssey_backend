@@ -526,7 +526,8 @@ async function _updateUserExerciseAndMuscleGroupRanks(
     const { data: emgData, error: emgError } = await supabase
       .from("exercise_muscle_groups")
       .select("muscle_group_id, muscle_groups (name)") // Fetch name for response
-      .in("exercise_id", allSessionExIdsForMg);
+      .in("exercise_id", allSessionExIdsForMg)
+      .eq("intenstiy", "primary");
     if (emgError)
       fastify.log.error({ error: emgError }, "[RANK_UPDATE_OPTIMIZED] Error fetching exercise_muscle_groups.");
     else
