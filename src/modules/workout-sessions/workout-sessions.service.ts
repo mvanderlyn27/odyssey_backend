@@ -1,6 +1,7 @@
 import { FastifyInstance } from "fastify";
-import { SupabaseClient, PostgrestError } from "@supabase/supabase-js";
+import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Tables, TablesInsert, TablesUpdate } from "../../types/database";
+import { XpService, XPUpdateResult } from "../xp/xp.service"; // Added import
 import {
   NewFinishSessionBody,
   DetailedFinishSessionResponse,
@@ -123,18 +124,42 @@ type WorkoutSessionSetInsert = TablesInsert<"workout_session_sets">;
 // };
 type UserExercisePrInsert = TablesInsert<"user_exercise_prs">;
 
+// Input data for progression logic, sourced directly from finishData
+type SetProgressionInput = {
+  exercise_id: string;
+  exercise_name?: string | null;
+  workout_plan_day_exercise_id?: string | null; // From SessionExerciseInput, used for logging/grouping
+  workout_plan_day_exercise_sets_id?: string | null; // From SessionSetInput, crucial for identifying plan set to update
+  set_order: number; // From SessionSetInput (order_index)
+  planned_weight_kg?: number | null; // From SessionSetInput, base for progression calc
+  planned_weight_increase_kg?: number | null; // From SessionSetInput, the increment
+  is_success?: boolean | null; // From SessionSetInput
+};
+
 // For data prepared before DB insertion
 type SetPayloadPreamble = Omit<TablesInsert<"workout_session_sets">, "workout_session_id"> & {
-  exercise_name?: string; // For summary
+  exercise_name?: string; // For summary, not a DB field on workout_session_sets
 };
 
 type PreparedWorkoutData = {
   sessionInsertPayload: TablesInsert<"workout_sessions">;
-  setInsertPayloads: SetPayloadPreamble[]; // Use the new preamble type
+  setInsertPayloads: SetPayloadPreamble[]; // For inserting into workout_session_sets
+  setsProgressionInputData: SetProgressionInput[]; // New: For _updateWorkoutPlanProgression
   userProfile: Tables<"user_profiles">;
   userBodyweight: number | null;
-  // Pass along enriched sets for subsequent processing if needed, beyond just DB payloads
-  processedEnrichedSets: (Tables<"workout_session_sets"> & { exercise_name?: string })[];
+  exerciseDetailsMap: Map<string, { id: string; name: string }>;
+  // For exercise_muscle_groups, ensure you fetch muscle_groups(id, name) for richer data
+  exerciseMuscleGroupMappings: (Tables<"exercise_muscle_groups"> & {
+    muscle_groups: Pick<Tables<"muscle_groups">, "id" | "name"> | null;
+  })[];
+  existingUserExercisePRs: Map<
+    string,
+    Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "current_rank_label">
+  >;
+  // For muscle group scores, we'll fetch them based on muscle_group_ids derived from exerciseMuscleGroupMappings
+  // This might be better fetched in the rank update function itself after identifying unique MGs.
+  // For now, let's defer fetching existingUserMuscleGroupScores here to avoid complexity if MGs aren't known yet.
+  // existingUserMuscleGroupScores: Map<string, Pick<Tables<"user_muscle_group_scores">, "muscle_group_id" | "muscle_group_swr_score" | "current_rank_label">>;
 };
 
 /**
@@ -153,24 +178,40 @@ async function _gatherAndPrepareWorkoutData(
   fastify.log.info(`[PREPARE_WORKOUT_DATA] Starting for user: ${userId}`, { finishData });
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
-  // 1. Fetch User Profile and Bodyweight concurrently
-  const [profileResult, bodyWeightResult, exercisesResult] = await Promise.all([
-    supabase.from("user_profiles").select("*").eq("id", userId).single(),
-    supabase
-      .from("user_body_measurements")
-      .select("body_weight")
-      .eq("user_id", userId)
-      .lte("created_at", finishData.ended_at) // Use ended_at as the reference for bodyweight
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+  const sessionExerciseIds =
     finishData.exercises && finishData.exercises.length > 0
-      ? supabase
-          .from("exercises")
-          .select("id, name")
-          .in("id", Array.from(new Set(finishData.exercises.map((ex) => ex.exercise_id))))
-      : Promise.resolve({ data: [], error: null }),
-  ]);
+      ? Array.from(new Set(finishData.exercises.map((ex) => ex.exercise_id)))
+      : [];
+
+  // 1. Fetch User Profile, Bodyweight, Exercise Details, EMG Mappings, and Existing PRs concurrently
+  const [profileResult, bodyWeightResult, exercisesDataResult, emgMappingsResult, existingExercisePRsResult] =
+    await Promise.all([
+      supabase.from("user_profiles").select("*").eq("id", userId).single(),
+      supabase
+        .from("user_body_measurements")
+        .select("body_weight")
+        .eq("user_id", userId)
+        .lte("created_at", finishData.ended_at)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      sessionExerciseIds.length > 0
+        ? supabase.from("exercises").select("id, name").in("id", sessionExerciseIds)
+        : Promise.resolve({ data: [], error: null }),
+      sessionExerciseIds.length > 0
+        ? supabase
+            .from("exercise_muscle_groups")
+            .select("*, muscle_groups (id, name)") // Fetch related muscle group name
+            .in("exercise_id", sessionExerciseIds)
+        : Promise.resolve({ data: [], error: null }),
+      sessionExerciseIds.length > 0
+        ? supabase
+            .from("user_exercise_prs")
+            .select("exercise_id, best_swr, current_rank_label")
+            .eq("user_id", userId)
+            .in("exercise_id", sessionExerciseIds)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
 
   if (profileResult.error || !profileResult.data) {
     fastify.log.error({ error: profileResult.error, userId }, "[PREPARE_WORKOUT_DATA] Failed to fetch user profile.");
@@ -183,7 +224,6 @@ async function _gatherAndPrepareWorkoutData(
       { error: bodyWeightResult.error, userId },
       "[PREPARE_WORKOUT_DATA] Error fetching user bodyweight. SWR calculations may be null."
     );
-    // Continue, SWR will be null
   }
   const userBodyweight = bodyWeightResult.data?.body_weight ?? null;
   if (userBodyweight === null) {
@@ -193,17 +233,45 @@ async function _gatherAndPrepareWorkoutData(
     );
   }
 
-  const exerciseIdToNameMap = new Map<string, string>();
-  if (exercisesResult.error) {
-    fastify.log.error({ error: exercisesResult.error }, "[PREPARE_WORKOUT_DATA] Error fetching exercise names.");
-    // Continue, names will be missing in summary
-  } else if (exercisesResult.data) {
-    exercisesResult.data.forEach((ex) => exerciseIdToNameMap.set(ex.id, ex.name));
+  const exerciseDetailsMap = new Map<string, { id: string; name: string }>();
+  if (exercisesDataResult.error) {
+    fastify.log.error({ error: exercisesDataResult.error }, "[PREPARE_WORKOUT_DATA] Error fetching exercise names.");
+  } else if (exercisesDataResult.data) {
+    exercisesDataResult.data.forEach((ex) => exerciseDetailsMap.set(ex.id, ex));
+  }
+
+  let exerciseMuscleGroupMappings: (Tables<"exercise_muscle_groups"> & {
+    muscle_groups: Pick<Tables<"muscle_groups">, "id" | "name"> | null;
+  })[] = [];
+  if (emgMappingsResult.error) {
+    fastify.log.error({ error: emgMappingsResult.error }, "[PREPARE_WORKOUT_DATA] Error fetching EMG mappings.");
+  } else if (emgMappingsResult.data) {
+    exerciseMuscleGroupMappings = emgMappingsResult.data as (Tables<"exercise_muscle_groups"> & {
+      muscle_groups: Pick<Tables<"muscle_groups">, "id" | "name"> | null;
+    })[];
+  }
+
+  const existingUserExercisePRs = new Map<
+    string,
+    Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "current_rank_label">
+  >();
+  if (existingExercisePRsResult.error) {
+    fastify.log.error(
+      { error: existingExercisePRsResult.error },
+      "[PREPARE_WORKOUT_DATA] Error fetching existing exercise PRs."
+    );
+  } else if (existingExercisePRsResult.data) {
+    existingExercisePRsResult.data.forEach((pr) => {
+      if (pr.exercise_id) {
+        // Ensure exercise_id is not null
+        existingUserExercisePRs.set(pr.exercise_id, pr);
+      }
+    });
   }
 
   // 2. In-Memory Calculations for Sets and Session Aggregates
-  const setInsertPayloads: SetPayloadPreamble[] = []; // Use the new preamble type
-  const processedEnrichedSetsForRankCalc: (Tables<"workout_session_sets"> & { exercise_name?: string })[] = []; // For rank calc
+  const setInsertPayloads: SetPayloadPreamble[] = []; // For DB insertion into workout_session_sets
+  const setsProgressionInputArray: SetProgressionInput[] = []; // For passing to _updateWorkoutPlanProgression
 
   let calculatedTotalSets = 0;
   let calculatedTotalReps = 0;
@@ -212,7 +280,8 @@ async function _gatherAndPrepareWorkoutData(
 
   if (finishData.exercises) {
     finishData.exercises.forEach((exercise) => {
-      const exerciseName = exerciseIdToNameMap.get(exercise.exercise_id) ?? "Unknown Exercise";
+      const exerciseDetail = exerciseDetailsMap.get(exercise.exercise_id);
+      const exerciseName = exerciseDetail?.name ?? "Unknown Exercise";
       if (exercise.sets.length > 0 && exerciseName !== "Unknown Exercise") {
         performedExerciseNamesForSummary.add(exerciseName);
       }
@@ -239,18 +308,30 @@ async function _gatherAndPrepareWorkoutData(
           notes: set.user_notes ?? exercise.user_notes ?? null,
           planned_min_reps: set.planned_min_reps,
           planned_max_reps: set.planned_max_reps,
-          planned_weight_kg: set.target_weight_kg,
+          planned_weight_kg: set.planned_weight_kg,
           is_success: set.is_success,
           is_warmup: set.is_warmup,
           rest_seconds_taken: set.rest_time_seconds,
           performed_at: finishData.ended_at, // All sets marked with session end time
           calculated_1rm: calculated_1rm,
           calculated_swr: calculated_swr,
-          exercise_name: exerciseName, // For immediate use if needed, not a DB field for sets
+          // exercise_name is for local use, not a DB field on workout_session_sets
+          // planned_weight_increase_kg is NOT part of workout_session_sets table anymore
+          // workout_plan_day_exercise_sets_id is NOT part of workout_session_sets table anymore
         };
         setInsertPayloads.push(setPayload);
-        // For rank calculation, we'll need the DB version of the set later, but this structure is close
-        // We'll reconstruct this from `persistedSessionSets` which will have DB IDs.
+
+        // Populate the new array for progression logic, taking data directly from `set` (frontend input)
+        setsProgressionInputArray.push({
+          exercise_id: exercise.exercise_id,
+          exercise_name: exerciseName,
+          workout_plan_day_exercise_id: exercise.workout_plan_day_exercise_id,
+          workout_plan_day_exercise_sets_id: set.workout_plan_day_exercise_sets_id ?? null,
+          set_order: set.order_index,
+          planned_weight_kg: set.planned_weight_kg ?? null,
+          planned_weight_increase_kg: set.planned_weight_increase_kg ?? null,
+          is_success: set.is_success ?? null,
+        });
       });
     });
   }
@@ -284,15 +365,6 @@ async function _gatherAndPrepareWorkoutData(
     // existing_session_id is handled by the main orchestrator if provided
   };
 
-  // This is a placeholder for now, will be reconstructed from persisted sets
-  const placeholderProcessedSets = setInsertPayloads.map((p) => ({
-    ...p,
-    id: "temp",
-    workout_session_id: "temp",
-    updated_at: "temp",
-    deleted: false,
-  })) as (Tables<"workout_session_sets"> & { exercise_name?: string })[];
-
   fastify.log.info(`[PREPARE_WORKOUT_DATA] Completed for user: ${userId}.`, {
     calculatedTotalSets,
     calculatedTotalReps,
@@ -303,10 +375,13 @@ async function _gatherAndPrepareWorkoutData(
 
   return {
     sessionInsertPayload,
-    setInsertPayloads,
+    setInsertPayloads, // For DB
+    setsProgressionInputData: setsProgressionInputArray, // For progression logic
     userProfile,
     userBodyweight,
-    processedEnrichedSets: placeholderProcessedSets, // Placeholder
+    exerciseDetailsMap,
+    exerciseMuscleGroupMappings,
+    existingUserExercisePRs,
   };
 }
 
@@ -317,20 +392,21 @@ async function _gatherAndPrepareWorkoutData(
 async function _updateWorkoutPlanProgression(
   fastify: FastifyInstance,
   workoutPlanDayId: string | null | undefined,
-  // loggedSets needs exercise_id, is_success, and potentially exercise_name for the response
-  loggedSets: (Pick<Tables<"workout_session_sets">, "exercise_id" | "is_success"> & { exercise_name?: string | null })[]
+  // setsProgressionData contains all necessary info for progression, sourced directly from finishData input
+  setsProgressionData: SetProgressionInput[] // Changed from loggedSets
 ): Promise<PlanProgressionResults> {
   const results: PlanProgressionResults = { weightIncreases: [] };
-  fastify.log.info(`[FINISH_SESSION_STEP_PROGRESSION] Starting for workoutPlanDayId: ${workoutPlanDayId}`, {
-    numLoggedSets: loggedSets.length,
+  fastify.log.info(`[PROGRESSION_REFACTOR_V2] Starting for workoutPlanDayId: ${workoutPlanDayId}`, {
+    numProgressionSets: setsProgressionData.length,
   });
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
-  if (!workoutPlanDayId || loggedSets.length === 0) {
-    fastify.log.info("[FINISH_SESSION_STEP_PROGRESSION] Skipping: No plan day ID or no logged sets.");
+  if (!workoutPlanDayId || setsProgressionData.length === 0) {
+    fastify.log.info("[PROGRESSION_REFACTOR_V2] Skipping: No plan day ID or no sets for progression.");
     return results;
   }
 
+  // Fetch plan day exercises to check auto_progression_enabled and get exercise details
   const { data: planDayExercises, error: pdeError } = await supabase
     .from("workout_plan_day_exercises")
     .select("id, exercise_id, auto_progression_enabled, exercises (name)") // Fetch exercise name via relationship
@@ -339,70 +415,148 @@ async function _updateWorkoutPlanProgression(
   if (pdeError) {
     fastify.log.error(
       { error: pdeError, planDayId: workoutPlanDayId },
-      "[FINISH_SESSION_STEP_PROGRESSION] Failed to fetch plan day exercises."
+      "[PROGRESSION_REFACTOR] Failed to fetch plan day exercises."
     );
     return results;
   }
 
-  if (planDayExercises) {
-    for (const planDayEx of planDayExercises) {
-      const exerciseName = (planDayEx.exercises as { name: string } | null)?.name ?? "Unknown Exercise";
-      const setsForThisPlanExercise = loggedSets.filter((ls) => ls.exercise_id === planDayEx.exercise_id);
-      if (setsForThisPlanExercise.length === 0) continue;
+  if (!planDayExercises || planDayExercises.length === 0) {
+    fastify.log.info("[PROGRESSION_REFACTOR] No plan day exercises found for this plan day. Skipping progression.");
+    return results;
+  }
 
-      let wasOverallExerciseSuccessful = setsForThisPlanExercise.every((set) => set.is_success === true);
+  // This function now uses setsProgressionData which is sourced directly from the frontend input.
+  // It will directly update workout_plan_day_exercise_sets.target_weight.
 
-      if (planDayEx.auto_progression_enabled === true && wasOverallExerciseSuccessful) {
-        const { data: planExerciseSets, error: fetchSetsError } = await supabase
-          .from("workout_plan_day_exercise_sets")
-          .select("id, target_weight, target_weight_increase, set_order")
-          .eq("workout_plan_exercise_id", planDayEx.id);
+  const planSetUpdates: { id: string; target_weight: number }[] = []; // To collect updates for batch operation
 
-        if (fetchSetsError) {
-          fastify.log.error(
-            { error: fetchSetsError, planDayExerciseId: planDayEx.id },
-            "[FINISH_SESSION_STEP_PROGRESSION] Failed to fetch plan sets for progression."
+  for (const planDayEx of planDayExercises) {
+    // planDayEx is from workout_plan_day_exercises, contains exercise_id and auto_progression_enabled
+    const currentPlanExerciseName = (planDayEx.exercises as { name: string } | null)?.name ?? "Unknown Exercise";
+
+    // Filter setsProgressionData for the current planDayEx.exercise_id.
+    // These sets should have all necessary data passed from the frontend.
+    const progressionSetsForThisExercise = setsProgressionData.filter(
+      (ps) => ps.exercise_id === planDayEx.exercise_id && ps.workout_plan_day_exercise_sets_id // Critical: We need this ID to know which plan set to update.
+    );
+
+    if (progressionSetsForThisExercise.length === 0) {
+      fastify.log.info(
+        `[PROGRESSION_REFACTOR_V2] No progression data with a 'workout_plan_day_exercise_sets_id' found for exercise '${currentPlanExerciseName}' (PlanDayExercise ID: ${planDayEx.id}). Skipping progression for this exercise.`
+      );
+      continue;
+    }
+
+    // Check if auto-progression is enabled for this exercise in the plan
+    if (planDayEx.auto_progression_enabled !== true) {
+      fastify.log.info(
+        `[PROGRESSION_REFACTOR_V2] Auto-progression disabled for exercise '${currentPlanExerciseName}' (PlanDayExercise ID: ${planDayEx.id}). Skipping progression.`
+      );
+      continue;
+    }
+
+    // Check if all *relevant* (i.e., those with workout_plan_day_exercise_sets_id) sets for this exercise were successful
+    const wasOverallExerciseSuccessful = progressionSetsForThisExercise.every((ps) => ps.is_success === true);
+
+    if (!wasOverallExerciseSuccessful) {
+      fastify.log.info(
+        `[PROGRESSION_REFACTOR_V2] Not all relevant sets were successful for exercise '${currentPlanExerciseName}' (PlanDayExercise ID: ${planDayEx.id}). Skipping progression.`
+      );
+      continue;
+    }
+
+    // If auto-progression is enabled and all relevant sets were successful, proceed to update target weights
+    fastify.log.info(
+      `[PROGRESSION_REFACTOR_V2] Processing progression for exercise '${currentPlanExerciseName}' (PlanDayExercise ID: ${planDayEx.id}).`
+    );
+
+    for (const progressionSet of progressionSetsForThisExercise) {
+      // workout_plan_day_exercise_sets_id is confirmed present by the filter above.
+      // is_success is confirmed true by wasOverallExerciseSuccessful check.
+
+      const progressionIncrement = progressionSet.planned_weight_increase_kg;
+      // oldTargetWeightForCalc is the target weight of the set *as performed in the session* (from frontend input).
+      // This is the base upon which the increment is added for the *next* session's plan.
+      const oldTargetWeightForCalc = progressionSet.planned_weight_kg;
+
+      if (
+        progressionIncrement &&
+        progressionIncrement > 0 &&
+        oldTargetWeightForCalc !== null &&
+        oldTargetWeightForCalc !== undefined && // Explicitly check for undefined
+        progressionSet.workout_plan_day_exercise_sets_id // Should always be true here due to filter
+      ) {
+        const newTargetWeight = oldTargetWeightForCalc + progressionIncrement;
+
+        planSetUpdates.push({
+          id: progressionSet.workout_plan_day_exercise_sets_id, // This is the ID of the workout_plan_day_exercise_sets record to update
+          target_weight: newTargetWeight,
+        });
+
+        results.weightIncreases.push({
+          plan_day_exercise_id: planDayEx.id, // workout_plan_day_exercises.id (links to the exercise in the plan)
+          exercise_name: progressionSet.exercise_name ?? currentPlanExerciseName, // Use name from progression set if available
+          plan_set_order: progressionSet.set_order, // The order of the set that was logged and triggered this progression (already a number)
+          old_target_weight: oldTargetWeightForCalc, // The target weight of the set as performed (now checked for null/undefined)
+          new_target_weight: newTargetWeight, // The new target weight for the plan
+        });
+
+        fastify.log.info(
+          `[PROGRESSION_REFACTOR_V2] Queued update for workout_plan_day_exercise_sets ID '${progressionSet.workout_plan_day_exercise_sets_id}'. ` +
+            `Exercise: '${progressionSet.exercise_name ?? currentPlanExerciseName}', Set Order (from input): ${
+              progressionSet.set_order
+            }. ` +
+            `Old Target (from input set's planned_weight_kg): ${oldTargetWeightForCalc}, New Target: ${newTargetWeight}, Increment: ${progressionIncrement}`
+        );
+      } else {
+        // Log why a specific set isn't being progressed if it passed initial filters but failed this one
+        let skipReason = "";
+        if (!progressionIncrement || progressionIncrement <= 0)
+          skipReason += `Invalid progressionIncrement (${progressionIncrement}). `;
+        if (oldTargetWeightForCalc === null || oldTargetWeightForCalc === undefined)
+          skipReason += `oldTargetWeightForCalc is null or undefined. `;
+        if (!progressionSet.workout_plan_day_exercise_sets_id)
+          skipReason += `workout_plan_day_exercise_sets_id is missing.`;
+
+        if (skipReason) {
+          fastify.log.warn(
+            `[PROGRESSION_REFACTOR_V2] Skipping progression for a specific set of exercise '${currentPlanExerciseName}' (PlanDayExercise ID: ${planDayEx.id}, Input Set Order: ${progressionSet.set_order}, Plan Set ID: ${progressionSet.workout_plan_day_exercise_sets_id}). Reason: ${skipReason}`
           );
-          continue;
-        }
-
-        if (planExerciseSets) {
-          for (const setInstance of planExerciseSets) {
-            if (
-              setInstance.target_weight_increase &&
-              setInstance.target_weight_increase > 0 &&
-              setInstance.target_weight !== null
-            ) {
-              const oldTargetWeight = setInstance.target_weight;
-              const newTargetWeight = oldTargetWeight + setInstance.target_weight_increase;
-              const { error: updateSetError } = await supabase
-                .from("workout_plan_day_exercise_sets")
-                .update({ target_weight: newTargetWeight })
-                .eq("id", setInstance.id);
-
-              if (updateSetError) {
-                fastify.log.error(
-                  { error: updateSetError, setId: setInstance.id },
-                  "[FINISH_SESSION_STEP_PROGRESSION] Failed to update target_weight."
-                );
-              } else {
-                fastify.log.info(
-                  `[FINISH_SESSION_STEP_PROGRESSION] Updated target_weight for set ${setInstance.id} to ${newTargetWeight}.`
-                );
-                results.weightIncreases.push({
-                  plan_day_exercise_id: planDayEx.id,
-                  exercise_name: exerciseName,
-                  plan_set_order: setInstance.set_order,
-                  old_target_weight: oldTargetWeight,
-                  new_target_weight: newTargetWeight,
-                });
-              }
-            }
-          }
         }
       }
     }
   }
+
+  // Perform batch update if there are any changes
+  if (planSetUpdates.length > 0) {
+    fastify.log.info(
+      `[PROGRESSION_REFACTOR_V2] Attempting to batch update ${planSetUpdates.length} plan sets in 'workout_plan_day_exercise_sets'.`
+    );
+    // Supabase JS client typically requires individual update calls.
+    // A true batch update (single network call for multiple different rows/values) isn't standard.
+    // Looping through updates is the common pattern.
+    for (const update of planSetUpdates) {
+      const { error: updateSetError } = await supabase
+        .from("workout_plan_day_exercise_sets")
+        .update({ target_weight: update.target_weight })
+        .eq("id", update.id);
+
+      if (updateSetError) {
+        fastify.log.error(
+          { error: updateSetError, setIdToUpdate: update.id, newWeight: update.target_weight },
+          "[PROGRESSION_REFACTOR_V2] Failed to update target_weight for a plan set during batch operation."
+        );
+        // Decide on error handling: continue, or throw/return error?
+        // For now, logging and continuing, as one failure shouldn't stop others.
+      }
+    }
+    fastify.log.info(
+      `[PROGRESSION_REFACTOR_V2] Batch update process completed for ${planSetUpdates.length} plan sets.`
+    );
+  } else {
+    fastify.log.info("[PROGRESSION_REFACTOR_V2] No plan set updates to perform.");
+  }
+
   return results;
 }
 
@@ -414,8 +568,17 @@ async function _updateUserExerciseAndMuscleGroupRanks(
   fastify: FastifyInstance,
   userId: string,
   userGender: Database["public"]["Enums"]["gender_enum"],
-  // Persisted sets, which include calculated_1rm, calculated_swr, id, performed_at
-  persistedSessionSets: (Tables<"workout_session_sets"> & { exercise_name?: string | null })[]
+  persistedSessionSets: (Tables<"workout_session_sets"> & { exercise_name?: string | null })[],
+  // Pre-fetched data:
+  exerciseDetailsMap: Map<string, { id: string; name: string }>,
+  exerciseMuscleGroupMappings: (Tables<"exercise_muscle_groups"> & {
+    muscle_groups: Pick<Tables<"muscle_groups">, "id" | "name"> | null;
+  })[],
+  existingUserExercisePRs: Map<
+    string,
+    Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "current_rank_label">
+  >
+  // Note: existingUserMuscleGroupScores will be fetched inside this function based on affected MGs
 ): Promise<RankUpdateResults> {
   const results: RankUpdateResults = { exerciseRankUps: [], muscleGroupRankUps: [] };
   fastify.log.info(`[RANK_UPDATE_OPTIMIZED] Starting for user: ${userId}`, {
@@ -428,21 +591,47 @@ async function _updateUserExerciseAndMuscleGroupRanks(
     return results;
   }
 
-  // Fetch names for exercises and muscle groups involved for richer response
   const allExerciseIdsInSession = Array.from(
     new Set(persistedSessionSets.map((s) => s.exercise_id).filter((id) => id !== null) as string[])
   );
-  const exerciseIdToNameMap = new Map<string, string>();
-  if (allExerciseIdsInSession.length > 0) {
-    const { data: exDetails, error: exError } = await supabase
-      .from("exercises")
-      .select("id, name")
-      .in("id", allExerciseIdsInSession);
-    if (exError) fastify.log.error({ error: exError }, "Error fetching ex names for rank up response");
-    else exDetails?.forEach((ex) => exerciseIdToNameMap.set(ex.id, ex.name));
-  }
 
   // Phase A: Exercise PR Updates
+  // Fetch all exercise_swr_benchmarks for relevant exercises and gender
+  let exerciseSWRBenchmarksMap = new Map<string, Tables<"exercise_swr_benchmarks">[]>();
+  if (allExerciseIdsInSession.length > 0) {
+    const { data: exBenchmarks, error: benchError } = await supabase
+      .from("exercise_swr_benchmarks")
+      .select("*")
+      .in("exercise_id", allExerciseIdsInSession)
+      .eq("gender", userGender)
+      .order("min_swr_threshold", { ascending: false }); // Important for easy rank lookup
+
+    if (benchError) {
+      fastify.log.error({ error: benchError }, "[RANK_UPDATE_OPTIMIZED] Error fetching exercise SWR benchmarks.");
+    } else if (exBenchmarks) {
+      exBenchmarks.forEach((benchmark) => {
+        if (!exerciseSWRBenchmarksMap.has(benchmark.exercise_id)) {
+          exerciseSWRBenchmarksMap.set(benchmark.exercise_id, []);
+        }
+        exerciseSWRBenchmarksMap.get(benchmark.exercise_id)!.push(benchmark);
+      });
+    }
+  }
+
+  // Helper function to get exercise rank label from pre-fetched benchmarks
+  function getExerciseRankLabelFromBenchmarks(exerciseId: string, swrValue: number | null): RankLabel | null {
+    if (swrValue === null) return null;
+    const benchmarks = exerciseSWRBenchmarksMap.get(exerciseId);
+    if (!benchmarks) return null;
+    for (const benchmark of benchmarks) {
+      // Assumes benchmarks are sorted descending by threshold
+      if (swrValue >= benchmark.min_swr_threshold) {
+        return benchmark.rank_label as RankLabel;
+      }
+    }
+    return null; // Or a default lowest rank if applicable
+  }
+
   const potentialPrSetsMap = new Map<string, Tables<"workout_session_sets">>();
   for (const set of persistedSessionSets) {
     if (set.calculated_swr !== null && set.exercise_id) {
@@ -454,57 +643,35 @@ async function _updateUserExerciseAndMuscleGroupRanks(
   }
 
   if (potentialPrSetsMap.size > 0) {
-    const relevantExIds = Array.from(potentialPrSetsMap.keys());
-    const { data: existingPrs, error: fetchPrErr } = await supabase
-      .from("user_exercise_prs")
-      .select("exercise_id, best_swr, current_rank_label")
-      .eq("user_id", userId)
-      .in("exercise_id", relevantExIds);
-
-    if (fetchPrErr)
-      fastify.log.error({ error: fetchPrErr }, "[RANK_UPDATE_OPTIMIZED] Error fetching existing exercise PRs.");
-
-    const existingPrsMap = new Map<string, { best_swr: number; current_rank_label: RankLabel | null }>();
-    existingPrs?.forEach((pr) => {
-      if (pr.exercise_id && pr.best_swr !== null)
-        existingPrsMap.set(pr.exercise_id, {
-          best_swr: pr.best_swr,
-          current_rank_label: pr.current_rank_label as RankLabel | null,
-        });
-    });
-
     const prUpserts: UserExercisePrInsert[] = [];
-    const rankLabelPromises = [];
 
     for (const [exerciseId, sessionBestSet] of potentialPrSetsMap) {
-      const existingPr = existingPrsMap.get(exerciseId);
-      if (sessionBestSet.calculated_swr! > (existingPr?.best_swr ?? -1)) {
-        rankLabelPromises.push(
-          get_exercise_rank_label(fastify, exerciseId, userGender, sessionBestSet.calculated_swr).then(
-            (newRankLabel) => {
-              if (newRankLabel !== (existingPr?.current_rank_label ?? null)) {
-                results.exerciseRankUps.push({
-                  exercise_id: exerciseId,
-                  exercise_name: exerciseIdToNameMap.get(exerciseId) || "Unknown Exercise",
-                  old_rank_label: existingPr?.current_rank_label ?? null,
-                  new_rank_label: newRankLabel!, // Non-null if it's a rank up or first rank
-                });
-              }
-              prUpserts.push({
-                user_id: userId,
-                exercise_id: exerciseId,
-                best_1rm: sessionBestSet.calculated_1rm,
-                best_swr: sessionBestSet.calculated_swr,
-                current_rank_label: newRankLabel,
-                achieved_at: sessionBestSet.performed_at,
-                source_set_id: sessionBestSet.id,
-              });
-            }
-          )
-        );
+      const existingPrData = existingUserExercisePRs.get(exerciseId);
+      const existingBestSwr = existingPrData?.best_swr ?? -1; // Default to -1 if no PR exists
+      const existingRankLabel = (existingPrData?.current_rank_label as RankLabel | null) ?? null;
+
+      if (sessionBestSet.calculated_swr! > existingBestSwr) {
+        const newRankLabel = getExerciseRankLabelFromBenchmarks(exerciseId, sessionBestSet.calculated_swr);
+
+        if (newRankLabel !== existingRankLabel) {
+          results.exerciseRankUps.push({
+            exercise_id: exerciseId,
+            exercise_name: exerciseDetailsMap.get(exerciseId)?.name || "Unknown Exercise",
+            old_rank_label: existingRankLabel,
+            new_rank_label: newRankLabel!, // Non-null if it's a rank up or first rank
+          });
+        }
+        prUpserts.push({
+          user_id: userId,
+          exercise_id: exerciseId,
+          best_1rm: sessionBestSet.calculated_1rm,
+          best_swr: sessionBestSet.calculated_swr,
+          current_rank_label: newRankLabel,
+          achieved_at: sessionBestSet.performed_at,
+          source_set_id: sessionBestSet.id,
+        });
       }
     }
-    await Promise.all(rankLabelPromises); // Ensure all rank labels are fetched and rankUps populated
 
     if (prUpserts.length > 0) {
       const { error: upsertPrError } = await supabase
@@ -517,119 +684,166 @@ async function _updateUserExerciseAndMuscleGroupRanks(
   }
 
   // Phase B: Muscle Group Score Updates
-  const allSessionExIdsForMg = Array.from(
-    new Set(persistedSessionSets.map((s) => s.exercise_id).filter(Boolean) as string[])
+  // Filter for primary muscle group mappings first
+  const primaryExerciseMuscleGroupMappings = exerciseMuscleGroupMappings.filter(
+    (mapping) => mapping.intensity === "primary"
   );
+
   const uniqueAffectedMgIds = new Set<string>();
-
-  if (allSessionExIdsForMg.length > 0) {
-    const { data: emgData, error: emgError } = await supabase
-      .from("exercise_muscle_groups")
-      .select("muscle_group_id, muscle_groups (name)") // Fetch name for response
-      .in("exercise_id", allSessionExIdsForMg)
-      .eq("intenstiy", "primary");
-    if (emgError)
-      fastify.log.error({ error: emgError }, "[RANK_UPDATE_OPTIMIZED] Error fetching exercise_muscle_groups.");
-    else
-      emgData?.forEach((emg) => {
-        if (emg.muscle_group_id) uniqueAffectedMgIds.add(emg.muscle_group_id);
-      });
-  }
-
   const muscleGroupIdToNameMap = new Map<string, string>();
-  if (uniqueAffectedMgIds.size > 0) {
-    const { data: mgDetails, error: mgError } = await supabase
-      .from("muscle_groups")
-      .select("id, name")
-      .in("id", Array.from(uniqueAffectedMgIds));
-    if (mgError) fastify.log.error({ error: mgError }, "Error fetching mg names for rank up response");
-    else mgDetails?.forEach((mg) => muscleGroupIdToNameMap.set(mg.id, mg.name));
-  }
+
+  primaryExerciseMuscleGroupMappings.forEach((mapping) => {
+    if (mapping.muscle_group_id && mapping.muscle_groups) {
+      uniqueAffectedMgIds.add(mapping.muscle_group_id);
+      muscleGroupIdToNameMap.set(mapping.muscle_group_id, mapping.muscle_groups.name);
+    }
+  });
 
   if (uniqueAffectedMgIds.size === 0) {
-    fastify.log.info("[RANK_UPDATE_OPTIMIZED] No muscle groups to update.");
-    return results;
+    fastify.log.info(
+      "[RANK_UPDATE_OPTIMIZED] No primary muscle groups affected by this session's exercises to update."
+    );
+    return results; // No muscle groups to update based on session exercises
   }
 
-  const { data: allUserPrs, error: fetchAllPrsErr } = await supabase
+  // Fetch all muscle_group_swr_benchmarks for relevant muscle groups and gender
+  let muscleGroupSWRBenchmarksMap = new Map<string, Tables<"muscle_group_swr_benchmarks">[]>();
+  const mgIdsArray = Array.from(uniqueAffectedMgIds);
+  if (mgIdsArray.length > 0) {
+    const { data: mgBenchmarks, error: mgBenchError } = await supabase
+      .from("muscle_group_swr_benchmarks")
+      .select("*")
+      .in("muscle_group_id", mgIdsArray)
+      .eq("gender", userGender)
+      .order("min_swr_threshold", { ascending: false });
+
+    if (mgBenchError) {
+      fastify.log.error({ error: mgBenchError }, "[RANK_UPDATE_OPTIMIZED] Error fetching muscle group SWR benchmarks.");
+    } else if (mgBenchmarks) {
+      mgBenchmarks.forEach((benchmark) => {
+        if (!muscleGroupSWRBenchmarksMap.has(benchmark.muscle_group_id)) {
+          muscleGroupSWRBenchmarksMap.set(benchmark.muscle_group_id, []);
+        }
+        muscleGroupSWRBenchmarksMap.get(benchmark.muscle_group_id)!.push(benchmark);
+      });
+    }
+  }
+
+  // Helper function to get muscle group rank label from pre-fetched benchmarks
+  function getMuscleGroupRankLabelFromBenchmarks(muscleGroupId: string, swrValue: number | null): RankLabel | null {
+    if (swrValue === null) return null;
+    const benchmarks = muscleGroupSWRBenchmarksMap.get(muscleGroupId);
+    if (!benchmarks) return null;
+    for (const benchmark of benchmarks) {
+      // Assumes benchmarks are sorted descending
+      if (swrValue >= benchmark.min_swr_threshold) {
+        return benchmark.rank_label as RankLabel;
+      }
+    }
+    return null; // Or a default lowest rank
+  }
+
+  // Fetch existing muscle group scores for the user and affected muscle groups
+  const { data: existingMgScoresData, error: fetchMgScoresErr } = await supabase
+    .from("user_muscle_group_scores")
+    .select("muscle_group_id, muscle_group_swr_score, current_rank_label")
+    .eq("user_id", userId)
+    .in("muscle_group_id", mgIdsArray);
+
+  if (fetchMgScoresErr) {
+    fastify.log.error(
+      { error: fetchMgScoresErr },
+      "[RANK_UPDATE_OPTIMIZED] Error fetching existing muscle group scores."
+    );
+    // Continue without existing scores, will attempt to insert new ones
+  }
+  const existingMgScoresMap = new Map<
+    string,
+    Pick<Tables<"user_muscle_group_scores">, "muscle_group_id" | "muscle_group_swr_score" | "current_rank_label">
+  >();
+  existingMgScoresData?.forEach((score) => {
+    if (score.muscle_group_id) existingMgScoresMap.set(score.muscle_group_id, score);
+  });
+
+  // Re-evaluate muscle group scores based on *all* user's PRs for exercises contributing to that muscle group
+  // This requires fetching all user_exercise_prs if not already available comprehensively
+  // For simplicity in this step, we'll use the `existingUserExercisePRs` map which contains PRs for exercises in *this* session.
+  // A more robust solution would fetch all user PRs that could contribute to any of the uniqueAffectedMgIds.
+  // However, the current logic in the original code seems to imply re-calculating based on all known PRs.
+  // Let's fetch all user PRs to correctly determine the top SWR for each muscle group.
+  const { data: allUserPrsData, error: allPrsError } = await supabase
     .from("user_exercise_prs")
     .select("exercise_id, best_swr, achieved_at")
     .eq("user_id", userId);
 
-  if (fetchAllPrsErr) {
-    fastify.log.error({ error: fetchAllPrsErr }, "[RANK_UPDATE_OPTIMIZED] Error fetching all user PRs for MG eval.");
-    return results;
+  if (allPrsError) {
+    fastify.log.error(
+      { error: allPrsError },
+      "[RANK_UPDATE_OPTIMIZED] Critical error fetching all user PRs for MG score calculation."
+    );
+    return results; // Cannot reliably calculate MG scores
   }
   const allUserPrsMap = new Map<string, { best_swr: number; achieved_at: string }>();
-  allUserPrs?.forEach((pr) => {
-    if (pr.exercise_id && pr.best_swr !== null && pr.achieved_at !== null)
+  allUserPrsData?.forEach((pr) => {
+    if (pr.exercise_id && pr.best_swr !== null && pr.achieved_at) {
       allUserPrsMap.set(pr.exercise_id, { best_swr: pr.best_swr, achieved_at: pr.achieved_at });
+    }
   });
 
-  const mgScoreUpdatePromises = Array.from(uniqueAffectedMgIds).map(async (mgId) => {
-    const { data: contribEx, error: ceError } = await supabase
-      .from("exercise_muscle_groups")
-      .select("exercise_id")
-      .eq("muscle_group_id", mgId);
-    if (ceError || !contribEx || contribEx.length === 0) return null;
+  const mgScoresToUpsert: TablesInsert<"user_muscle_group_scores">[] = [];
 
-    let topSwr: number | null = null,
-      contribExId: string | null = null,
-      contribExSwr: number | null = null,
-      achievedAt: string | null = null;
-    contribEx.forEach((ex) => {
-      const pr = allUserPrsMap.get(ex.exercise_id);
-      if (pr && pr.best_swr !== null && (topSwr === null || pr.best_swr > topSwr)) {
-        topSwr = pr.best_swr;
-        contribExId = ex.exercise_id;
-        contribExSwr = pr.best_swr;
-        achievedAt = pr.achieved_at;
+  for (const mgId of uniqueAffectedMgIds) {
+    // Find all exercises that contribute to this muscle group (from pre-filtered primary mappings)
+    const contributingExercisesToMg = primaryExerciseMuscleGroupMappings
+      .filter((m) => m.muscle_group_id === mgId)
+      .map((m) => m.exercise_id);
+
+    let topSwrForMg: number | null = null;
+    let contributingExerciseIdForMg: string | null = null;
+    let contributingExerciseSwrForMg: number | null = null;
+    let achievedAtForMg: string | null = null;
+
+    for (const exId of contributingExercisesToMg) {
+      const pr = allUserPrsMap.get(exId); // Use the comprehensive PR map
+      if (pr && pr.best_swr !== null) {
+        if (topSwrForMg === null || pr.best_swr > topSwrForMg) {
+          topSwrForMg = pr.best_swr;
+          contributingExerciseIdForMg = exId;
+          contributingExerciseSwrForMg = pr.best_swr;
+          achievedAtForMg = pr.achieved_at;
+        }
       }
-    });
-
-    const { data: existingMgScore, error: fetchMgScoreErr } = await supabase
-      .from("user_muscle_group_scores")
-      .select("muscle_group_swr_score, current_rank_label")
-      .eq("user_id", userId)
-      .eq("muscle_group_id", mgId)
-      .maybeSingle();
-    if (fetchMgScoreErr) {
-      fastify.log.error({ error: fetchMgScoreErr, mgId }, "Err fetch existing MG score");
-      return null;
     }
 
-    const existingSwr = existingMgScore?.muscle_group_swr_score ?? null;
-    const oldRankLabel = (existingMgScore?.current_rank_label as RankLabel | null) ?? null;
+    const existingMgScore = existingMgScoresMap.get(mgId);
+    const existingMgSwr = existingMgScore?.muscle_group_swr_score ?? null;
+    const oldMgRankLabel = (existingMgScore?.current_rank_label as RankLabel | null) ?? null;
 
     if (
-      (topSwr !== null && (existingSwr === null || topSwr > existingSwr)) ||
-      (existingSwr !== null && topSwr === null)
+      (topSwrForMg !== null && (existingMgSwr === null || topSwrForMg > existingMgSwr)) ||
+      (existingMgSwr !== null && topSwrForMg === null)
     ) {
-      const newRankLabel = await get_muscle_group_rank_label(fastify, mgId, userGender, topSwr);
-      if (newRankLabel !== oldRankLabel) {
+      const newMgRankLabel = getMuscleGroupRankLabelFromBenchmarks(mgId, topSwrForMg);
+      if (newMgRankLabel !== oldMgRankLabel) {
         results.muscleGroupRankUps.push({
           muscle_group_id: mgId,
           muscle_group_name: muscleGroupIdToNameMap.get(mgId) || "Unknown Muscle Group",
-          old_rank_label: oldRankLabel,
-          new_rank_label: newRankLabel!,
+          old_rank_label: oldMgRankLabel,
+          new_rank_label: newMgRankLabel!,
         });
       }
-      return {
+      mgScoresToUpsert.push({
         user_id: userId,
         muscle_group_id: mgId,
-        muscle_group_swr_score: topSwr,
-        current_rank_label: newRankLabel,
-        contributing_exercise_id: contribExId,
-        contributing_exercise_swr: contribExSwr,
-        achieved_at: achievedAt,
-      } as TablesInsert<"user_muscle_group_scores">;
+        muscle_group_swr_score: topSwrForMg,
+        current_rank_label: newMgRankLabel,
+        contributing_exercise_id: contributingExerciseIdForMg,
+        contributing_exercise_swr: contributingExerciseSwrForMg,
+        achieved_at: achievedAtForMg,
+      });
     }
-    return null;
-  });
+  }
 
-  const mgScoresToUpsert = (await Promise.all(mgScoreUpdatePromises)).filter(
-    Boolean
-  ) as TablesInsert<"user_muscle_group_scores">[];
   if (mgScoresToUpsert.length > 0) {
     const { error: upsertMgErr } = await supabase
       .from("user_muscle_group_scores")
@@ -646,29 +860,54 @@ async function _updateUserExerciseAndMuscleGroupRanks(
  */
 async function _awardXpAndLevel(
   fastify: FastifyInstance,
-  userId: string,
-  currentXp: number | null // Pass current XP to avoid re-fetch
-): Promise<{ awardedXp: number; levelUpOccurred: boolean }> {
-  fastify.log.info(`[XP_LEVEL] Starting for user: ${userId}`);
+  userProfile: Tables<"user_profiles">
+): Promise<XPUpdateResult & { awardedXp: number; remaining_xp_for_next_level: number | null }> {
+  const userId = userProfile.id;
+  fastify.log.info(`[XP_LEVEL] Starting XP and Level update for user: ${userId}`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
+  const xpService = new XpService(supabase);
   const awardedXp = XP_PER_WORKOUT;
-  const levelUpOccurred = false; // Simplified
 
-  const initialXp = currentXp || 0;
-  const newXp = initialXp + awardedXp;
+  const xpResult = await xpService.addXPAndUpdateLevel(userProfile, awardedXp);
 
-  const { error: xpUpdateError } = await supabase
-    .from("user_profiles")
-    .update({ experience_points: newXp })
-    .eq("id", userId);
-
-  if (xpUpdateError) {
-    fastify.log.error({ error: xpUpdateError, userId, newXp }, "[XP_LEVEL] Failed to update user experience_points.");
-  } else {
-    fastify.log.info(`[XP_LEVEL] Awarded ${awardedXp} XP to user ${userId}. New total XP: ${newXp}.`);
+  if (!xpResult) {
+    fastify.log.error({ userId, awardedXp }, "[XP_LEVEL] Failed to update user XP and level via XpService.");
+    return {
+      userId,
+      oldExperiencePoints: userProfile.experience_points ?? 0,
+      newExperiencePoints: (userProfile.experience_points ?? 0) + awardedXp,
+      oldLevelId: userProfile.current_level_id ?? null,
+      newLevelId: userProfile.current_level_id ?? null,
+      leveledUp: false,
+      awardedXp: awardedXp,
+      remaining_xp_for_next_level: null, // Fallback
+    };
   }
-  // TODO: Implement actual level up check
-  return { awardedXp, levelUpOccurred };
+
+  let remaining_xp_for_next_level: number | null = null;
+  try {
+    const levelDetails = await xpService.getUserLevelDetails(userId);
+    if (levelDetails && levelDetails.nextLevel && typeof levelDetails.nextLevel.xpRequiredToReach === "number") {
+      remaining_xp_for_next_level = levelDetails.nextLevel.xpRequiredToReach - xpResult.newExperiencePoints;
+      if (remaining_xp_for_next_level < 0) remaining_xp_for_next_level = 0; // Should not happen if logic is correct
+    }
+  } catch (levelDetailsError) {
+    fastify.log.error(
+      { userId, error: levelDetailsError },
+      "[XP_LEVEL] Error fetching user level details for remaining XP calculation."
+    );
+  }
+
+  if (xpResult.leveledUp) {
+    fastify.log.info(
+      `[XP_LEVEL] User ${userId} leveled up! Old Level ID: ${xpResult.oldLevelId}, New Level ID: ${xpResult.newLevelId}, New Level Number: ${xpResult.newLevelNumber}`
+    );
+  } else {
+    fastify.log.info(
+      `[XP_LEVEL] Awarded ${awardedXp} XP to user ${userId}. New total XP: ${xpResult.newExperiencePoints}. No level up.`
+    );
+  }
+  return { ...xpResult, awardedXp, remaining_xp_for_next_level };
 }
 
 // _finalizeSessionUpdate is no longer needed as session is inserted with all data initially.
@@ -766,10 +1005,13 @@ export const finishWorkoutSession = async (
     fastify.log.info("[FINISH_SESSION_FLOW] Step 1: _gatherAndPrepareWorkoutData.");
     const {
       sessionInsertPayload: rawSessionInsertPayload,
-      setInsertPayloads: rawSetInsertPayloads,
+      setInsertPayloads: rawSetInsertPayloads, // Payloads for workout_session_sets table
+      setsProgressionInputData, // Data for _updateWorkoutPlanProgression
       userProfile,
-      // userBodyweight, // Not directly needed by subsequent steps if SWR is on sets
-      // processedEnrichedSets, // This will be reconstructed from persisted sets
+      // userBodyweight,
+      exerciseDetailsMap,
+      exerciseMuscleGroupMappings,
+      existingUserExercisePRs,
     } = await _gatherAndPrepareWorkoutData(fastify, userId, finishData);
 
     // Handle existing_session_id: If provided, this is an update (finalize), otherwise new insert.
@@ -846,11 +1088,11 @@ export const finishWorkoutSession = async (
     }
 
     // Step 3: Update Workout Plan Progression
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 3: _updateWorkoutPlanProgression.");
+    fastify.log.info("[FINISH_SESSION_FLOW] Step 3: _updateWorkoutPlanProgression (using setsProgressionInputData).");
     const planProgressionResults = await _updateWorkoutPlanProgression(
       fastify,
       newlyCreatedOrFetchedSession.workout_plan_day_id,
-      persistedSessionSets
+      setsProgressionInputData // Pass the new data structure
     );
     fastify.log.info("[FINISH_SESSION_FLOW] Step 3 Complete.");
 
@@ -859,14 +1101,16 @@ export const finishWorkoutSession = async (
     let rankUpdateResults: RankUpdateResults; // Declare with type
     if (!userProfile.gender) {
       fastify.log.warn({ userId }, "User gender is null. Skipping rank updates.");
-      // Initialize empty results if gender is missing
-      rankUpdateResults = { exerciseRankUps: [], muscleGroupRankUps: [] }; // Assign to typed variable
+      rankUpdateResults = { exerciseRankUps: [], muscleGroupRankUps: [] };
     } else {
       rankUpdateResults = await _updateUserExerciseAndMuscleGroupRanks(
         fastify,
         userId,
-        userProfile.gender,
-        persistedSessionSets
+        userProfile.gender, // Gender is essential for rank calculation
+        persistedSessionSets, // The sets performed in this session
+        exerciseDetailsMap, // Map of exerciseId to exercise details (name)
+        exerciseMuscleGroupMappings, // Mappings of exercises to muscle groups
+        existingUserExercisePRs // User's existing PRs for exercises in this session
       );
     }
     fastify.log.info("[FINISH_SESSION_FLOW] Step 4 Complete.");
@@ -884,7 +1128,8 @@ export const finishWorkoutSession = async (
 
     // Step 6: Award XP
     fastify.log.info("[FINISH_SESSION_FLOW] Step 6: _awardXpAndLevel.");
-    const { awardedXp, levelUpOccurred } = await _awardXpAndLevel(fastify, userId, userProfile.experience_points);
+    // Pass the fetched userProfile to _awardXpAndLevel
+    const xpLevelResult = await _awardXpAndLevel(fastify, userProfile);
     fastify.log.info("[FINISH_SESSION_FLOW] Step 6 Complete.");
 
     // Step 7: Update Active Workout Plan Last Completed Day
@@ -901,8 +1146,12 @@ export const finishWorkoutSession = async (
     fastify.log.info("[FINISH_SESSION_FLOW] Step 8: Constructing detailed response.");
     const responsePayload: DetailedFinishSessionResponse = {
       sessionId: newlyCreatedOrFetchedSession.id,
-      xpAwarded: awardedXp,
-      levelUp: levelUpOccurred,
+      xpAwarded: xpLevelResult.awardedXp,
+      total_xp: xpLevelResult.newExperiencePoints,
+      levelUp: xpLevelResult.leveledUp,
+      newLevelNumber: xpLevelResult.newLevelNumber,
+      remaining_xp_for_next_level:
+        xpLevelResult.remaining_xp_for_next_level === null ? undefined : xpLevelResult.remaining_xp_for_next_level,
       durationSeconds: newlyCreatedOrFetchedSession.duration_seconds || 0,
       totalVolumeKg: newlyCreatedOrFetchedSession.total_volume_kg || 0,
       totalReps: newlyCreatedOrFetchedSession.total_reps || 0,
@@ -912,8 +1161,8 @@ export const finishWorkoutSession = async (
       overallFeeling: finishData.overall_feeling ?? null,
       exercisesPerformed: newlyCreatedOrFetchedSession.exercises_performed_summary || "",
       // New fields for richer summary
-      exerciseRankUps: rankUpdateResults.exerciseRankUps,
-      muscleGroupRankUps: rankUpdateResults.muscleGroupRankUps,
+      exerciseRankUps: rankUpdateResults.exerciseRankUps, // This is RankUpdateResults type
+      muscleGroupRankUps: rankUpdateResults.muscleGroupRankUps, // This is RankUpdateResults type
       loggedSetsSummary: persistedSessionSets.map((s) => ({
         exercise_id: s.exercise_id,
         exercise_name: s.exercise_name || "Unknown Exercise", // Fallback, exerciseIdToNameMap is not in this scope
@@ -966,14 +1215,18 @@ async function _updateUserMuscleLastWorked(
     const { data: emgMappings, error: emgError } = await supabase
       .from("exercise_muscle_groups")
       .select("muscle_group_id")
-      .in("exercise_id", uniqueExerciseIds);
+      .in("exercise_id", uniqueExerciseIds)
+      .in("intensity", ["primary", "secondary"]); // Filter for primary OR secondary intensity
 
     if (emgError) {
-      fastify.log.error({ error: emgError, userId }, "[MUSCLE_LAST_WORKED] Error fetching exercise_muscle_groups.");
+      fastify.log.error(
+        { error: emgError, userId },
+        "[MUSCLE_LAST_WORKED] Error fetching primary or secondary exercise_muscle_groups."
+      );
       return; // Non-critical
     }
     if (!emgMappings || emgMappings.length === 0) {
-      fastify.log.info("[MUSCLE_LAST_WORKED] No muscle group mappings found. Skipping.");
+      fastify.log.info("[MUSCLE_LAST_WORKED] No primary or secondary muscle group mappings found. Skipping.");
       return;
     }
 

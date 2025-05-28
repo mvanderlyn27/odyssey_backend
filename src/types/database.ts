@@ -300,6 +300,30 @@ export type Database = {
         }
         Relationships: []
       }
+      level_definitions: {
+        Row: {
+          created_at: string
+          id: string
+          level_number: number
+          title: string | null
+          xp_required: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          level_number: number
+          title?: string | null
+          xp_required: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          level_number?: number
+          title?: string | null
+          xp_required?: number
+        }
+        Relationships: []
+      }
       muscle_group_swr_benchmarks: {
         Row: {
           benchmark_id: string
@@ -617,56 +641,12 @@ export type Database = {
           },
         ]
       }
-      user_muscle_ranks: {
-        Row: {
-          deleted: boolean
-          id: string
-          muscle_group_id: string
-          muscle_rank: string
-          updated_at: string
-          user_id: string
-          workout_session_id: string | null
-        }
-        Insert: {
-          deleted?: boolean
-          id?: string
-          muscle_group_id: string
-          muscle_rank: string
-          updated_at?: string
-          user_id: string
-          workout_session_id?: string | null
-        }
-        Update: {
-          deleted?: boolean
-          id?: string
-          muscle_group_id?: string
-          muscle_rank?: string
-          updated_at?: string
-          user_id?: string
-          workout_session_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_muscle_ranks_muscle_group_id_fkey"
-            columns: ["muscle_group_id"]
-            isOneToOne: false
-            referencedRelation: "muscle_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_muscle_ranks_workout_session_id_fkey"
-            columns: ["workout_session_id"]
-            isOneToOne: false
-            referencedRelation: "workout_sessions"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_profiles: {
         Row: {
           age: number | null
           avatar_url: string | null
           created_at: string
+          current_level_id: string | null
           deleted: boolean
           experience_points: number
           full_name: string | null
@@ -683,6 +663,7 @@ export type Database = {
           age?: number | null
           avatar_url?: string | null
           created_at?: string
+          current_level_id?: string | null
           deleted?: boolean
           experience_points?: number
           full_name?: string | null
@@ -699,6 +680,7 @@ export type Database = {
           age?: number | null
           avatar_url?: string | null
           created_at?: string
+          current_level_id?: string | null
           deleted?: boolean
           experience_points?: number
           full_name?: string | null
@@ -711,7 +693,15 @@ export type Database = {
           username?: string | null
           weight_preference?: Database["public"]["Enums"]["unit_type"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_user_profiles_current_level"
+            columns: ["current_level_id"]
+            isOneToOne: false
+            referencedRelation: "level_definitions"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_streaks: {
         Row: {
@@ -997,6 +987,7 @@ export type Database = {
           rest_seconds_taken: number | null
           set_order: number
           updated_at: string
+          workout_plan_day_exercise_sets_id: string | null
           workout_session_id: string
         }
         Insert: {
@@ -1017,6 +1008,7 @@ export type Database = {
           rest_seconds_taken?: number | null
           set_order: number
           updated_at?: string
+          workout_plan_day_exercise_sets_id?: string | null
           workout_session_id: string
         }
         Update: {
@@ -1037,6 +1029,7 @@ export type Database = {
           rest_seconds_taken?: number | null
           set_order?: number
           updated_at?: string
+          workout_plan_day_exercise_sets_id?: string | null
           workout_session_id?: string
         }
         Relationships: [

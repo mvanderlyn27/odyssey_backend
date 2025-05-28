@@ -76,9 +76,9 @@ export const SessionExerciseSchema = Type.Object(
     exercise_id: Type.String({ format: "uuid" }),
     workout_plan_day_exercise_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]), // Renamed from workout_plan_day_exercise_id based on service
     set_order: Type.Integer(), // Added based on LogSetBody
-    target_sets: Type.Optional(Type.Integer()), // Make optional as it might not exist for ad-hoc sets
-    target_reps_min: Type.Optional(Type.Integer()), // Make optional
-    target_reps_max: Type.Optional(Type.Union([Type.Integer(), Type.Null()])), // Make optional
+    planned_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])), // Added to store planned weight
+    planned_min_reps: Type.Optional(Type.Integer()), // Renamed from target_reps_min
+    planned_max_reps: Type.Optional(Type.Union([Type.Integer(), Type.Null()])), // Renamed from target_reps_max
     target_rest_seconds: Type.Optional(Type.Union([Type.Integer(), Type.Null()])), // Make optional
     logged_sets: Type.Optional(Type.Integer()), // Make optional as it's logged per set
     logged_reps: Type.Integer(), // Required per set log
@@ -102,7 +102,7 @@ export const SessionSetInputSchema = Type.Object(
     order_index: Type.Integer({ minimum: 0 }),
     planned_min_reps: Type.Optional(Type.Integer({ minimum: 0 })), // New field
     planned_max_reps: Type.Optional(Type.Integer({ minimum: 0 })), // New field
-    target_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+    planned_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     actual_reps: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     actual_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     is_completed: Type.Boolean(),
@@ -110,6 +110,10 @@ export const SessionSetInputSchema = Type.Object(
     is_warmup: Type.Optional(Type.Boolean()),
     rest_time_seconds: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
     user_notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    planned_weight_increase_kg: Type.Optional(
+      Type.Number({ description: "The planned weight increase for this set, if applicable, in kg." })
+    ),
+    workout_plan_day_exercise_sets_id: Type.Optional(Type.String({ format: "uuid" })),
   },
   { $id: "SessionSetInputSchema", description: "Input for a single set within a finished exercise" }
 );
@@ -207,7 +211,12 @@ export const DetailedFinishSessionResponseSchema = Type.Object(
   {
     sessionId: Type.String({ format: "uuid" }),
     xpAwarded: Type.Number(),
+    total_xp: Type.Number({ description: "User's total experience points after the workout" }),
     levelUp: Type.Boolean(),
+    newLevelNumber: Type.Optional(Type.Number({ description: "The user's new level number" })), // Represents current level
+    remaining_xp_for_next_level: Type.Optional(
+      Type.Number({ description: "XP needed for the user to reach the next level" })
+    ),
     durationSeconds: Type.Integer({ minimum: 0 }),
     totalVolumeKg: Type.Number({ minimum: 0 }),
     totalReps: Type.Integer({ minimum: 0 }),
