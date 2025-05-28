@@ -205,3 +205,159 @@ export const MuscleStatsSchema = Type.Intersect(
   { $id: "MuscleStatsSchema", description: "Performance statistics aggregated by primary muscle group" }
 );
 export type MuscleStats = Static<typeof MuscleStatsSchema>;
+
+// --- New Enums for Stats Blueprint ---
+const BlueprintTimePeriodEnum = Type.Union(
+  [Type.Literal("last_7_days"), Type.Literal("last_30_days"), Type.Literal("last_90_days"), Type.Literal("all_time")],
+  { $id: "BlueprintTimePeriodEnum", description: "Time period for stats overview and exercise progress" }
+);
+export type BlueprintTimePeriod = Static<typeof BlueprintTimePeriodEnum>;
+
+const BlueprintGranularityEnum = Type.Union([Type.Literal("daily"), Type.Literal("weekly"), Type.Literal("monthly")], {
+  $id: "BlueprintGranularityEnum",
+  description: "Granularity for grouping exercise progress data",
+});
+export type BlueprintGranularity = Static<typeof BlueprintGranularityEnum>;
+
+// --- Schemas for User Stats Overview (I.A) ---
+export const OverviewStatsQuerySchema = Type.Object(
+  {
+    period: Type.Optional(BlueprintTimePeriodEnum), // Default: "last_30_days" will be handled in route
+  },
+  { $id: "OverviewStatsQuerySchema" }
+);
+export type OverviewStatsQuery = Static<typeof OverviewStatsQuerySchema>;
+
+const RecentPRExerciseSchema = Type.Object(
+  {
+    exercise_id: Type.String({ format: "uuid" }),
+    exercise_name: Type.String(),
+    pr_type: Type.String(), // e.g., "1RM", "SWR"
+    value: Type.Number(), // The PR value
+    unit: Type.String(), // e.g., "kg", "SWR"
+    achieved_at: Type.String({ format: "date-time" }),
+    source_set_id: Type.Optional(Type.String({ format: "uuid" })),
+  },
+  { $id: "RecentPRExerciseSchema" }
+);
+export type RecentPRExercise = Static<typeof RecentPRExerciseSchema>;
+
+const LatestBodyWeightSchema = Type.Object(
+  {
+    body_weight_kg: Type.Optional(Type.Number()), // Changed from body_weight to body_weight_kg for clarity
+    created_at: Type.Optional(Type.String({ format: "date-time" })),
+  },
+  { $id: "LatestBodyWeightSchema" }
+);
+export type LatestBodyWeight = Static<typeof LatestBodyWeightSchema>;
+
+// Forward declaration for MuscleGroupFocus (Optional - For Later)
+// const MuscleGroupFocusSchema = Type.Object({}, { $id: "MuscleGroupFocusSchema", additionalProperties: true, description: "Placeholder for muscle group focus data" });
+// export type MuscleGroupFocus = Static<typeof MuscleGroupFocusSchema>;
+
+export const OverviewStatsSchema = Type.Object(
+  {
+    totalWorkouts: Type.Integer(),
+    sumTotalVolumeKg: Type.Number(),
+    sumTotalReps: Type.Integer(),
+    sumTotalSets: Type.Integer(),
+    avgWorkoutDurationMin: Type.Number(),
+    current_streak: Type.Integer(),
+    longest_streak: Type.Integer(),
+    recentPRs: Type.Array(RecentPRExerciseSchema),
+    latestBodyWeight: LatestBodyWeightSchema,
+    // muscleGroupFocus: Type.Optional(MuscleGroupFocusSchema), // Optional for later
+  },
+  { $id: "OverviewStatsSchema" }
+);
+export type OverviewStats = Static<typeof OverviewStatsSchema>;
+
+// --- Schemas for Detailed Exercise Progress (II.A) ---
+
+export const ExerciseProgressParamsSchema = Type.Object(
+  {
+    exerciseId: Type.String({ format: "uuid", description: "The ID of the exercise" }),
+  },
+  { $id: "ExerciseProgressParamsSchema" }
+);
+export type ExerciseProgressParams = Static<typeof ExerciseProgressParamsSchema>;
+
+export const ExerciseProgressQuerySchema = Type.Object(
+  {
+    period: Type.Optional(BlueprintTimePeriodEnum), // Default: "all_time"
+    granularity: Type.Optional(BlueprintGranularityEnum), // Default: "weekly"
+  },
+  { $id: "ExerciseProgressQuerySchema" }
+);
+export type ExerciseProgressQuery = Static<typeof ExerciseProgressQuerySchema>;
+
+const ExerciseInfoSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    name: Type.String(),
+    description: Type.Optional(Type.String()),
+    video_url: Type.Optional(Type.String({ format: "uri" })),
+  },
+  { $id: "ExerciseInfoSchema" }
+);
+export type ExerciseInfo = Static<typeof ExerciseInfoSchema>;
+
+const CurrentBestPRsSchema = Type.Object(
+  {
+    best_1rm_kg: Type.Optional(Type.Number()), // Clarified unit
+    best_swr: Type.Optional(Type.Number()),
+    achieved_at_1rm: Type.Optional(Type.String({ format: "date-time" })),
+    achieved_at_swr: Type.Optional(Type.String({ format: "date-time" })),
+    source_set_id_1rm: Type.Optional(Type.String({ format: "uuid" })),
+    source_set_id_swr: Type.Optional(Type.String({ format: "uuid" })),
+  },
+  { $id: "CurrentBestPRsSchema" }
+);
+export type CurrentBestPRs = Static<typeof CurrentBestPRsSchema>;
+
+const BestSessionVolumeSchema = Type.Object(
+  {
+    max_session_volume_kg: Type.Optional(Type.Number()),
+    achieved_at: Type.Optional(Type.String({ format: "date-time" })), // Session completed_at or max set performed_at
+    workout_session_id: Type.Optional(Type.String({ format: "uuid" })),
+  },
+  { $id: "BestSessionVolumeSchema" }
+);
+export type BestSessionVolume = Static<typeof BestSessionVolumeSchema>;
+
+const RepPRSchema = Type.Object(
+  {
+    reps: Type.Integer(),
+    weight_kg: Type.Number(),
+    performed_at: Type.String({ format: "date-time" }),
+    source_set_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "RepPRSchema" }
+);
+export type RepPR = Static<typeof RepPRSchema>;
+
+export const GraphDataPointSchema = Type.Object(
+  {
+    date: Type.String({ description: "Date key (YYYY-MM-DD, YYYY-WW, YYYY-MM-01)" }),
+    value: Type.Number(),
+    workoutSessionId: Type.Optional(
+      Type.String({ format: "uuid", description: "Optional: workout session ID for volume per session graph" })
+    ),
+  },
+  { $id: "GraphDataPointSchema" }
+);
+export type GraphDataPoint = Static<typeof GraphDataPointSchema>;
+
+export const ExerciseProgressSchema = Type.Object(
+  {
+    basicExerciseInfo: ExerciseInfoSchema,
+    currentBestPRs: CurrentBestPRsSchema,
+    bestSessionVolume: BestSessionVolumeSchema,
+    repPRsAtSpecificWeights: Type.Array(RepPRSchema),
+    e1RMOverTime: Type.Array(GraphDataPointSchema),
+    volumePerSessionOverTime: Type.Array(GraphDataPointSchema),
+    swrOverTime: Type.Array(GraphDataPointSchema),
+  },
+  { $id: "ExerciseProgressSchema" }
+);
+export type ExerciseProgress = Static<typeof ExerciseProgressSchema>;

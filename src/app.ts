@@ -95,6 +95,13 @@ import {
   GetMuscleStatsParamsSchema,
   GetMuscleStatsQuerySchema,
   MuscleStatsSchema,
+  // New Stats Schemas from blueprint
+  OverviewStatsQuerySchema,
+  OverviewStatsSchema,
+  ExerciseProgressParamsSchema,
+  ExerciseProgressQuerySchema,
+  ExerciseProgressSchema,
+  GraphDataPointSchema, // Though nested, explicit registration can be good practice
 } from "./schemas/statsSchemas";
 // Streaks
 import { UserStreakResponseSchema, RecoverStreakBodySchema } from "./schemas/streaksSchemas";
@@ -404,6 +411,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(GetMuscleStatsParamsSchema);
   app.addSchema(GetMuscleStatsQuerySchema);
   app.addSchema(MuscleStatsSchema);
+
+  // New Stats Schemas from blueprint
+  app.addSchema(OverviewStatsQuerySchema);
+  app.addSchema(OverviewStatsSchema);
+  app.addSchema(ExerciseProgressParamsSchema);
+  app.addSchema(ExerciseProgressQuerySchema);
+  app.addSchema(GraphDataPointSchema); // Register GraphDataPointSchema before ExerciseProgressSchema if it's referenced directly
+  app.addSchema(ExerciseProgressSchema);
 
   // Streaks
   app.addSchema(UserStreakResponseSchema);
