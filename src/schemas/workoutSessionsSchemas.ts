@@ -237,3 +237,166 @@ export const DetailedFinishSessionResponseSchema = Type.Object(
   }
 );
 export type DetailedFinishSessionResponse = Static<typeof DetailedFinishSessionResponseSchema>;
+
+// --- Schemas for Workout Session List & Summary (Phase 2) ---
+
+// Enums for ListWorkoutSessionsQuerySchema
+export const ListWorkoutSessionsSortByEnum = Type.Union(
+  [
+    Type.Literal("started_at_desc"),
+    Type.Literal("started_at_asc"),
+    Type.Literal("duration_desc"),
+    Type.Literal("duration_asc"),
+    Type.Literal("total_volume_desc"),
+    Type.Literal("total_volume_asc"),
+  ],
+  { $id: "ListWorkoutSessionsSortByEnum", description: "Sort options for listing workout sessions" }
+);
+export type ListWorkoutSessionsSortBy = Static<typeof ListWorkoutSessionsSortByEnum>;
+
+export const ListWorkoutSessionsPeriodEnum = Type.Union(
+  [
+    Type.Literal("last_7_days"),
+    Type.Literal("last_30_days"),
+    Type.Literal("last_90_days"),
+    Type.Literal("current_month"),
+    Type.Literal("last_month"),
+    Type.Literal("all_time"),
+  ],
+  { $id: "ListWorkoutSessionsPeriodEnum", description: "Time period filter for listing workout sessions" }
+);
+export type ListWorkoutSessionsPeriod = Static<typeof ListWorkoutSessionsPeriodEnum>;
+
+// Query Schema for Listing Workout Sessions
+// Redefined to be a flat object to avoid potential Type.Intersect issues with Static type generation for query.page/limit
+export const ListWorkoutSessionsQuerySchema = Type.Object(
+  {
+    page: Type.Optional(Type.Integer({ minimum: 1, default: 1 })),
+    limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 10 })),
+    sortBy: Type.Optional(ListWorkoutSessionsSortByEnum), // Default: started_at_desc
+    period: Type.Optional(ListWorkoutSessionsPeriodEnum), // Default: all_time
+    // Future: filterByStatus: Type.Optional(SessionStatusEnum)
+    // Future: filterByWorkoutPlanId: Type.Optional(Type.String({ format: "uuid" }))
+  },
+  { $id: "ListWorkoutSessionsQuerySchema" }
+);
+export type ListWorkoutSessionsQuery = Static<typeof ListWorkoutSessionsQuerySchema>;
+
+// Schema for a single item in the workout session list
+export const WorkoutSessionListItemSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    started_at: Type.String({ format: "date-time" }),
+    duration_seconds: Type.Optional(Type.Integer()),
+    status: SessionStatusEnum,
+    total_volume_kg: Type.Optional(Type.Number()),
+    total_sets: Type.Optional(Type.Integer()),
+    total_reps: Type.Optional(Type.Integer()),
+    num_exercises: Type.Optional(Type.Integer()), // Number of unique exercises performed
+    workout_plan_name: Type.Optional(Type.String()), // If linked to a plan
+    workout_plan_day_name: Type.Optional(Type.String()), // If linked to a plan day
+    // Potentially a short summary of exercises, e.g., "Bench Press, Squats, ..."
+    exercise_summary_preview: Type.Optional(Type.String()),
+  },
+  { $id: "WorkoutSessionListItemSchema" }
+);
+export type WorkoutSessionListItem = Static<typeof WorkoutSessionListItemSchema>;
+
+// Response Schema for Listing Workout Sessions
+export const ListWorkoutSessionsResponseSchema = Type.Object(
+  {
+    items: Type.Array(WorkoutSessionListItemSchema),
+    totalItems: Type.Integer(),
+    totalPages: Type.Integer(),
+    currentPage: Type.Integer(),
+  },
+  { $id: "ListWorkoutSessionsResponseSchema" }
+);
+export type ListWorkoutSessionsResponse = Static<typeof ListWorkoutSessionsResponseSchema>;
+
+// Params Schema for Workout Session Summary (GET /users/me/workout-sessions/:sessionId/summary)
+// Reusing UuidParamsSchema if it's just { sessionId: Type.String({ format: "uuid" }) }
+// For clarity, defining it explicitly here.
+export const WorkoutSessionSummaryParamsSchema = Type.Object(
+  {
+    sessionId: Type.String({ format: "uuid", description: "The ID of the workout session" }),
+  },
+  { $id: "WorkoutSessionSummaryParamsSchema" }
+);
+export type WorkoutSessionSummaryParams = Static<typeof WorkoutSessionSummaryParamsSchema>;
+
+// Schema for a single set within the WorkoutSessionExerciseSummarySchema
+export const WorkoutSessionSetSummarySchema = Type.Object(
+  {
+    set_id: Type.String({ format: "uuid" }), // ID of the workout_session_sets record
+    order_index: Type.Integer(),
+    planned_reps_min: Type.Optional(Type.Integer()),
+    planned_reps_max: Type.Optional(Type.Integer()),
+    planned_weight_kg: Type.Optional(Type.Number()),
+    actual_reps: Type.Optional(Type.Number()),
+    actual_weight_kg: Type.Optional(Type.Number()),
+    is_completed: Type.Boolean(),
+    is_success: Type.Optional(Type.Boolean()),
+    is_warmup: Type.Optional(Type.Boolean()),
+    rest_time_seconds: Type.Optional(Type.Integer()),
+    user_notes: Type.Optional(Type.String()),
+    calculated_1rm: Type.Optional(Type.Number()),
+    calculated_swr: Type.Optional(Type.Number()),
+    new_pr_achieved_1rm: Type.Optional(Type.Boolean()), // Indicates if this set resulted in a new 1RM PR for this exercise
+    new_pr_achieved_swr: Type.Optional(Type.Boolean()), // Indicates if this set resulted in a new SWR PR for this exercise
+  },
+  { $id: "WorkoutSessionSetSummarySchema" }
+);
+export type WorkoutSessionSetSummary = Static<typeof WorkoutSessionSetSummarySchema>;
+
+// Schema for a single exercise within the WorkoutSessionSummaryResponseSchema
+export const WorkoutSessionExerciseSummarySchema = Type.Object(
+  {
+    exercise_id: Type.String({ format: "uuid" }),
+    exercise_name: Type.String(),
+    exercise_description: Type.Optional(Type.String()),
+    exercise_video_url: Type.Optional(Type.String({ format: "uri" })),
+    order_index: Type.Integer(),
+    user_notes: Type.Optional(Type.String()), // Notes for the overall exercise in this session
+    sets: Type.Array(WorkoutSessionSetSummarySchema),
+    total_volume_for_exercise_kg: Type.Number(),
+    max_weight_for_exercise_kg: Type.Number(),
+    // Could add pre-session PRs for comparison if needed
+  },
+  { $id: "WorkoutSessionExerciseSummarySchema" }
+);
+export type WorkoutSessionExerciseSummary = Static<typeof WorkoutSessionExerciseSummarySchema>;
+
+// Response Schema for Workout Session Summary
+export const WorkoutSessionSummaryResponseSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }), // Session ID
+    started_at: Type.String({ format: "date-time" }),
+    ended_at: Type.Optional(Type.String({ format: "date-time" })),
+    duration_seconds: Type.Optional(Type.Integer()),
+    status: SessionStatusEnum,
+    notes: Type.Optional(Type.String()), // Overall session notes
+    overall_feeling: Type.Optional(OverallFeelingEnum),
+    workout_plan_id: Type.Optional(Type.String({ format: "uuid" })),
+    workout_plan_name: Type.Optional(Type.String()),
+    workout_plan_day_id: Type.Optional(Type.String({ format: "uuid" })),
+    workout_plan_day_name: Type.Optional(Type.String()),
+    total_volume_kg: Type.Optional(Type.Number()),
+    total_sets_completed: Type.Optional(Type.Integer()),
+    total_reps_completed: Type.Optional(Type.Integer()),
+    exercises: Type.Array(WorkoutSessionExerciseSummarySchema),
+    // Summary of new PRs achieved during this session
+    new_prs_achieved_summary: Type.Array(
+      Type.Object({
+        exercise_id: Type.String({ format: "uuid" }),
+        exercise_name: Type.String(),
+        pr_type: Type.String(), // "1RM" or "SWR"
+        old_value: Type.Optional(Type.Number()),
+        new_value: Type.Number(),
+        unit: Type.String(), // "kg" or "SWR"
+      })
+    ),
+  },
+  { $id: "WorkoutSessionSummaryResponseSchema" }
+);
+export type WorkoutSessionSummaryResponse = Static<typeof WorkoutSessionSummaryResponseSchema>;

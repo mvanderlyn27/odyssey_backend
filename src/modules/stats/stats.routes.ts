@@ -12,6 +12,10 @@ import {
   ExerciseProgressParams,
   ExerciseProgressQuery,
   ExerciseProgress,
+  AllUserPRsQuerySchema,
+  AllUserPRsResponseSchema,
+  AllUserPRsQuery, // Type for the querystring object
+  AllUserPRsResponse, // The actual TypeScript type for the response
 } from "../../schemas/statsSchemas";
 import { ErrorResponseSchema, ErrorResponse } from "../../schemas/commonSchemas";
 
@@ -22,7 +26,7 @@ async function statsRoutes(fastify: FastifyInstance, options: FastifyPluginOptio
   fastify.get<{
     Querystring: OverviewStatsQuery;
     Reply: OverviewStats | ErrorResponse;
-  }>("/users/me/stats/overview", {
+  }>("/overview", {
     preHandler: [fastify.authenticate],
     schema: {
       description: "Get an overview of the authenticated user's statistics.",
@@ -50,12 +54,10 @@ async function statsRoutes(fastify: FastifyInstance, options: FastifyPluginOptio
         return reply.send(overview);
       } catch (error: any) {
         fastify.log.error(error, `Failed getting user stats overview for user ${userId}`);
-        return reply
-          .code(500)
-          .send({
-            error: "Internal Server Error",
-            message: error.message || "Failed to retrieve user stats overview.",
-          });
+        return reply.code(500).send({
+          error: "Internal Server Error",
+          message: error.message || "Failed to retrieve user stats overview.",
+        });
       }
     },
   });
@@ -65,7 +67,7 @@ async function statsRoutes(fastify: FastifyInstance, options: FastifyPluginOptio
     Params: ExerciseProgressParams;
     Querystring: ExerciseProgressQuery;
     Reply: ExerciseProgress | ErrorResponse;
-  }>("/users/me/exercises/:exerciseId/progress", {
+  }>("/exercises/:exerciseId/progress", {
     preHandler: [fastify.authenticate],
     schema: {
       description: "Get detailed progress for a specific exercise for the authenticated user.",
@@ -114,6 +116,45 @@ async function statsRoutes(fastify: FastifyInstance, options: FastifyPluginOptio
         return reply
           .code(500)
           .send({ error: "Internal Server Error", message: error.message || "Failed to retrieve exercise progress." });
+      }
+    },
+  });
+
+  // --- GET /users/me/personal-records ---
+  fastify.get<{
+    Querystring: AllUserPRsQuery;
+    Reply: AllUserPRsResponse | ErrorResponse; // Use the actual TypeScript type
+  }>("/personal-records", {
+    preHandler: [fastify.authenticate],
+    schema: {
+      description: "Get all personal records (1RM) for the authenticated user.",
+      tags: ["Stats"],
+      summary: "Get all user PRs (1RM)",
+      security: [{ bearerAuth: [] }],
+      querystring: AllUserPRsQuerySchema,
+      response: {
+        200: AllUserPRsResponseSchema,
+        401: ErrorResponseSchema,
+        500: ErrorResponseSchema,
+      },
+    },
+    handler: async (request: FastifyRequest<{ Querystring: AllUserPRsQuery }>, reply: FastifyReply) => {
+      const userId = request.user?.id;
+      if (!userId) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
+
+      const queryParams = request.query; // Contains sortBy, filterByExerciseId, filterByMuscleGroupId
+
+      try {
+        const personalRecords = await statsService.getAllUserPRs(fastify, userId, queryParams);
+        return reply.send(personalRecords);
+      } catch (error: any) {
+        fastify.log.error(error, `Failed getting all personal records for user ${userId}`);
+        return reply.code(500).send({
+          error: "Internal Server Error",
+          message: error.message || "Failed to retrieve personal records.",
+        });
       }
     },
   });

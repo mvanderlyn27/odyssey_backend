@@ -11,12 +11,85 @@ import {
   BestSessionVolume,
   RepPR,
   GraphDataPoint,
+  AllUserPRsQuery,
+  AllUserPRsResponse,
+  UserPREntry,
+  AllUserPRsSortBy,
 } from "../../schemas/statsSchemas";
 import { Tables, Enums } from "../../types/database"; // Added Enums for potential use
 import { getGroupedDateKey, BlueprintGranularityString, BlueprintTimePeriodString } from "./stats.utils"; // parseDateRange will be used by routes
 
 // Define a type for Supabase client from FastifyInstance
 type SupabaseClient = FastifyInstance["supabase"];
+
+// Type for the data structure returned by getExerciseSetsInRange
+// Includes relevant fields from workout_session_sets and nested workout_sessions
+type ExerciseSetRecord = Pick<
+  Tables<"workout_session_sets">,
+  | "performed_at"
+  | "calculated_1rm"
+  | "calculated_swr"
+  | "actual_weight_kg"
+  | "actual_reps"
+  | "workout_session_id"
+  | "id"
+> & {
+  workout_sessions: {
+    user_id: string;
+    completed_at: string | null; // Ensure completed_at is part of the type
+  } | null; // workout_sessions can be null if the join is not !inner or if data is missing
+};
+
+// Helper function to generate graph data from a list of records
+function generateGraphData(
+  records: Array<any>, // Consider a more specific type if possible, e.g., ExerciseSetRecord or a generic
+  dateColumnKey: string,
+  valueColumnKey: string,
+  granularity: BlueprintGranularityString,
+  aggregationType: "MAX" | "SUM" | "AVG",
+  fastifyLog: FastifyInstance["log"] // Pass logger for warnings
+): GraphDataPoint[] {
+  const aggregatedData: Map<string, number[]> = new Map();
+
+  for (const record of records) {
+    const dateValue = record[dateColumnKey];
+    const metricValue = record[valueColumnKey];
+
+    if (dateValue === null || typeof dateValue !== "string") continue;
+    if (metricValue === null || typeof metricValue !== "number") continue;
+
+    const dateKey = getGroupedDateKey(dateValue, granularity);
+    if (!aggregatedData.has(dateKey)) {
+      aggregatedData.set(dateKey, []);
+    }
+    aggregatedData.get(dateKey)?.push(metricValue);
+  }
+
+  const result: GraphDataPoint[] = [];
+  for (const [dateKey, values] of aggregatedData.entries()) {
+    if (values.length === 0) continue;
+
+    let aggregatedValue: number;
+    switch (aggregationType) {
+      case "MAX":
+        aggregatedValue = Math.max(...values);
+        break;
+      case "SUM":
+        aggregatedValue = values.reduce((sum, val) => sum + val, 0);
+        break;
+      case "AVG":
+        aggregatedValue = values.reduce((sum, val) => sum + val, 0) / values.length;
+        break;
+      default:
+        fastifyLog.warn(`Unknown aggregation type: ${aggregationType}`);
+        aggregatedValue = 0;
+        break;
+    }
+    result.push({ date: dateKey, value: aggregatedValue });
+  }
+  result.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  return result;
+}
 
 export class StatsService {
   // Removed constructor and instance properties for fastify and supabase
@@ -192,122 +265,58 @@ export class StatsService {
     }
   }
 
-  // getHistoricalMetricData and getExerciseProgressDetails will be implemented next
+  // getExerciseSetsInRange and getExerciseProgressDetails will be implemented next
 
   /**
-   * III. Helper/Sub-Service for Historical Graph Data
-   * A. Service Function (stats.service.ts or a new graph.service.ts)
-   * Function: getHistoricalMetricData(userId: string, exerciseId: string, metricColumnName: string, startDate: string, endDate: string, granularity: string, aggregationType: 'MAX' | 'SUM' | 'AVG'): Promise<GraphDataPoint[]>
+   * Fetches exercise sets within a given date range.
    */
-  async getHistoricalMetricData(
-    fastify: FastifyInstance, // Added fastify parameter
+  async getExerciseSetsInRange(
+    fastify: FastifyInstance,
     userId: string,
     exerciseId: string,
-    metricColumnName: keyof Pick<
-      Tables<"workout_session_sets">,
-      "calculated_1rm" | "calculated_swr" | "actual_weight_kg" | "actual_reps"
-    >, // Restrict to valid numeric columns
     startDate: string,
-    endDate: string,
-    granularity: BlueprintGranularityString,
-    aggregationType: "MAX" | "SUM" | "AVG"
-  ): Promise<GraphDataPoint[]> {
+    endDate: string
+  ): Promise<ExerciseSetRecord[]> {
     const supabase = fastify.supabase;
     if (!supabase) {
-      fastify.log.error("Supabase client not found on Fastify instance in getHistoricalMetricData.");
+      fastify.log.error("Supabase client not found on Fastify instance in getExerciseSetsInRange.");
       throw new Error("Supabase client not configured.");
     }
 
-    // Define type for the set object with the aliased metric_value
-    // This needs to be defined before it's used in .returns<>()
-    type SetWithAliasedMetric = {
-      performed_at: string;
-      metric_value: number | null;
-      workout_sessions: { user_id: string };
-    };
-
     try {
-      // Query workout_session_sets table
-      // Ensure user_id is part of the query, joining with workout_sessions if necessary
-      // For simplicity, assuming workout_session_sets has performed_at and user_id can be filtered via workout_sessions join
-      const query = supabase // Use local supabase
+      const query = supabase
         .from("workout_session_sets")
         .select(
           `
           performed_at,
-          ${metricColumnName} AS metric_value, 
-          workout_sessions!inner ( user_id )
+          calculated_1rm,
+          calculated_swr,
+          actual_weight_kg,
+          actual_reps,
+          workout_session_id,
+          id,
+          workout_sessions!inner ( user_id, completed_at )
         `
         )
         .eq("exercise_id", exerciseId)
-        .eq("workout_sessions.user_id", userId)
-        .gte("performed_at", startDate)
-        .lte("performed_at", endDate)
-        .order("performed_at", { ascending: true })
-        .returns<SetWithAliasedMetric[]>(); // Add .returns<T[]>()
+        .eq("workout_sessions.user_id", userId) // Filter by user_id via the joined workout_sessions table
+        .gte("performed_at", startDate) // Filter sets by performed_at
+        .lte("performed_at", endDate) // Filter sets by performed_at
+        .order("performed_at", { ascending: true });
 
-      const { data: sets, error: setsError } = await query;
+      const { data: sets, error: setsError } = await query.returns<ExerciseSetRecord[]>();
 
       if (setsError) {
-        fastify.log.error(setsError, `Failed to fetch historical data for exercise ${exerciseId}, user ${userId}`); // Use fastify.log
-        throw new Error("Failed to retrieve historical exercise data.");
+        fastify.log.error(setsError, `Failed to fetch exercise sets for exercise ${exerciseId}, user ${userId}`);
+        throw new Error("Failed to retrieve exercise sets.");
       }
 
-      if (!sets || sets.length === 0) {
-        return [];
-      }
-
-      // Aggregate Data by Granularity
-      const aggregatedData: Map<string, number[]> = new Map();
-
-      // const typedSets = sets as SetWithAliasedMetric[]; // No longer needed due to .returns()
-
-      for (const set of sets) {
-        // Iterate over typed sets directly
-        const value = set.metric_value; // Access the aliased metric_value
-        if (value === null || typeof value !== "number") continue; // Skip if null or not a number
-
-        const dateKey = getGroupedDateKey(set.performed_at, granularity);
-        if (!aggregatedData.has(dateKey)) {
-          aggregatedData.set(dateKey, []);
-        }
-        aggregatedData.get(dateKey)?.push(value);
-      }
-
-      const result: GraphDataPoint[] = [];
-      for (const [dateKey, values] of aggregatedData.entries()) {
-        if (values.length === 0) continue;
-
-        let aggregatedValue: number;
-        switch (aggregationType) {
-          case "MAX":
-            aggregatedValue = Math.max(...values);
-            break;
-          case "SUM":
-            aggregatedValue = values.reduce((sum, val) => sum + val, 0);
-            break;
-          case "AVG":
-            aggregatedValue = values.reduce((sum, val) => sum + val, 0) / values.length;
-            break;
-          default: // Should not happen with TypeScript
-            fastify.log.warn(`Unknown aggregation type: ${aggregationType}`); // Use fastify.log
-            aggregatedValue = 0;
-            break;
-        }
-        result.push({ date: dateKey, value: aggregatedValue });
-      }
-
-      // Sort the resulting GraphDataPoint array by date (already sorted by query and map iteration order)
-      // but an explicit sort ensures correctness if map iteration order isn't guaranteed for all JS engines.
-      result.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-      return result;
+      return sets || [];
     } catch (error: any) {
-      fastify.log.error(error, `Error in getHistoricalMetricData for exercise ${exerciseId}, user ${userId}`); // Use fastify.log
+      fastify.log.error(error, `Error in getExerciseSetsInRange for exercise ${exerciseId}, user ${userId}`);
       throw error;
     }
   }
-  // getExerciseProgressDetails will be implemented next
 
   /**
    * II. Detailed Exercise Progress
@@ -457,90 +466,61 @@ export class StatsService {
       }
       repPRsAtSpecificWeights.sort((a, b) => a.reps - b.reps);
 
+      // Fetch all sets in range once
+      const allSetsInRange = await this.getExerciseSetsInRange(fastify, userId, exerciseId, startDate, endDate);
+
       // 5. Fetch Data for e1RM Over Time Graph
-      const e1RMOverTime = await this.getHistoricalMetricData(
-        fastify,
-        userId,
-        exerciseId,
+      const e1RMOverTime = generateGraphData(
+        allSetsInRange.filter((set) => set.calculated_1rm !== null),
+        "performed_at",
         "calculated_1rm",
-        startDate,
-        endDate,
         granularity,
-        "MAX"
+        "MAX",
+        fastify.log
       );
 
       // 6. Fetch Data for Volume Per Session Over Time Graph
-      // This requires custom logic as per blueprint
-      const { data: setsForVolumeGraph, error: setsForVolumeGraphError } = await supabase
-        .from("workout_session_sets")
-        .select(
-          "actual_weight_kg, actual_reps, performed_at, workout_session_id, workout_sessions!inner(user_id, completed_at)"
-        )
-        .eq("exercise_id", exerciseId)
-        .eq("workout_sessions.user_id", userId)
-        .gte("workout_sessions.completed_at", startDate)
-        .lte("workout_sessions.completed_at", endDate);
+      const sessionVolumeData: Array<{ session_date: string; volume: number }> = [];
+      if (allSetsInRange.length > 0) {
+        const volumeBySession: Map<string, { totalVolume: number; completedAt: string | null }> = new Map();
 
-      if (setsForVolumeGraphError) {
-        fastify.log.error(
-          setsForVolumeGraphError,
-          `Failed to fetch sets for volume graph, exercise ${exerciseId}, user ${userId}`
-        );
-        // Not throwing, proceed with empty graph data
-      }
-
-      const volumePerSessionMap: Map<string, { date: string; totalVolume: number; sessionIds: Set<string> }> =
-        new Map();
-      if (setsForVolumeGraph && setsForVolumeGraph.length > 0) {
-        const sessionVolumes: Map<string, number> = new Map(); // sessionId -> totalVolumeForSession
-        const sessionDates: Map<string, string> = new Map(); // sessionId -> completed_at (for grouping key)
-
-        for (const set of setsForVolumeGraph) {
-          if (
-            set.actual_weight_kg != null &&
-            set.actual_reps != null &&
-            set.workout_session_id != null &&
-            (set.workout_sessions as any)?.completed_at != null
-          ) {
+        for (const set of allSetsInRange) {
+          if (set.actual_weight_kg != null && set.actual_reps != null && set.workout_session_id != null) {
             const volume = set.actual_weight_kg * set.actual_reps;
-            sessionVolumes.set(set.workout_session_id, (sessionVolumes.get(set.workout_session_id) || 0) + volume);
-            sessionDates.set(set.workout_session_id, (set.workout_sessions as any).completed_at);
+            const sessionInfo = volumeBySession.get(set.workout_session_id) || {
+              totalVolume: 0,
+              completedAt: set.workout_sessions?.completed_at ?? null, // Get completed_at from the joined data
+            };
+            sessionInfo.totalVolume += volume;
+            volumeBySession.set(set.workout_session_id, sessionInfo);
           }
         }
 
-        for (const [sessionId, totalVolumeForSession] of sessionVolumes.entries()) {
-          const sessionCompletedAt = sessionDates.get(sessionId);
-          if (sessionCompletedAt) {
-            const dateKey = getGroupedDateKey(sessionCompletedAt, granularity);
-            const existingEntry = volumePerSessionMap.get(dateKey) || {
-              date: dateKey,
-              totalVolume: 0,
-              sessionIds: new Set(),
-            };
-            existingEntry.totalVolume += totalVolumeForSession; // Sum volumes if multiple sessions in same period
-            existingEntry.sessionIds.add(sessionId);
-            volumePerSessionMap.set(dateKey, existingEntry);
+        volumeBySession.forEach((data, sessionId) => {
+          if (data.completedAt) {
+            // Ensure there's a completion date for grouping
+            sessionVolumeData.push({ session_date: data.completedAt, volume: data.totalVolume });
           }
-        }
+        });
       }
-      const volumePerSessionOverTime: GraphDataPoint[] = Array.from(volumePerSessionMap.values())
-        .map((entry) => ({
-          date: entry.date,
-          value: entry.totalVolume, // Could also average if multiple sessions: entry.totalVolume / entry.sessionIds.size
-          // workoutSessionId: entry.sessionIds.size === 1 ? entry.sessionIds.values().next().value : undefined // Optional: if only one session
-        }))
-        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      const volumePerSessionOverTime = generateGraphData(
+        sessionVolumeData,
+        "session_date", // Date key is now 'session_date' from our processed array
+        "volume", // Value key is 'volume'
+        granularity,
+        "SUM", // Typically sum volume per period, or AVG
+        fastify.log
+      );
 
       // 7. Fetch Data for SWR Over Time Graph
-      const swrOverTime = await this.getHistoricalMetricData(
-        fastify,
-        userId,
-        exerciseId,
+      const swrOverTime = generateGraphData(
+        allSetsInRange.filter((set: ExerciseSetRecord) => set.calculated_swr !== null), // Filter out nulls before processing, add type
+        "performed_at",
         "calculated_swr",
-        startDate,
-        endDate,
         granularity,
-        "MAX"
+        "MAX",
+        fastify.log
       );
 
       // Assemble and Return ExerciseProgressSchema object
@@ -556,6 +536,176 @@ export class StatsService {
       return result;
     } catch (error: any) {
       fastify.log.error(error, `Error in getExerciseProgressDetails for exercise ${exerciseId}, user ${userId}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Phase 1: All Personal Records
+   * Service Function: getAllUserPRs
+   */
+  async getAllUserPRs(
+    fastify: FastifyInstance,
+    userId: string,
+    query: AllUserPRsQuery // Use the schema type for query parameters
+  ): Promise<AllUserPRsResponse> {
+    const supabase = fastify.supabase;
+    if (!supabase) {
+      fastify.log.error("Supabase client not found on Fastify instance in getAllUserPRs.");
+      throw new Error("Supabase client not configured.");
+    }
+
+    const { sortBy, filterByExerciseId, filterByMuscleGroupId } = query;
+
+    try {
+      let prQuery = supabase
+        .from("user_exercise_prs")
+        .select(
+          `
+          exercise_id,
+          achieved_at,
+          best_1rm,
+          source_set_id,
+          workout_session_sets!inner(workout_session_id),
+          exercises!inner (
+            name,
+            description,
+            video_url,
+            exercise_muscle_groups!inner(intensity, muscle_group_id, muscle_groups!inner(id, name))
+          )
+        `
+        )
+        .eq("user_id", userId)
+        .not("best_1rm", "is", null); // Only include records where 1RM is set
+
+      if (filterByExerciseId) {
+        prQuery = prQuery.eq("exercise_id", filterByExerciseId);
+      }
+
+      if (filterByMuscleGroupId) {
+        // Filter by the muscle group ID, ensuring it's the primary one.
+        // The muscle_group_id in exercise_muscle_groups is the FK to muscle_groups.id
+        prQuery = prQuery.eq("exercises.exercise_muscle_groups.intensity", "primary");
+        prQuery = prQuery.eq("exercises.exercise_muscle_groups.muscle_group_id", filterByMuscleGroupId);
+      }
+
+      // Apply sorting
+      // Default sort: most recent PRs first
+      let sortColumn = "achieved_at";
+      let sortAscending = false;
+
+      if (sortBy) {
+        switch (
+          sortBy as AllUserPRsSortBy // Cast to ensure type safety
+        ) {
+          case "exercise_name_asc":
+            sortColumn = "exercises.name"; // Sort by joined table column
+            sortAscending = true;
+            break;
+          case "exercise_name_desc":
+            sortColumn = "exercises.name";
+            sortAscending = false;
+            break;
+          case "pr_value_asc":
+            sortColumn = "best_1rm";
+            sortAscending = true;
+            break;
+          case "pr_value_desc":
+            sortColumn = "best_1rm";
+            sortAscending = false;
+            break;
+          case "achieved_at_asc":
+            sortColumn = "achieved_at";
+            sortAscending = true;
+            break;
+          case "achieved_at_desc":
+            sortColumn = "achieved_at";
+            sortAscending = false;
+            break;
+        }
+      }
+      // For joined tables, PostgREST requires specifying the joined table in order()
+      // e.g., .order('name', { foreignTable: 'exercises', ascending: sortAscending })
+      // However, if the column is unique in the result set (like exercises.name after join),
+      // direct sorting might work or might need the foreignTable hint.
+      // Let's try direct first, and adjust if PostgREST complains.
+      if (sortColumn.startsWith("exercises.")) {
+        prQuery = prQuery.order(sortColumn.split(".")[1], { foreignTable: "exercises", ascending: sortAscending });
+      } else {
+        prQuery = prQuery.order(sortColumn, { ascending: sortAscending });
+      }
+
+      const { data: prRecords, error: prError } = await prQuery;
+
+      if (prError) {
+        fastify.log.error(prError, `Failed to fetch personal records for user ${userId}`);
+        throw new Error("Failed to retrieve personal records.");
+      }
+
+      if (!prRecords) {
+        return [];
+      }
+
+      // Map to UserPREntrySchema
+      const result: UserPREntry[] = prRecords.map((pr: any) => {
+        // The 'any' type is used here because Supabase's dynamic select makes precise typing complex.
+        // We ensure data integrity by mapping to the UserPREntry schema.
+        const typedPr = pr as {
+          exercise_id: string;
+          achieved_at: string;
+          best_1rm: number | null;
+          source_set_id: string | null;
+          exercises: {
+            name: string;
+            description: string | null;
+            video_url: string | null;
+            exercise_muscle_groups: Array<{
+              intensity: string | null;
+              muscle_group_id: string;
+              muscle_groups: {
+                id: string;
+                name: string;
+              } | null;
+            }> | null;
+          } | null;
+          workout_session_sets: {
+            // workout_session_sets is a sibling to exercises on the pr object
+            workout_session_id: string;
+          } | null;
+        };
+
+        const exerciseData = typedPr.exercises;
+        let primaryMuscleGroupIdValue: string | undefined = undefined;
+        let primaryMuscleGroupNameValue: string | undefined = undefined;
+
+        if (exerciseData?.exercise_muscle_groups) {
+          const primaryEmgEntry = exerciseData.exercise_muscle_groups.find(
+            (emg) => emg.intensity === "primary" && emg.muscle_groups
+          );
+          if (primaryEmgEntry && primaryEmgEntry.muscle_groups) {
+            primaryMuscleGroupIdValue = primaryEmgEntry.muscle_groups.id;
+            primaryMuscleGroupNameValue = primaryEmgEntry.muscle_groups.name;
+          }
+        }
+
+        return {
+          exercise_id: pr.exercise_id,
+          exercise_name: exerciseData?.name || "Unknown Exercise",
+          exercise_description: exerciseData?.description ?? undefined,
+          exercise_video_url: exerciseData?.video_url ?? undefined,
+          primary_muscle_group_id: primaryMuscleGroupIdValue,
+          primary_muscle_group_name: primaryMuscleGroupNameValue,
+          pr_type: "1RM", // Hardcoded as per current scope
+          value_kg: typedPr.best_1rm!, // Assert non-null due to .not("best_1rm", "is", null) filter
+          achieved_at: typedPr.achieved_at,
+          source_set_id: typedPr.source_set_id ?? undefined,
+          workout_session_id: typedPr.workout_session_sets?.workout_session_id ?? undefined,
+        };
+      });
+
+      return result;
+    } catch (error: any) {
+      fastify.log.error(error, `Error in getAllUserPRs for user ${userId}`);
       throw error;
     }
   }

@@ -102,6 +102,10 @@ import {
   ExerciseProgressQuerySchema,
   ExerciseProgressSchema,
   GraphDataPointSchema, // Though nested, explicit registration can be good practice
+  // Schemas for All Personal Records (Phase 1)
+  AllUserPRsQuerySchema,
+  UserPREntrySchema,
+  AllUserPRsResponseSchema,
 } from "./schemas/statsSchemas";
 // Streaks
 import { UserStreakResponseSchema, RecoverStreakBodySchema } from "./schemas/streaksSchemas";
@@ -159,6 +163,16 @@ import {
   MuscleGroupRankUpSchema,
   LoggedSetSummaryItemSchema,
   PlanWeightIncreaseItemSchema,
+  // Schemas for Workout Session List & Summary (Phase 2)
+  ListWorkoutSessionsQuerySchema,
+  WorkoutSessionListItemSchema,
+  ListWorkoutSessionsResponseSchema,
+  WorkoutSessionSummaryParamsSchema,
+  WorkoutSessionSetSummarySchema,
+  WorkoutSessionExerciseSummarySchema,
+  WorkoutSessionSummaryResponseSchema,
+  ListWorkoutSessionsSortByEnum,
+  ListWorkoutSessionsPeriodEnum,
 } from "./schemas/workoutSessionsSchemas";
 
 // --- Import Route Handlers ---
@@ -370,6 +384,17 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(PlanWeightIncreaseItemSchema);
   app.addSchema(DetailedFinishSessionResponseSchema); // Now includes Refs to the above
 
+  // Workout Session List & Summary Schemas (Phase 2)
+  app.addSchema(ListWorkoutSessionsSortByEnum);
+  app.addSchema(ListWorkoutSessionsPeriodEnum);
+  app.addSchema(ListWorkoutSessionsQuerySchema);
+  app.addSchema(WorkoutSessionListItemSchema); // Dependency for ListWorkoutSessionsResponseSchema
+  app.addSchema(ListWorkoutSessionsResponseSchema);
+  app.addSchema(WorkoutSessionSummaryParamsSchema);
+  app.addSchema(WorkoutSessionSetSummarySchema); // Dependency for WorkoutSessionExerciseSummarySchema
+  app.addSchema(WorkoutSessionExerciseSummarySchema); // Dependency for WorkoutSessionSummaryResponseSchema
+  app.addSchema(WorkoutSessionSummaryResponseSchema);
+
   // AI Coach Messages
   app.addSchema(PostChatBodySchema);
   app.addSchema(PostChatResponseSchema);
@@ -419,6 +444,11 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(ExerciseProgressQuerySchema);
   app.addSchema(GraphDataPointSchema); // Register GraphDataPointSchema before ExerciseProgressSchema if it's referenced directly
   app.addSchema(ExerciseProgressSchema);
+
+  // New Stats Schemas for "All Personal Records" (Phase 1)
+  app.addSchema(AllUserPRsQuerySchema);
+  app.addSchema(UserPREntrySchema);
+  app.addSchema(AllUserPRsResponseSchema);
 
   // Streaks
   app.addSchema(UserStreakResponseSchema);

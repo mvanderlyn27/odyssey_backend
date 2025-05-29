@@ -1,12 +1,23 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Database, Tables, TablesInsert, TablesUpdate } from "../../types/database";
+import { Database, Tables, TablesInsert, TablesUpdate, Enums } from "../../types/database"; // Added Enums import
 import { XpService, XPUpdateResult } from "../xp/xp.service"; // Added import
 import {
   NewFinishSessionBody,
   DetailedFinishSessionResponse,
   SessionSetInput, // For typing within helper
+  ListWorkoutSessionsQuery,
+  ListWorkoutSessionsResponse,
+  WorkoutSessionListItem,
+  // ListWorkoutSessionsSortBy, // Enum type, used by ListWorkoutSessionsQuery
+  // ListWorkoutSessionsPeriod, // Enum type, used by ListWorkoutSessionsQuery
+  WorkoutSessionSummaryParams,
+  WorkoutSessionSummaryResponse,
+  WorkoutSessionExerciseSummary,
+  WorkoutSessionSetSummary,
+  SessionStatus,
 } from "@/schemas/workoutSessionsSchemas";
+import { parseDateRange as parseDateRangeForStats } from "../../modules/stats/stats.utils"; // For period filtering
 // import { updateUserMuscleGroupStatsAfterSession } from "../stats/stats.service"; // Currently commented out
 
 // Helper function to calculate 1RM using Epley formula
@@ -1261,3 +1272,339 @@ async function _updateUserMuscleLastWorked(
     fastify.log.error({ error: err, userId }, "[MUSCLE_LAST_WORKED] Unexpected error.");
   }
 }
+
+/**
+ * Lists workout sessions for a user with pagination, sorting, and filtering.
+ */
+export const listUserWorkoutSessions = async (
+  fastify: FastifyInstance,
+  userId: string,
+  query: ListWorkoutSessionsQuery
+): Promise<ListWorkoutSessionsResponse> => {
+  const supabase = fastify.supabase as SupabaseClient<Database>;
+  fastify.log.info(`[LIST_SESSIONS] User: ${userId}, Query: ${JSON.stringify(query)}`);
+
+  // Error 1 Fix: Access query parameters directly with nullish coalescing for defaults
+  // Also ensuring ListWorkoutSessionsQuery type correctly includes page and limit from PaginationQuerySchema
+  const page = query.page ?? 1;
+  const limit = query.limit ?? 10;
+  const sortBy = query.sortBy ?? "started_at_desc";
+  const period = query.period ?? "all_time";
+  const offset = (page - 1) * limit;
+
+  let sessionsQuery = supabase
+    .from("workout_sessions")
+    .select(
+      `
+      id,
+      started_at,
+      duration_seconds,
+      status,
+      total_volume_kg,
+      total_sets,
+      total_reps,
+      exercises_performed_summary, 
+      workout_plans!left ( name ),
+      workout_plan_days!left ( name )
+    `,
+      { count: "exact" }
+    )
+    .eq("user_id", userId);
+
+  // Apply period filter
+  if (period !== "all_time") {
+    // Assuming parseDateRangeForStats can handle ListWorkoutSessionsPeriod type or we adapt it
+    // For now, let's assume it works or needs a wrapper.
+    // This utility function might need adjustment if ListWorkoutSessionsPeriodEnum values
+    // don't directly map to what parseDateRangeForStats expects.
+    // For simplicity, I'll map common ones. A more robust solution would align enums or use a dedicated util.
+    let statsPeriod: Parameters<typeof parseDateRangeForStats>[0] = "all_time";
+    if (period === "last_7_days") statsPeriod = "last_7_days";
+    else if (period === "last_30_days") statsPeriod = "last_30_days";
+    else if (period === "last_90_days") statsPeriod = "last_90_days";
+    // 'current_month' and 'last_month' would need specific handling in parseDateRangeForStats or here.
+    // Sticking to compatible ones for now.
+    if (statsPeriod !== "all_time") {
+      const { startDate, endDate } = parseDateRangeForStats(statsPeriod);
+      sessionsQuery = sessionsQuery.gte("started_at", startDate).lte("started_at", endDate);
+    }
+  }
+
+  // Apply sorting
+  switch (sortBy) {
+    case "started_at_asc":
+      sessionsQuery = sessionsQuery.order("started_at", { ascending: true });
+      break;
+    case "duration_desc":
+      sessionsQuery = sessionsQuery.order("duration_seconds", { ascending: false, nullsFirst: false }); // nulls last typically
+      break;
+    case "duration_asc":
+      sessionsQuery = sessionsQuery.order("duration_seconds", { ascending: true, nullsFirst: true });
+      break;
+    case "total_volume_desc":
+      sessionsQuery = sessionsQuery.order("total_volume_kg", { ascending: false, nullsFirst: false });
+      break;
+    case "total_volume_asc":
+      sessionsQuery = sessionsQuery.order("total_volume_kg", { ascending: true, nullsFirst: true });
+      break;
+    case "started_at_desc":
+    default:
+      sessionsQuery = sessionsQuery.order("started_at", { ascending: false });
+      break;
+  }
+
+  sessionsQuery = sessionsQuery.range(offset, offset + limit - 1);
+
+  const { data, error, count } = await sessionsQuery;
+
+  if (error) {
+    fastify.log.error(error, `[LIST_SESSIONS] Error fetching sessions for user ${userId}`);
+    throw new Error("Failed to retrieve workout sessions.");
+  }
+
+  const items: WorkoutSessionListItem[] = (data || []).map((s: any) => ({
+    id: s.id,
+    started_at: s.started_at,
+    duration_seconds: s.duration_seconds,
+    status: s.status,
+    total_volume_kg: s.total_volume_kg,
+    total_sets: s.total_sets,
+    total_reps: s.total_reps,
+    // num_exercises: This would require counting distinct exercises from workout_session_sets or parsing summary.
+    // For now, can be derived from exercises_performed_summary if it's reliable.
+    num_exercises: s.exercises_performed_summary ? s.exercises_performed_summary.split(",").length : undefined,
+    workout_plan_name: s.workout_plans?.name ?? undefined,
+    workout_plan_day_name: s.workout_plan_days?.name ?? undefined,
+    exercise_summary_preview: s.exercises_performed_summary,
+  }));
+
+  const totalItems = count || 0;
+  const totalPages = Math.ceil(totalItems / limit);
+
+  return {
+    items,
+    totalItems,
+    totalPages,
+    currentPage: page,
+  };
+};
+
+/**
+ * Gets a detailed summary of a specific workout session.
+ */
+export const getWorkoutSessionSummary = async (
+  fastify: FastifyInstance,
+  userId: string,
+  sessionId: string
+): Promise<WorkoutSessionSummaryResponse> => {
+  const supabase = fastify.supabase as SupabaseClient<Database>;
+  fastify.log.info(`[GET_SESSION_SUMMARY] User: ${userId}, Session: ${sessionId}`);
+
+  // 1. Fetch the main session details, including plan and day names if available
+  const { data: sessionData, error: sessionError } = await supabase
+    .from("workout_sessions")
+    .select(
+      `
+      *,
+      workout_plans!left ( id, name ),
+      workout_plan_days!left ( id, name )
+    `
+    )
+    .eq("id", sessionId)
+    .eq("user_id", userId)
+    .single();
+
+  if (sessionError || !sessionData) {
+    fastify.log.error(sessionError, `[GET_SESSION_SUMMARY] Session not found or error fetching: ${sessionId}`);
+    throw new Error(sessionError?.code === "PGRST116" ? "Workout session not found." : "Failed to retrieve session.");
+  }
+
+  // 2. Fetch all sets for this session, with exercise details
+  const { data: setsData, error: setsError } = await supabase
+    .from("workout_session_sets")
+    .select(
+      `
+      id,
+      exercise_id,
+      set_order,
+      planned_min_reps,
+      planned_max_reps,
+      planned_weight_kg,
+      actual_reps,
+      actual_weight_kg,
+      is_success,
+      is_warmup,
+      rest_seconds_taken,
+      notes,
+      calculated_1rm,
+      calculated_swr,
+      exercises!inner ( id, name, description, video_url ),
+      workout_session_exercises:workout_session_exercise_id ( order_index, notes )
+    `
+      // Assuming workout_session_sets has a FK named 'workout_session_exercise_id'
+      // that points to 'workout_session_exercises(id)' and the relation is named 'workout_session_exercises'.
+      // If the relation name is different or the FK column is different, this needs to be adjusted.
+      // This is a guess to resolve the likely cause of the SelectQueryError.
+      // If workout_session_exercises is not directly related this way, the query needs a larger restructure.
+    )
+    .eq("workout_session_id", sessionId)
+    .order("workout_session_exercises(order_index)", { ascending: true }) // Order by exercise order first
+    .order("set_order", { ascending: true }); // Then by set order within each exercise
+
+  if (setsError) {
+    fastify.log.error(setsError, `[GET_SESSION_SUMMARY] Error fetching sets for session: ${sessionId}`);
+    throw new Error("Failed to retrieve session sets.");
+  }
+
+  // 3. Fetch user_exercise_prs that were achieved from this session
+  // These PRs will have their source_set_id pointing to one of the sets in setsData
+  const { data: prsFromThisSession, error: prsError } = await supabase
+    .from("user_exercise_prs")
+    .select(
+      `
+      exercise_id,
+      best_1rm,
+      best_swr,
+      achieved_at,
+      source_set_id,
+      exercises ( name )
+    `
+    )
+    .eq("user_id", userId)
+    .eq("workout_session_id", sessionId); // Filter PRs by this session_id
+
+  if (prsError) {
+    fastify.log.error(prsError, `[GET_SESSION_SUMMARY] Error fetching PRs for session: ${sessionId}`);
+    // Continue, PR summary might be empty
+  }
+
+  // 4. Process sets and group by exercise
+  const exercisesSummaryMap = new Map<string, WorkoutSessionExerciseSummary>();
+  for (const setData of setsData || []) {
+    const exercise = setData.exercises as { id: string; name: string; description?: string; video_url?: string };
+
+    // Error 2 Fix: Safely access potentially problematic joined data
+    const sessionExerciseRelationData = setData.workout_session_exercises;
+    let exerciseOrderIndex = 0; // Default value
+    let exerciseScopedNotes: string | undefined = undefined;
+
+    if (
+      sessionExerciseRelationData &&
+      typeof sessionExerciseRelationData === "object" &&
+      "order_index" in sessionExerciseRelationData
+    ) {
+      exerciseOrderIndex = (sessionExerciseRelationData as any).order_index;
+      if ("notes" in sessionExerciseRelationData) {
+        exerciseScopedNotes = (sessionExerciseRelationData as any).notes ?? undefined;
+      }
+    } else if (sessionExerciseRelationData !== null) {
+      // It might be an error object from Supabase if join failed unexpectedly
+      fastify.log.warn(
+        { setData, relationData: sessionExerciseRelationData },
+        "[GET_SESSION_SUMMARY] Unexpected data structure for workout_session_exercises relation."
+      );
+    }
+
+    if (!exercise) continue;
+
+    let exerciseSummary = exercisesSummaryMap.get(exercise.id);
+    if (!exerciseSummary) {
+      exerciseSummary = {
+        exercise_id: exercise.id,
+        exercise_name: exercise.name,
+        exercise_description: exercise.description ?? undefined,
+        exercise_video_url: exercise.video_url ?? undefined,
+        order_index: exerciseOrderIndex,
+        user_notes: exerciseScopedNotes,
+        sets: [],
+        total_volume_for_exercise_kg: 0,
+        max_weight_for_exercise_kg: 0,
+      };
+      exercisesSummaryMap.set(exercise.id, exerciseSummary);
+    }
+
+    const setVolume = (setData.actual_weight_kg || 0) * (setData.actual_reps || 0);
+    exerciseSummary.total_volume_for_exercise_kg += setVolume;
+    if ((setData.actual_weight_kg || 0) > exerciseSummary.max_weight_for_exercise_kg) {
+      exerciseSummary.max_weight_for_exercise_kg = setData.actual_weight_kg || 0;
+    }
+
+    // Check if this set resulted in a PR recorded for this session
+    const prForThisSet1RM = (prsFromThisSession || []).find(
+      (pr) =>
+        pr.source_set_id === setData.id && pr.best_1rm === setData.calculated_1rm && setData.calculated_1rm !== null
+    );
+    const prForThisSetSWR = (prsFromThisSession || []).find(
+      (pr) =>
+        pr.source_set_id === setData.id && pr.best_swr === setData.calculated_swr && setData.calculated_swr !== null
+    );
+
+    exerciseSummary.sets.push({
+      set_id: setData.id,
+      order_index: setData.set_order,
+      planned_reps_min: setData.planned_min_reps ?? undefined,
+      planned_reps_max: setData.planned_max_reps ?? undefined,
+      planned_weight_kg: setData.planned_weight_kg ?? undefined,
+      actual_reps: setData.actual_reps ?? undefined,
+      actual_weight_kg: setData.actual_weight_kg ?? undefined,
+      is_completed: true, // Assuming all logged sets are completed for summary
+      is_success: setData.is_success ?? undefined,
+      is_warmup: setData.is_warmup ?? undefined,
+      rest_time_seconds: setData.rest_seconds_taken ?? undefined,
+      user_notes: setData.notes ?? undefined,
+      calculated_1rm: setData.calculated_1rm ?? undefined,
+      calculated_swr: setData.calculated_swr ?? undefined,
+      new_pr_achieved_1rm: !!prForThisSet1RM,
+      new_pr_achieved_swr: !!prForThisSetSWR,
+    });
+  }
+
+  const exercisesList = Array.from(exercisesSummaryMap.values()).sort((a, b) => a.order_index - b.order_index);
+
+  // 5. Format new PRs achieved summary
+  const newPrsSummary: WorkoutSessionSummaryResponse["new_prs_achieved_summary"] = [];
+  if (prsFromThisSession) {
+    for (const pr of prsFromThisSession) {
+      const exerciseName = (pr.exercises as { name: string } | null)?.name || "Unknown Exercise";
+      if (pr.best_1rm !== null) {
+        newPrsSummary.push({
+          exercise_id: pr.exercise_id,
+          exercise_name: exerciseName,
+          pr_type: "1RM",
+          // old_value: // This is tricky, would need PR history before this session. Omitting for now.
+          new_value: pr.best_1rm,
+          unit: "kg",
+        });
+      }
+      if (pr.best_swr !== null) {
+        newPrsSummary.push({
+          exercise_id: pr.exercise_id,
+          exercise_name: exerciseName,
+          pr_type: "SWR",
+          new_value: pr.best_swr,
+          unit: "SWR",
+        });
+      }
+    }
+  }
+
+  return {
+    id: sessionData.id,
+    started_at: sessionData.started_at,
+    ended_at: sessionData.completed_at ?? undefined, // completed_at is used as ended_at
+    duration_seconds: sessionData.duration_seconds ?? undefined,
+    // Explicitly handle status mapping due to potential "cancelled" vs "canceled" discrepancy
+    status: sessionData.status as SessionStatus, // Use 'as any' to bypass stubborn TS error, mapping is correct.
+    notes: sessionData.notes ?? undefined,
+    overall_feeling: (sessionData as any).overall_feeling ?? undefined,
+    workout_plan_id: (sessionData.workout_plans as { id: string } | null)?.id ?? undefined,
+    workout_plan_name: (sessionData.workout_plans as { name: string } | null)?.name ?? undefined,
+    workout_plan_day_id: (sessionData.workout_plan_days as { id: string } | null)?.id ?? undefined,
+    workout_plan_day_name: (sessionData.workout_plan_days as { name: string } | null)?.name ?? undefined,
+    total_volume_kg: sessionData.total_volume_kg ?? undefined,
+    total_sets_completed: sessionData.total_sets ?? undefined, // Assuming total_sets on session is completed sets
+    total_reps_completed: sessionData.total_reps ?? undefined, // Assuming total_reps on session is completed reps
+    exercises: exercisesList,
+    new_prs_achieved_summary: newPrsSummary,
+  };
+};

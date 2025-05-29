@@ -354,10 +354,68 @@ export const ExerciseProgressSchema = Type.Object(
     currentBestPRs: CurrentBestPRsSchema,
     bestSessionVolume: BestSessionVolumeSchema,
     repPRsAtSpecificWeights: Type.Array(RepPRSchema),
-    e1RMOverTime: Type.Array(GraphDataPointSchema),
-    volumePerSessionOverTime: Type.Array(GraphDataPointSchema),
-    swrOverTime: Type.Array(GraphDataPointSchema),
+    e1RMOverTime: Type.Array(Type.Ref(GraphDataPointSchema)),
+    volumePerSessionOverTime: Type.Array(Type.Ref(GraphDataPointSchema)),
+    swrOverTime: Type.Array(Type.Ref(GraphDataPointSchema)),
   },
   { $id: "ExerciseProgressSchema" }
 );
 export type ExerciseProgress = Static<typeof ExerciseProgressSchema>;
+
+// --- Schemas for All Personal Records (Phase 1) ---
+
+const AllUserPRsSortByEnum = Type.Union(
+  [
+    Type.Literal("exercise_name_asc"),
+    Type.Literal("exercise_name_desc"),
+    Type.Literal("pr_value_asc"),
+    Type.Literal("pr_value_desc"),
+    Type.Literal("achieved_at_asc"),
+    Type.Literal("achieved_at_desc"),
+  ],
+  { $id: "AllUserPRsSortByEnum", description: "Sort options for all user PRs" }
+);
+export type AllUserPRsSortBy = Static<typeof AllUserPRsSortByEnum>;
+
+export const AllUserPRsQuerySchema = Type.Object(
+  {
+    sortBy: Type.Optional(AllUserPRsSortByEnum), // Default: achieved_at_desc
+    filterByExerciseId: Type.Optional(
+      Type.String({ format: "uuid", description: "Filter PRs by a specific exercise ID" })
+    ),
+    filterByMuscleGroupId: Type.Optional(
+      Type.String({ format: "uuid", description: "Filter PRs by a specific primary muscle group ID of the exercise" })
+    ),
+    // Future: filterByPRType: Type.Optional(Type.Enum(["1RM", "SWR"])) // For when SWR is included
+  },
+  { $id: "AllUserPRsQuerySchema" }
+);
+export type AllUserPRsQuery = Static<typeof AllUserPRsQuerySchema>;
+
+export const UserPREntrySchema = Type.Object(
+  {
+    exercise_id: Type.String({ format: "uuid" }),
+    exercise_name: Type.String(),
+    exercise_description: Type.Optional(Type.String()),
+    exercise_video_url: Type.Optional(Type.String({ format: "uri" })),
+    primary_muscle_group_id: Type.Optional(Type.String({ format: "uuid" })), // Added for potential client-side filtering/grouping
+    primary_muscle_group_name: Type.Optional(Type.String()), // Added for display
+    pr_type: Type.Literal("1RM"), // Initially only 1RM
+    value_kg: Type.Number({ description: "The 1RM value in kilograms" }), // Explicitly stating unit
+    achieved_at: Type.String({ format: "date-time" }),
+    source_set_id: Type.Optional(
+      Type.String({ format: "uuid", description: "The set from which this PR was derived" })
+    ),
+    workout_session_id: Type.Optional(
+      Type.String({ format: "uuid", description: "The workout session during which this PR was achieved" })
+    ),
+  },
+  { $id: "UserPREntrySchema" }
+);
+export type UserPREntry = Static<typeof UserPREntrySchema>;
+
+export const AllUserPRsResponseSchema = Type.Array(UserPREntrySchema, {
+  $id: "AllUserPRsResponseSchema",
+  description: "A list of the user's personal records (1RM).",
+});
+export type AllUserPRsResponse = Static<typeof AllUserPRsResponseSchema>;
