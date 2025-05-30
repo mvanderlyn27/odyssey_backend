@@ -8,7 +8,7 @@ on:
 env:
   GCP_PROJECT_ID: aura-fitness-457121
   GCP_SA_EMAIL: aura-github@aura-fitness-457121.iam.gserviceaccount.com
-  WIF_PROVIDER: projects/113655940311/locations/global/workloadIdentityPools/aura-github-pool/providers/aura-provider
+  WIF_PROVIDER: projects/113655940311/locations/global/workloadIdentityPools/odessey-github-pool/providers/odessey-provider
   ARTIFACT_REGISTRY_REGION: us-central1
   ARTIFACT_REGISTRY_REPO: aura-backend
   CLOUD_RUN_SERVICE: aura-backend-service

@@ -1,4 +1,4 @@
-# Aura Backend API Routes
+# odessey Backend API Routes
 
 *This document outlines the available API routes, grouped by module, based on the route definitions and TypeBox schemas.*
 

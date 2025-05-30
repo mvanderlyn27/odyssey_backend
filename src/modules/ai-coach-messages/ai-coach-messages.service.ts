@@ -342,7 +342,7 @@
 //     const { history, profile, goal, plan } = await getAiContext(fastify, userId, sessionId);
 
 //     // 3. Construct Prompt Elements
-//     let systemPrompt = `You are Aura, a friendly and encouraging AI fitness coach. Your goal is to help the user stay motivated, answer their fitness questions, and potentially modify their workout plan if they ask and you deem it appropriate via function calls. Be concise and supportive.`;
+//     let systemPrompt = `You are odessey, a friendly and encouraging AI fitness coach. Your goal is to help the user stay motivated, answer their fitness questions, and potentially modify their workout plan if they ask and you deem it appropriate via function calls. Be concise and supportive.`;
 
 //     let contextPrompt = "\n\n## User Context:\n";
 //     if (profile) {

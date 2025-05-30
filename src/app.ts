@@ -216,8 +216,8 @@ const swaggerOptions = {
   hideUntagged: true,
   openapi: {
     info: {
-      title: "Aura Backend API",
-      description: "API endpoints for the Aura application, providing AI generation capabilities.",
+      title: "odessey Backend API",
+      description: "API endpoints for the odessey application, providing AI generation capabilities.",
       version: process.env.npm_package_version || "1.0.0",
       contact: {
         name: "API Support",

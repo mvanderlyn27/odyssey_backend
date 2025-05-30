@@ -1,7 +1,7 @@
 {
-  "name": "aura_backend",
+  "name": "odessey_backend",
   "version": "1.0.0",
-  "description": "Fastify backend for Aura deployed on Google Cloud Run",
+  "description": "Fastify backend for Oddesey deployed on Google Cloud Run",
   "main": "build/index.js",
   "scripts": {
     "test": "echo \"Tests skipped\"",

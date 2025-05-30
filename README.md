@@ -1,6 +1,6 @@
-# Aura Backend API
+# odessey Backend API
 
-This repository contains the Fastify backend API for the Aura application, providing AI generation capabilities via Google Gemini and authentication via Supabase. It's designed for deployment on Google Cloud Run.
+This repository contains the Fastify backend API for the odessey application, providing AI generation capabilities via Google Gemini and authentication via Supabase. It's designed for deployment on Google Cloud Run.
 
 ## Prerequisites
 
@@ -12,8 +12,8 @@ This repository contains the Fastify backend API for the Aura application, provi
 
 1.  **Clone the repository:**
     ```bash
-    git clone https://github.com/mvanderlyn27/aura_backend.git
-    cd aura_backend
+    git clone https://github.com/mvanderlyn27/odessey_backend.git
+    cd odessey_backend
     ```
 
 2.  **Install dependencies:**
@@ -120,7 +120,7 @@ This project uses GitHub Actions for Continuous Integration (CI) and Continuous 
     *   Authenticates to Google Cloud using Workload Identity Federation.
     *   Builds a Docker image using the `Dockerfile`.
     *   Pushes the image to Google Artifact Registry.
-    *   Deploys the image to the specified Cloud Run service (`aura-backend-service` in `us-central1`).
+    *   Deploys the image to the specified Cloud Run service (`odessey-backend-service` in `us-central1`).
     *   Injects environment variables (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `GEMINI_API_KEY`) into the Cloud Run service using GitHub Actions secrets.
 
 *   **Required GitHub Secrets:** For deployment to work, the following secrets must be configured in the repository settings (Settings > Secrets and variables > Actions > Repository secrets):
@@ -128,7 +128,7 @@ This project uses GitHub Actions for Continuous Integration (CI) and Continuous 
     *   `SUPABASE_ANON_KEY`
     *   `GEMINI_API_KEY`
 
-*   **Required GCP Permissions:** The Google Cloud service account used by the workflow (`aura-github@aura-fitness-457121.iam.gserviceaccount.com`) needs appropriate permissions, including:
+*   **Required GCP Permissions:** The Google Cloud service account used by the workflow (`odessey-github@odessey-fitness-457121.iam.gserviceaccount.com`) needs appropriate permissions, including:
     *   `Artifact Registry Writer` (to push images)
     *   `Cloud Run Admin` (to deploy services)
     *   `Service Account User` (often needed for Cloud Run deployments)
