@@ -1,5 +1,4 @@
 import { Type, Static } from "@sinclair/typebox";
-import { z } from "zod"; // Import Zod
 import { UuidParamsSchema } from "./commonSchemas"; // Import common schemas
 
 // --- Enums & Common Types (TypeBox) ---
@@ -46,20 +45,6 @@ export const MuscleRankEnum = Type.Enum({
   Champion: "Champion",
   Legend: "Legend",
 });
-export const muscleRankEnum = z.enum(["Neophyte", "Adept", "Vanguard", "Elite", "Master", "Champion", "Legend"]);
-export type MuscleRank = z.infer<typeof muscleRankEnum>;
-
-// Schema for a single threshold object within the array
-export const muscleRankingThresholdSchema = z.object({
-  rank: muscleRankEnum,
-  required_weight_kg: z.number().positive("Required weight must be positive"),
-});
-export type MuscleRankingThreshold = z.infer<typeof muscleRankingThresholdSchema>;
-
-// Schema for the array stored in the muscle_groups.muscle_ranking_data column
-export const muscleRankingThresholdsSchema = z.array(muscleRankingThresholdSchema);
-export type MuscleRankingThresholds = z.infer<typeof muscleRankingThresholdsSchema>;
-
 // --- GET /stats/exercise/{id} ---
 export const GetExerciseStatsParamsSchema = UuidParamsSchema; // Re-use common schema
 export type GetExerciseStatsParams = Static<typeof GetExerciseStatsParamsSchema>;
@@ -255,17 +240,30 @@ export type LatestBodyWeight = Static<typeof LatestBodyWeightSchema>;
 // const MuscleGroupFocusSchema = Type.Object({}, { $id: "MuscleGroupFocusSchema", additionalProperties: true, description: "Placeholder for muscle group focus data" });
 // export type MuscleGroupFocus = Static<typeof MuscleGroupFocusSchema>;
 
+const WeeklyActivitySummarySchema = Type.Object(
+  {
+    weekIdentifier: Type.String({ description: "Week start date (YYYY-MM-DD)" }),
+    totalVolumeKg: Type.Number(),
+    numberOfWorkouts: Type.Integer(),
+    totalTimeSeconds: Type.Integer(),
+  },
+  { $id: "WeeklyActivitySummarySchema" }
+);
+export type WeeklyActivitySummary = Static<typeof WeeklyActivitySummarySchema>;
+
 export const OverviewStatsSchema = Type.Object(
   {
     totalWorkouts: Type.Integer(),
     sumTotalVolumeKg: Type.Number(),
     sumTotalReps: Type.Integer(),
     sumTotalSets: Type.Integer(),
+    sumTotalDurationSeconds: Type.Integer(), // Added total duration in seconds
     avgWorkoutDurationMin: Type.Number(),
     current_streak: Type.Integer(),
     longest_streak: Type.Integer(),
     recentPRs: Type.Array(RecentPRExerciseSchema),
     latestBodyWeight: LatestBodyWeightSchema,
+    weeklySummary: Type.Array(WeeklyActivitySummarySchema), // Added weekly summary
     // muscleGroupFocus: Type.Optional(MuscleGroupFocusSchema), // Optional for later
   },
   { $id: "OverviewStatsSchema" }

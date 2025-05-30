@@ -15,6 +15,7 @@ import {
   AllUserPRsResponse,
   UserPREntry,
   AllUserPRsSortBy,
+  WeeklyActivitySummary, // Added import for WeeklyActivitySummary
 } from "../../schemas/statsSchemas";
 import { Tables, Enums } from "../../types/database"; // Added Enums for potential use
 import { getGroupedDateKey, BlueprintGranularityString, BlueprintTimePeriodString } from "./stats.utils"; // parseDateRange will be used by routes
@@ -115,7 +116,7 @@ export class StatsService {
       // 1. Fetch Workout Session Aggregates
       const { data: workoutSessions, error: sessionsError } = await supabase // Use local supabase
         .from("workout_sessions")
-        .select("total_volume_kg, total_reps, total_sets, duration_seconds")
+        .select("completed_at, total_volume_kg, total_reps, total_sets, duration_seconds") // Added completed_at
         .eq("user_id", userId)
         .eq("status", "completed")
         .gte("completed_at", startDate)
@@ -133,15 +134,53 @@ export class StatsService {
       let sumDurationSeconds = 0;
       const validWorkoutSessions = workoutSessions || []; // Ensure it's an array
 
-      // if (workoutSessions) { // More explicit check
+      const weeklyAggregates: Map<
+        string,
+        { totalVolumeKg: number; numberOfWorkouts: number; totalTimeSeconds: number }
+      > = new Map();
+
       for (const session of validWorkoutSessions) {
-        // Loop over the guaranteed array
         sumTotalVolumeKg += session.total_volume_kg || 0;
         sumTotalReps += session.total_reps || 0;
         sumTotalSets += session.total_sets || 0;
         sumDurationSeconds += session.duration_seconds || 0;
+
+        if (session.completed_at) {
+          const weekIdentifier = getGroupedDateKey(session.completed_at, "weekly");
+          const currentWeekData = weeklyAggregates.get(weekIdentifier) || {
+            totalVolumeKg: 0,
+            numberOfWorkouts: 0,
+            totalTimeSeconds: 0,
+          };
+          currentWeekData.totalVolumeKg += session.total_volume_kg || 0;
+          currentWeekData.numberOfWorkouts += 1;
+          currentWeekData.totalTimeSeconds += session.duration_seconds || 0;
+          weeklyAggregates.set(weekIdentifier, currentWeekData);
+        }
       }
-      // } // This was the extraneous closing brace
+
+      const discreteWeeklySummary: WeeklyActivitySummary[] = Array.from(weeklyAggregates.entries())
+        .map(([weekIdentifier, data]) => ({
+          weekIdentifier,
+          ...data,
+        }))
+        .sort((a, b) => new Date(a.weekIdentifier).getTime() - new Date(b.weekIdentifier).getTime());
+
+      let runningTotalVolumeKg = 0;
+      let runningNumberOfWorkouts = 0;
+      let runningTotalTimeSeconds = 0;
+
+      const weeklySummary: WeeklyActivitySummary[] = discreteWeeklySummary.map((week) => {
+        runningTotalVolumeKg += week.totalVolumeKg;
+        runningNumberOfWorkouts += week.numberOfWorkouts;
+        runningTotalTimeSeconds += week.totalTimeSeconds;
+        return {
+          weekIdentifier: week.weekIdentifier,
+          totalVolumeKg: runningTotalVolumeKg,
+          numberOfWorkouts: runningNumberOfWorkouts,
+          totalTimeSeconds: runningTotalTimeSeconds,
+        };
+      });
 
       const avgWorkoutDurationMin = totalWorkouts > 0 ? sumDurationSeconds / totalWorkouts / 60 : 0;
 
@@ -251,11 +290,13 @@ export class StatsService {
         sumTotalVolumeKg,
         sumTotalReps,
         sumTotalSets,
+        sumTotalDurationSeconds: sumDurationSeconds, // Added this line
         avgWorkoutDurationMin,
         current_streak,
         longest_streak,
         recentPRs: sortedRecentPRs,
         latestBodyWeight,
+        weeklySummary, // Added weeklySummary to the result
       };
       return result;
     } catch (error: any) {
