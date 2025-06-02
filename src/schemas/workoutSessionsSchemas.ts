@@ -4,23 +4,7 @@ import { WorkoutPlanSchema, WorkoutPlanDaySchema } from "./workoutPlansSchemas";
 import { ExerciseSchema } from "./exercisesSchemas"; // Import Exercise schema
 
 // --- Enums ---
-// Define RankLabelEnum based on database.ts
-export const RankLabelEnum = Type.Union(
-  // Added export
-  [
-    Type.Literal("F"),
-    Type.Literal("E"),
-    Type.Literal("D"),
-    Type.Literal("C"),
-    Type.Literal("B"),
-    Type.Literal("A"),
-    Type.Literal("S"),
-    Type.Literal("Elite"),
-    Type.Null(), // To represent cases where rank is not applicable or not yet achieved
-  ],
-  { $id: "RankLabelEnum", description: "Represents F-Elite ranking labels or null" }
-);
-export type RankLabelType = Static<typeof RankLabelEnum>; // Exporting the type for service usage
+// RankLabelEnum is removed as ranks are now stored in a separate table.
 
 const SessionStatusEnum = Type.Union(
   [
@@ -158,26 +142,68 @@ export type NewFinishSessionBody = Static<typeof NewFinishSessionBodySchema>;
 
 // Schemas for richer response details
 export const ExerciseRankUpSchema = Type.Object(
-  // Added export
   {
     exercise_id: Type.String({ format: "uuid" }),
     exercise_name: Type.String(),
-    old_rank_label: Type.Ref(RankLabelEnum),
-    new_rank_label: Type.Ref(RankLabelEnum), // Should not be null if it's a rank up
+    old_rank_id: Type.Union([Type.Number(), Type.Null()]),
+    old_rank_name: Type.Union([Type.String(), Type.Null()]),
+    new_rank_id: Type.Union([Type.Number(), Type.Null()]),
+    new_rank_name: Type.Union([Type.String(), Type.Null()]),
   },
   { $id: "ExerciseRankUpSchema" }
 );
 
 export const MuscleGroupRankUpSchema = Type.Object(
-  // Added export
   {
     muscle_group_id: Type.String({ format: "uuid" }),
     muscle_group_name: Type.String(),
-    old_rank_label: Type.Ref(RankLabelEnum),
-    new_rank_label: Type.Ref(RankLabelEnum), // Should not be null if it's a rank up
+    old_total_score: Type.Union([Type.Number({ minimum: 0 }), Type.Null()], {
+      description: "User's total score for this muscle group before this session's calculation.",
+    }),
+    new_total_score: Type.Number({
+      minimum: 0,
+      description: "User's total score for this muscle group after this session's calculation.",
+    }),
+    old_rank_id: Type.Union([Type.Number(), Type.Null()]),
+    old_rank_name: Type.Union([Type.String(), Type.Null()]),
+    new_rank_id: Type.Union([Type.Number(), Type.Null()]),
+    new_rank_name: Type.Union([Type.String(), Type.Null()]),
+    rank_changed: Type.Boolean({ description: "True if new_rank_id is different from old_rank_id." }),
   },
   { $id: "MuscleGroupRankUpSchema" }
 );
+
+export const MuscleScoreChangeSchema = Type.Object(
+  {
+    muscle_id: Type.String({ format: "uuid" }),
+    muscle_name: Type.String(),
+    old_score: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
+    new_score: Type.Number({ minimum: 0 }),
+    old_rank_id: Type.Union([Type.Number(), Type.Null()]), // This rank is based on the SWR achieved for the muscle against muscle_rank_swr_benchmark
+    old_rank_name: Type.Union([Type.String(), Type.Null()]),
+    new_rank_id: Type.Union([Type.Number(), Type.Null()]), // This rank is based on the SWR achieved for the muscle against muscle_rank_swr_benchmark
+    new_rank_name: Type.Union([Type.String(), Type.Null()]),
+    rank_changed: Type.Boolean({
+      description: "True if new_rank_id (SWR-based muscle rank) is different from old_rank_id.",
+    }),
+  },
+  { $id: "MuscleScoreChangeSchema" }
+);
+export type MuscleScoreChange = Static<typeof MuscleScoreChangeSchema>;
+
+export const OverallUserRankUpSchema = Type.Object(
+  {
+    old_total_score: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
+    new_total_score: Type.Number({ minimum: 0 }),
+    old_rank_id: Type.Union([Type.Number(), Type.Null()]),
+    old_rank_name: Type.Union([Type.String(), Type.Null()]),
+    new_rank_id: Type.Union([Type.Number(), Type.Null()]),
+    new_rank_name: Type.Union([Type.String(), Type.Null()]),
+    rank_changed: Type.Boolean({ description: "True if new_rank_id is different from old_rank_id." }),
+  },
+  { $id: "OverallUserRankUpSchema" }
+);
+export type OverallUserRankUp = Static<typeof OverallUserRankUpSchema>;
 
 export const LoggedSetSummaryItemSchema = Type.Object(
   // Added export
@@ -227,9 +253,28 @@ export const DetailedFinishSessionResponseSchema = Type.Object(
     exercisesPerformed: Type.String({ description: "Comma-separated list of unique exercise names performed." }),
     // New fields for richer summary
     exerciseRankUps: Type.Array(Type.Ref(ExerciseRankUpSchema)),
+    muscleScoreChanges: Type.Array(Type.Ref(MuscleScoreChangeSchema), {
+      description: "Details of individual muscle score changes and SWR-based rank updates.",
+    }),
     muscleGroupRankUps: Type.Array(Type.Ref(MuscleGroupRankUpSchema)),
+    overallUserRankUp: Type.Union([Type.Ref(OverallUserRankUpSchema), Type.Null()], {
+      description: "Details of the overall user rank change, if any.",
+    }),
     loggedSetsSummary: Type.Array(Type.Ref(LoggedSetSummaryItemSchema)),
     planWeightIncreases: Type.Array(Type.Ref(PlanWeightIncreaseItemSchema)),
+    sessionMuscleRankUpsCount: Type.Number({
+      minimum: 0,
+      description: "Number of individual muscles that had their SWR-based rank increase this session.",
+    }),
+    sessionMuscleGroupRankUpsCount: Type.Number({
+      minimum: 0,
+      description: "Number of muscle groups that ranked up this session based on score.",
+    }),
+    sessionOverallRankUpCount: Type.Number({
+      minimum: 0,
+      maximum: 1,
+      description: "Whether the user's overall rank increased this session (0 or 1).",
+    }),
   },
   {
     $id: "DetailedFinishSessionResponseSchema",

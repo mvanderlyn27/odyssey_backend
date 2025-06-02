@@ -172,77 +172,71 @@ export type Database = {
           },
         ]
       }
-      exercise_muscle_groups: {
+      exercise_muscles: {
         Row: {
-          created_at: string
-          deleted: boolean
+          created_at: string | null
           exercise_id: string
           id: string
-          intensity: Database["public"]["Enums"]["muscle_intensity"] | null
-          muscle_group_id: string
-          updated_at: string
+          muscle_id: string
+          muscle_intensity: Database["public"]["Enums"]["muscle_intensity"]
         }
         Insert: {
-          created_at?: string
-          deleted?: boolean
+          created_at?: string | null
           exercise_id: string
           id?: string
-          intensity?: Database["public"]["Enums"]["muscle_intensity"] | null
-          muscle_group_id: string
-          updated_at?: string
+          muscle_id: string
+          muscle_intensity: Database["public"]["Enums"]["muscle_intensity"]
         }
         Update: {
-          created_at?: string
-          deleted?: boolean
+          created_at?: string | null
           exercise_id?: string
           id?: string
-          intensity?: Database["public"]["Enums"]["muscle_intensity"] | null
-          muscle_group_id?: string
-          updated_at?: string
+          muscle_id?: string
+          muscle_intensity?: Database["public"]["Enums"]["muscle_intensity"]
         }
         Relationships: [
           {
-            foreignKeyName: "exercise_muscle_groups_exercise_id_fkey"
+            foreignKeyName: "exercise_muscles_exercise_id_fkey"
             columns: ["exercise_id"]
             isOneToOne: false
             referencedRelation: "exercises"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "exercise_muscle_groups_muscle_group_id_fkey"
-            columns: ["muscle_group_id"]
+            foreignKeyName: "exercise_muscles_muscle_id_fkey"
+            columns: ["muscle_id"]
             isOneToOne: false
-            referencedRelation: "muscle_groups"
+            referencedRelation: "muscles"
             referencedColumns: ["id"]
           },
         ]
       }
-      exercise_swr_benchmarks: {
+      exercise_rank_benchmarks: {
         Row: {
-          benchmark_id: string
           created_at: string | null
           exercise_id: string
-          gender: Database["public"]["Enums"]["gender_enum"]
-          min_swr_threshold: number
-          rank_label: Database["public"]["Enums"]["rank_label"]
+          gender: Database["public"]["Enums"]["gender"]
+          id: string
+          min_threshold: number
+          rank_id: number | null
           updated_at: string | null
         }
         Insert: {
-          benchmark_id?: string
           created_at?: string | null
           exercise_id: string
-          gender: Database["public"]["Enums"]["gender_enum"]
-          min_swr_threshold: number
-          rank_label: Database["public"]["Enums"]["rank_label"]
+          gender: Database["public"]["Enums"]["gender"]
+          id?: string
+          min_threshold: number
+          rank_id?: number | null
           updated_at?: string | null
         }
         Update: {
-          benchmark_id?: string
           created_at?: string | null
           exercise_id?: string
-          gender?: Database["public"]["Enums"]["gender_enum"]
-          min_swr_threshold?: number
-          rank_label?: Database["public"]["Enums"]["rank_label"]
+          gender?: Database["public"]["Enums"]["gender"]
+          id?: string
+          min_threshold?: number
+          rank_id?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -251,6 +245,13 @@ export type Database = {
             columns: ["exercise_id"]
             isOneToOne: false
             referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_rank_id"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
             referencedColumns: ["id"]
           },
         ]
@@ -324,126 +325,345 @@ export type Database = {
         }
         Relationships: []
       }
-      muscle_group_swr_benchmarks: {
+      muscle_group_rank_benchmarks: {
         Row: {
-          benchmark_id: string
-          created_at: string | null
-          gender: Database["public"]["Enums"]["gender_enum"]
-          min_swr_threshold: number
+          created_at: string
+          gender: Database["public"]["Enums"]["gender"]
+          id: string
+          min_threshold: number
           muscle_group_id: string
-          rank_label: Database["public"]["Enums"]["rank_label"]
-          updated_at: string | null
+          rank_id: number
+          updated_at: string
         }
         Insert: {
-          benchmark_id?: string
-          created_at?: string | null
-          gender: Database["public"]["Enums"]["gender_enum"]
-          min_swr_threshold: number
+          created_at?: string
+          gender: Database["public"]["Enums"]["gender"]
+          id?: string
+          min_threshold: number
           muscle_group_id: string
-          rank_label: Database["public"]["Enums"]["rank_label"]
-          updated_at?: string | null
+          rank_id: number
+          updated_at?: string
         }
         Update: {
-          benchmark_id?: string
-          created_at?: string | null
-          gender?: Database["public"]["Enums"]["gender_enum"]
-          min_swr_threshold?: number
+          created_at?: string
+          gender?: Database["public"]["Enums"]["gender"]
+          id?: string
+          min_threshold?: number
           muscle_group_id?: string
-          rank_label?: Database["public"]["Enums"]["rank_label"]
-          updated_at?: string | null
+          rank_id?: number
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "muscle_group_swr_benchmarks_muscle_group_id_fkey"
+            foreignKeyName: "fk_muscle_group"
             columns: ["muscle_group_id"]
             isOneToOne: false
             referencedRelation: "muscle_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_rank"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      muscle_group_ranks: {
+        Row: {
+          created_at: string
+          id: string
+          last_calculated_at: string | null
+          muscle_group_id: string
+          rank_id: number | null
+          total_score_for_group: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_calculated_at?: string | null
+          muscle_group_id: string
+          rank_id?: number | null
+          total_score_for_group?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_calculated_at?: string | null
+          muscle_group_id?: string
+          rank_id?: number | null
+          total_score_for_group?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_muscle_group"
+            columns: ["muscle_group_id"]
+            isOneToOne: false
+            referencedRelation: "muscle_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_muscle_group_id_fkey"
+            columns: ["muscle_group_id"]
+            isOneToOne: false
+            referencedRelation: "muscle_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_rank_id_fkey"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey1"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
             referencedColumns: ["id"]
           },
         ]
       }
       muscle_groups: {
         Row: {
-          body_side: Database["public"]["Enums"]["enum_body_side"] | null
-          created_at: string
-          deleted: boolean
-          description: string | null
+          created_at: string | null
           id: string
-          image_url: string | null
-          muscle_group_key:
-            | Database["public"]["Enums"]["muscle_group_type"]
-            | null
           name: string
-          updated_at: string
-        }
-        Insert: {
-          body_side?: Database["public"]["Enums"]["enum_body_side"] | null
-          created_at?: string
-          deleted?: boolean
-          description?: string | null
-          id?: string
-          image_url?: string | null
-          muscle_group_key?:
-            | Database["public"]["Enums"]["muscle_group_type"]
-            | null
-          name: string
-          updated_at?: string
-        }
-        Update: {
-          body_side?: Database["public"]["Enums"]["enum_body_side"] | null
-          created_at?: string
-          deleted?: boolean
-          description?: string | null
-          id?: string
-          image_url?: string | null
-          muscle_group_key?:
-            | Database["public"]["Enums"]["muscle_group_type"]
-            | null
-          name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      muscles: {
-        Row: {
-          body_side: Database["public"]["Enums"]["enum_body_side"] | null
-          created_at: string
-          deleted: boolean | null
-          id: string
-          muscle_group_id: string | null
-          muscle_key: Database["public"]["Enums"]["muscle_type"] | null
-          name: string | null
           updated_at: string | null
         }
         Insert: {
-          body_side?: Database["public"]["Enums"]["enum_body_side"] | null
-          created_at?: string
-          deleted?: boolean | null
+          created_at?: string | null
           id?: string
-          muscle_group_id?: string | null
-          muscle_key?: Database["public"]["Enums"]["muscle_type"] | null
-          name?: string | null
+          name: string
           updated_at?: string | null
         }
         Update: {
-          body_side?: Database["public"]["Enums"]["enum_body_side"] | null
-          created_at?: string
-          deleted?: boolean | null
+          created_at?: string | null
           id?: string
-          muscle_group_id?: string | null
-          muscle_key?: Database["public"]["Enums"]["muscle_type"] | null
-          name?: string | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      muscle_rank_benchmarks: {
+        Row: {
+          created_at: string
+          gender: Database["public"]["Enums"]["gender"]
+          id: string
+          min_threshold: number
+          muscle_id: string
+          rank_id: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          gender: Database["public"]["Enums"]["gender"]
+          id?: string
+          min_threshold: number
+          muscle_id: string
+          rank_id: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          gender?: Database["public"]["Enums"]["gender"]
+          id?: string
+          min_threshold?: number
+          muscle_id?: string
+          rank_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_muscle"
+            columns: ["muscle_id"]
+            isOneToOne: false
+            referencedRelation: "muscles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_rank"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      muscle_ranks: {
+        Row: {
+          achieved_swr_value: number | null
+          contributing_session_set_id: string | null
+          created_at: string
+          id: string
+          last_calculated_at: string | null
+          muscle_id: string
+          rank_id: number | null
+          score: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          achieved_swr_value?: number | null
+          contributing_session_set_id?: string | null
+          created_at?: string
+          id?: string
+          last_calculated_at?: string | null
+          muscle_id: string
+          rank_id?: number | null
+          score?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          achieved_swr_value?: number | null
+          contributing_session_set_id?: string | null
+          created_at?: string
+          id?: string
+          last_calculated_at?: string | null
+          muscle_id?: string
+          rank_id?: number | null
+          score?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_muscle"
+            columns: ["muscle_id"]
+            isOneToOne: false
+            referencedRelation: "muscles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_muscle_ranks_contributing_session_set"
+            columns: ["contributing_session_set_id"]
+            isOneToOne: false
+            referencedRelation: "workout_session_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_ranks_muscle_id_fkey"
+            columns: ["muscle_id"]
+            isOneToOne: false
+            referencedRelation: "muscles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_ranks_rank_id_fkey"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      muscles: {
+        Row: {
+          created_at: string | null
+          id: string
+          muscle_group_id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          muscle_group_id: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          muscle_group_id?: string
+          name?: string
           updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "muscles_muscle_group_id_fkey"
+            foreignKeyName: "muscles_muscle_group_id_fkey1"
             columns: ["muscle_group_id"]
             isOneToOne: false
             referencedRelation: "muscle_groups"
             referencedColumns: ["id"]
           },
         ]
+      }
+      overall_rank_benchmarks: {
+        Row: {
+          created_at: string
+          gender: Database["public"]["Enums"]["gender"]
+          id: string
+          min_threshold: number
+          rank_id: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          gender: Database["public"]["Enums"]["gender"]
+          id?: string
+          min_threshold: number
+          rank_id: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          gender?: Database["public"]["Enums"]["gender"]
+          id?: string
+          min_threshold?: number
+          rank_id?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_rank"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ranks: {
+        Row: {
+          id: number
+          rank_name: string
+          rank_weight: number
+        }
+        Insert: {
+          id?: number
+          rank_name: string
+          rank_weight: number
+        }
+        Update: {
+          id?: number
+          rank_name?: string
+          rank_weight?: number
+        }
+        Relationships: []
       }
       user_body_measurements: {
         Row: {
@@ -480,9 +700,9 @@ export type Database = {
           best_1rm: number | null
           best_swr: number | null
           created_at: string | null
-          current_rank_label: Database["public"]["Enums"]["rank_label"] | null
           exercise_id: string
           id: string
+          rank_id: number | null
           source_set_id: string | null
           updated_at: string | null
           user_id: string
@@ -492,9 +712,9 @@ export type Database = {
           best_1rm?: number | null
           best_swr?: number | null
           created_at?: string | null
-          current_rank_label?: Database["public"]["Enums"]["rank_label"] | null
           exercise_id: string
           id?: string
+          rank_id?: number | null
           source_set_id?: string | null
           updated_at?: string | null
           user_id: string
@@ -504,14 +724,21 @@ export type Database = {
           best_1rm?: number | null
           best_swr?: number | null
           created_at?: string | null
-          current_rank_label?: Database["public"]["Enums"]["rank_label"] | null
           exercise_id?: string
           id?: string
+          rank_id?: number | null
           source_set_id?: string | null
           updated_at?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_rank_id"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_exercise_prs_exercise_id_fkey"
             columns: ["exercise_id"]
@@ -535,73 +762,12 @@ export type Database = {
           },
         ]
       }
-      user_muscle_group_scores: {
-        Row: {
-          achieved_at: string | null
-          contributing_exercise_id: string | null
-          contributing_exercise_swr: number | null
-          created_at: string | null
-          current_rank_label: Database["public"]["Enums"]["rank_label"] | null
-          id: string
-          muscle_group_id: string
-          muscle_group_swr_score: number | null
-          updated_at: string | null
-          user_id: string
-        }
-        Insert: {
-          achieved_at?: string | null
-          contributing_exercise_id?: string | null
-          contributing_exercise_swr?: number | null
-          created_at?: string | null
-          current_rank_label?: Database["public"]["Enums"]["rank_label"] | null
-          id?: string
-          muscle_group_id: string
-          muscle_group_swr_score?: number | null
-          updated_at?: string | null
-          user_id: string
-        }
-        Update: {
-          achieved_at?: string | null
-          contributing_exercise_id?: string | null
-          contributing_exercise_swr?: number | null
-          created_at?: string | null
-          current_rank_label?: Database["public"]["Enums"]["rank_label"] | null
-          id?: string
-          muscle_group_id?: string
-          muscle_group_swr_score?: number | null
-          updated_at?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_muscle_group_scores_contributing_exercise_id_fkey"
-            columns: ["contributing_exercise_id"]
-            isOneToOne: false
-            referencedRelation: "exercises"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_muscle_group_scores_muscle_group_id_fkey"
-            columns: ["muscle_group_id"]
-            isOneToOne: false
-            referencedRelation: "muscle_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_muscle_group_scores_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_muscle_last_worked: {
         Row: {
           deleted: boolean
           id: string
           last_worked_date: string
-          muscle_group_id: string
+          muscle_id: string
           updated_at: string
           user_id: string
           workout_session_id: string | null
@@ -610,7 +776,7 @@ export type Database = {
           deleted?: boolean
           id?: string
           last_worked_date: string
-          muscle_group_id: string
+          muscle_id: string
           updated_at?: string
           user_id: string
           workout_session_id?: string | null
@@ -619,17 +785,17 @@ export type Database = {
           deleted?: boolean
           id?: string
           last_worked_date?: string
-          muscle_group_id?: string
+          muscle_id?: string
           updated_at?: string
           user_id?: string
           workout_session_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "user_muscle_last_worked_muscle_group_id_fkey"
-            columns: ["muscle_group_id"]
+            foreignKeyName: "user_muscle_last_worked_muscle_id_fkey"
+            columns: ["muscle_id"]
             isOneToOne: false
-            referencedRelation: "muscle_groups"
+            referencedRelation: "muscles"
             referencedColumns: ["id"]
           },
           {
@@ -703,11 +869,64 @@ export type Database = {
           },
         ]
       }
+      user_ranks: {
+        Row: {
+          created_at: string
+          id: string
+          last_calculated_at: string | null
+          rank_id: number | null
+          total_overall_score: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_calculated_at?: string | null
+          rank_id?: number | null
+          total_overall_score?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_calculated_at?: string | null
+          rank_id?: number | null
+          total_overall_score?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_ranks_id_fkey1"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_ranks_rank_id_fkey"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_ranks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_streaks: {
         Row: {
           created_at: string
           current_streak: number
           deleted: boolean
+          id: string
           last_paid_recovery_at: string | null
           last_streak_activity_date: string | null
           longest_streak: number
@@ -721,6 +940,7 @@ export type Database = {
           created_at?: string
           current_streak?: number
           deleted?: boolean
+          id?: string
           last_paid_recovery_at?: string | null
           last_streak_activity_date?: string | null
           longest_streak?: number
@@ -734,6 +954,7 @@ export type Database = {
           created_at?: string
           current_streak?: number
           deleted?: boolean
+          id?: string
           last_paid_recovery_at?: string | null
           last_streak_activity_date?: string | null
           longest_streak?: number
@@ -743,7 +964,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_streaks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       workout_plan_day_exercise_sets: {
         Row: {
@@ -755,7 +984,6 @@ export type Database = {
           notes: string | null
           rest_seconds: number | null
           set_order: number
-          target_reps_text: string | null
           target_weight: number | null
           target_weight_increase: number | null
           updated_at: string
@@ -770,7 +998,6 @@ export type Database = {
           notes?: string | null
           rest_seconds?: number | null
           set_order: number
-          target_reps_text?: string | null
           target_weight?: number | null
           target_weight_increase?: number | null
           updated_at?: string
@@ -785,7 +1012,6 @@ export type Database = {
           notes?: string | null
           rest_seconds?: number | null
           set_order?: number
-          target_reps_text?: string | null
           target_weight?: number | null
           target_weight_increase?: number | null
           updated_at?: string
@@ -1041,6 +1267,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "workout_session_sets_workout_plan_day_exercise_sets_id_fkey"
+            columns: ["workout_plan_day_exercise_sets_id"]
+            isOneToOne: false
+            referencedRelation: "workout_plan_day_exercise_sets"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "workout_session_sets_workout_session_id_fkey"
             columns: ["workout_session_id"]
             isOneToOne: false
@@ -1057,7 +1290,10 @@ export type Database = {
           duration_seconds: number | null
           exercises_performed_summary: string | null
           id: string
+          muscle_group_rank_ups_count: number
+          muscle_rank_ups_count: number
           notes: string | null
+          overall_rank_up_count: number
           session_name: string | null
           started_at: string
           status: string
@@ -1076,7 +1312,10 @@ export type Database = {
           duration_seconds?: number | null
           exercises_performed_summary?: string | null
           id?: string
+          muscle_group_rank_ups_count?: number
+          muscle_rank_ups_count?: number
           notes?: string | null
+          overall_rank_up_count?: number
           session_name?: string | null
           started_at?: string
           status?: string
@@ -1095,7 +1334,10 @@ export type Database = {
           duration_seconds?: number | null
           exercises_performed_summary?: string | null
           id?: string
+          muscle_group_rank_ups_count?: number
+          muscle_rank_ups_count?: number
           notes?: string | null
+          overall_rank_up_count?: number
           session_name?: string | null
           started_at?: string
           status?: string
@@ -1176,7 +1418,6 @@ export type Database = {
         | "calisthenics"
         | "machine"
       gender: "male" | "female"
-      gender_enum: "male" | "female"
       meal_type: "breakfast" | "lunch" | "dinner" | "snack"
       muscle_group_type:
         | "BackLeftHead"
@@ -1373,6 +1614,7 @@ export type Database = {
         | "FrontLeftTrapezius"
         | "FrontLeftNeck"
         | "FrontLeftHead"
+      primary_group_enum: "arms" | "legs" | "back" | "chest" | "abs"
       rank_label: "F" | "E" | "D" | "C" | "B" | "A" | "S" | "Elite"
       session_status:
         | "active"
@@ -1511,7 +1753,6 @@ export const Constants = {
         "machine",
       ],
       gender: ["male", "female"],
-      gender_enum: ["male", "female"],
       meal_type: ["breakfast", "lunch", "dinner", "snack"],
       muscle_group_type: [
         "BackLeftHead",
@@ -1711,6 +1952,7 @@ export const Constants = {
         "FrontLeftNeck",
         "FrontLeftHead",
       ],
+      primary_group_enum: ["arms", "legs", "back", "chest", "abs"],
       rank_label: ["F", "E", "D", "C", "B", "A", "S", "Elite"],
       session_status: [
         "active",

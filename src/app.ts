@@ -158,7 +158,6 @@ import {
   SessionSetInputSchema, // Added for explicit registration
   SessionExerciseInputSchema, // Added for explicit registration
   // New schemas for richer response
-  RankLabelEnum, // Enum itself for registration
   ExerciseRankUpSchema,
   MuscleGroupRankUpSchema,
   LoggedSetSummaryItemSchema,
@@ -173,6 +172,8 @@ import {
   WorkoutSessionSummaryResponseSchema,
   ListWorkoutSessionsSortByEnum,
   ListWorkoutSessionsPeriodEnum,
+  MuscleScoreChangeSchema,
+  OverallUserRankUpSchema,
 } from "./schemas/workoutSessionsSchemas";
 
 // --- Import Route Handlers ---
@@ -327,6 +328,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(WorkoutPlanDaySchema);
   app.addSchema(WorkoutPlanDayExerciseSchema);
   app.addSchema(WorkoutSessionSchema);
+  app.addSchema(OverallUserRankUpSchema);
   app.addSchema(SessionExerciseSchema); // This is the DB model schema, distinct from SessionExerciseInputSchema
   app.addSchema(AiCoachMessageSchema);
   app.addSchema(BodyMeasurementSchema);
@@ -373,7 +375,6 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   // Session Schemas (ensure dependencies are registered first)
   app.addSchema(OverallFeelingEnum); // Dependency for NewFinishSessionBodySchema
-  app.addSchema(RankLabelEnum); // Register RankLabelEnum itself
   app.addSchema(SessionSetInputSchema); // Dependency for SessionExerciseInputSchema
   app.addSchema(SessionExerciseInputSchema); // Dependency for NewFinishSessionBodySchema
   app.addSchema(NewFinishSessionBodySchema); // Uses SessionExerciseInputSchema & OverallFeelingEnum
@@ -436,6 +437,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(GetMuscleStatsParamsSchema);
   app.addSchema(GetMuscleStatsQuerySchema);
   app.addSchema(MuscleStatsSchema);
+  app.addSchema(MuscleScoreChangeSchema);
 
   // New Stats Schemas from blueprint
   app.addSchema(OverviewStatsQuerySchema);
@@ -455,6 +457,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(RecoverStreakBodySchema);
 
   // User Goals
+  console.log("DEBUG: UserGoalSchema:", UserGoalSchema);
+  console.log("DEBUG: CreateUserGoalBodySchema:", CreateUserGoalBodySchema);
+  console.log("DEBUG: GetCurrentGoalResponseSchema:", GetCurrentGoalResponseSchema);
+  console.log("DEBUG: GetGoalHistoryResponseSchema:", GetGoalHistoryResponseSchema);
   app.addSchema(CreateUserGoalBodySchema);
   app.addSchema(GetCurrentGoalResponseSchema);
   app.addSchema(GetGoalHistoryResponseSchema);

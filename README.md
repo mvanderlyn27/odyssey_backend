@@ -1,6 +1,9 @@
 # odessey Backend API
 
 This repository contains the Fastify backend API for the odessey application, providing AI generation capabilities via Google Gemini and authentication via Supabase. It's designed for deployment on Google Cloud Run.
+## Todo
+
+* Update resources to have odyssey name 
 
 ## Prerequisites
 

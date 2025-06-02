@@ -612,7 +612,7 @@ export class StatsService {
             name,
             description,
             video_url,
-            exercise_muscle_groups!inner(intensity, muscle_group_id, muscle_groups!inner(id, name))
+            exercise_muscles!inner(muscle_intensity, muscle_id, muscles!inner(muscle_group_id, muscle_groups!inner(id, name)))
           )
         `
         )
@@ -625,9 +625,10 @@ export class StatsService {
 
       if (filterByMuscleGroupId) {
         // Filter by the muscle group ID, ensuring it's the primary one.
-        // The muscle_group_id in exercise_muscle_groups is the FK to muscle_groups.id
-        prQuery = prQuery.eq("exercises.exercise_muscle_groups.intensity", "primary");
-        prQuery = prQuery.eq("exercises.exercise_muscle_groups.muscle_group_id", filterByMuscleGroupId);
+        // Path to intensity: exercises -> exercise_muscles -> muscle_intensity
+        // Path to muscle_group_id: exercises -> exercise_muscles -> muscles -> muscle_group_id
+        prQuery = prQuery.eq("exercises.exercise_muscles.muscle_intensity", "primary");
+        prQuery = prQuery.eq("exercises.exercise_muscles.muscles.muscle_group_id", filterByMuscleGroupId);
       }
 
       // Apply sorting
@@ -700,12 +701,16 @@ export class StatsService {
             name: string;
             description: string | null;
             video_url: string | null;
-            exercise_muscle_groups: Array<{
-              intensity: string | null;
-              muscle_group_id: string;
-              muscle_groups: {
-                id: string;
-                name: string;
+            exercise_muscles: Array<{
+              // Changed from exercise_muscle_groups
+              muscle_intensity: string | null; // Corrected from intensity
+              // muscle_id is here but not directly used in this specific mapping logic below
+              muscles: {
+                // muscle_group_id is here
+                muscle_groups: {
+                  id: string;
+                  name: string;
+                } | null;
               } | null;
             }> | null;
           } | null;
@@ -719,13 +724,14 @@ export class StatsService {
         let primaryMuscleGroupIdValue: string | undefined = undefined;
         let primaryMuscleGroupNameValue: string | undefined = undefined;
 
-        if (exerciseData?.exercise_muscle_groups) {
-          const primaryEmgEntry = exerciseData.exercise_muscle_groups.find(
-            (emg) => emg.intensity === "primary" && emg.muscle_groups
+        if (exerciseData?.exercise_muscles) {
+          // Changed from exercise_muscle_groups
+          const primaryMuscleEntry = exerciseData.exercise_muscles.find(
+            (em) => em.muscle_intensity === "primary" && em.muscles && em.muscles.muscle_groups // Corrected from em.intensity
           );
-          if (primaryEmgEntry && primaryEmgEntry.muscle_groups) {
-            primaryMuscleGroupIdValue = primaryEmgEntry.muscle_groups.id;
-            primaryMuscleGroupNameValue = primaryEmgEntry.muscle_groups.name;
+          if (primaryMuscleEntry && primaryMuscleEntry.muscles && primaryMuscleEntry.muscles.muscle_groups) {
+            primaryMuscleGroupIdValue = primaryMuscleEntry.muscles.muscle_groups.id;
+            primaryMuscleGroupNameValue = primaryMuscleEntry.muscles.muscle_groups.name;
           }
         }
 
