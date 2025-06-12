@@ -1,7 +1,13 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Database, Tables, TablesInsert } from "../../types/database";
-import { NewFinishSessionBody, SessionExerciseInput, SessionSetInput } from "../../schemas/workoutSessionsSchemas";
+import { Database, Tables, TablesInsert, Enums } from "../../types/database"; // Added Enums
+import {
+  NewFinishSessionBody,
+  SessionExerciseInput,
+  SessionSetInput,
+  MuscleWorkedSummaryItem, // Import the new schema type
+  MuscleIntensity, // Import the enum type
+} from "../../schemas/workoutSessionsSchemas";
 import { calculate_1RM, calculate_SWR } from "./workout-sessions.helpers";
 
 // Type definitions moved from workout-sessions.service.ts
@@ -22,6 +28,8 @@ export type SetPayloadPreamble = Omit<TablesInsert<"workout_session_sets">, "wor
   exercise_name?: string; // For summary, not a DB field on workout_session_sets
 };
 
+// MuscleGroupWorkedSummaryItem is removed as we are now using MuscleWorkedSummaryItem from schemas
+
 export type PreparedWorkoutData = {
   sessionInsertPayload: TablesInsert<"workout_sessions">;
   setInsertPayloads: SetPayloadPreamble[];
@@ -37,6 +45,7 @@ export type PreparedWorkoutData = {
       | null;
   })[];
   existingUserExercisePRs: Map<string, Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "rank_id">>;
+  muscles_worked_summary: MuscleWorkedSummaryItem[]; // Changed from muscleGroupsWorkedSummary
 };
 
 /**
@@ -154,6 +163,7 @@ export async function _gatherAndPrepareWorkoutData(
 
   const setInsertPayloads: SetPayloadPreamble[] = [];
   const setsProgressionInputArray: SetProgressionInput[] = [];
+  const musclesWorkedMap = new Map<string, MuscleWorkedSummaryItem>(); // Key: muscle_id
 
   let calculatedTotalSets = 0;
   let calculatedTotalReps = 0;
@@ -212,6 +222,45 @@ export async function _gatherAndPrepareWorkoutData(
     });
   }
 
+  // Populate musclesWorkedMap from exerciseMuscleMappings for all performed exercises
+  const performedExerciseIdSet = new Set(finishData.exercises.map((ex) => ex.exercise_id));
+  exerciseMuscleMappings.forEach((em) => {
+    fastify.log.info({
+      msg: "[PREPARE_WORKOUT_DATA] Inspecting exerciseMuscleMapping item",
+      exercise_id: em.exercise_id,
+      muscle_id: em.muscles?.id,
+      muscle_name: em.muscles?.name,
+      muscle_intensity_value: em.muscle_intensity, // Key value to check
+      is_performed: performedExerciseIdSet.has(em.exercise_id),
+    });
+
+    if (
+      performedExerciseIdSet.has(em.exercise_id) &&
+      em.muscles?.id &&
+      em.muscles?.name &&
+      em.muscles?.muscle_group_id &&
+      em.muscles?.muscle_groups?.name &&
+      em.muscle_intensity
+    ) {
+      if (!musclesWorkedMap.has(em.muscles.id)) {
+        // Add only if not already present, taking first encountered intensity
+        musclesWorkedMap.set(em.muscles.id, {
+          id: em.muscles.id,
+          name: em.muscles.name,
+          muscle_intensity: em.muscle_intensity as MuscleIntensity, // Cast to the enum type
+          muscle_group_id: em.muscles.muscle_group_id,
+          muscle_group_name: em.muscles.muscle_groups.name,
+        });
+      }
+    }
+  });
+
+  const muscles_worked_summary: MuscleWorkedSummaryItem[] = Array.from(musclesWorkedMap.values());
+  fastify.log.info({
+    msg: "Final muscles_worked_summary content",
+    summary: muscles_worked_summary,
+    count: muscles_worked_summary.length,
+  });
   const exercisesPerformedSummary = Array.from(performedExerciseNamesForSummary).join(", ");
 
   let durationSeconds = finishData.duration_seconds;
@@ -257,5 +306,6 @@ export async function _gatherAndPrepareWorkoutData(
     exerciseDetailsMap,
     exerciseMuscleMappings,
     existingUserExercisePRs,
+    muscles_worked_summary, // Changed from muscleGroupsWorkedSummary
   };
 }

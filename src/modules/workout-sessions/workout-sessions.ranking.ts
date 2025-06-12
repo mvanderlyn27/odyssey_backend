@@ -1,6 +1,11 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Tables, TablesInsert, Enums } from "../../types/database";
+import {
+  RankProgressionDetails,
+  MuscleGroupProgression,
+  RankProgressionStage,
+} from "../../schemas/workoutSessionsSchemas"; // Import new types
 
 // Type aliases & Interfaces moved from workout-sessions.service.ts
 export type ExerciseRankUpInfo = {
@@ -47,13 +52,11 @@ export type OverallUserRankUpInfo = {
 };
 
 export type RankUpdateResults = {
-  exerciseRankUps: ExerciseRankUpInfo[];
-  muscleScoreChanges: MuscleScoreChangeInfo[];
-  muscleGroupRankUps: MuscleGroupRankUpInfo[];
-  overallUserRankUp: OverallUserRankUpInfo | null;
-  sessionMuscleRankUpsCount: number;
-  sessionMuscleGroupRankUpsCount: number;
-  sessionOverallRankUpCount: number;
+  exerciseRankUps: ExerciseRankUpInfo[]; // Kept for now, may not be directly used in final response
+  muscleScoreChanges: MuscleScoreChangeInfo[]; // Kept for now, may not be directly used in final response
+  overall_user_rank_progression?: RankProgressionDetails;
+  muscle_group_progressions?: MuscleGroupProgression[];
+  // sessionMuscleRankUpsCount, sessionMuscleGroupRankUpsCount, sessionOverallRankUpCount are removed
 };
 
 type UserExercisePrInsert = TablesInsert<"user_exercise_prs">;
@@ -139,11 +142,9 @@ export async function _updateUserExerciseAndMuscleGroupRanks( // Function name m
   const results: RankUpdateResults = {
     exerciseRankUps: [],
     muscleScoreChanges: [],
-    muscleGroupRankUps: [],
-    overallUserRankUp: null,
-    sessionMuscleRankUpsCount: 0,
-    sessionMuscleGroupRankUpsCount: 0,
-    sessionOverallRankUpCount: 0,
+    // Initialize new progression fields
+    overall_user_rank_progression: undefined,
+    muscle_group_progressions: [],
   };
   fastify.log.info(`[RANK_UPDATE_REVISED] Starting for user: ${userId}`, {
     numPersistedSets: persistedSessionSets.length,
@@ -391,7 +392,7 @@ export async function _updateUserExerciseAndMuscleGroupRanks( // Function name m
   }
   const overallRankBenchmarks = overallRankBenchmarksResult.data || [];
   const overallRankBenchmarksSorted = [...overallRankBenchmarks].sort(
-    (a, b) => b.min_threshold - a.min_threshold // UPDATED column
+    (a, b) => a.min_threshold - b.min_threshold // Sort ascending for easier iteration
   );
 
   if (muscleGroupsResult.error) {
@@ -403,7 +404,151 @@ export async function _updateUserExerciseAndMuscleGroupRanks( // Function name m
 
   fastify.log.info(`[SCORE_RANK_LOGIC_A] Successfully fetched prerequisite data.`);
 
+  // Helper function to build rank progression stages
+  function buildRankProgressionStages(
+    initialScore: number,
+    finalScore: number,
+    // Benchmarks should be sorted by min_threshold ASCENDING for this function
+    sortedRankBenchmarks: (
+      | Tables<"overall_rank_benchmarks">
+      | Tables<"muscle_group_rank_benchmarks">
+      | Tables<"muscle_rank_benchmarks">
+    )[], // Added for potential future use with individual muscle progression
+    ranksMap: Map<number, { id: number; rank_name: string; rank_weight: number }>
+  ): RankProgressionDetails {
+    const stages: RankProgressionStage[] = [];
+    let currentRankMinScoreForPercentage = 0;
+    let nextRankMinScoreForPercentage = 0;
+    let finalRankName = "Unranked";
+
+    // Determine the rank containing the finalScore to find the correct nextRankMinScoreForPercentage
+    let finalScoreRankIndex = -1;
+    for (let i = 0; i < sortedRankBenchmarks.length; i++) {
+      if (finalScore >= sortedRankBenchmarks[i].min_threshold) {
+        finalScoreRankIndex = i;
+      } else {
+        break; // Found the rank below, or finalScore is below all benchmarks
+      }
+    }
+
+    if (finalScoreRankIndex !== -1) {
+      currentRankMinScoreForPercentage = sortedRankBenchmarks[finalScoreRankIndex].min_threshold;
+      finalRankName = ranksMap.get(sortedRankBenchmarks[finalScoreRankIndex].rank_id)?.rank_name || "Unknown Rank";
+      if (finalScoreRankIndex + 1 < sortedRankBenchmarks.length) {
+        nextRankMinScoreForPercentage = sortedRankBenchmarks[finalScoreRankIndex + 1].min_threshold;
+      } else {
+        // At the highest rank
+        nextRankMinScoreForPercentage = currentRankMinScoreForPercentage; // Or some other logic for max rank
+      }
+    } else {
+      // finalScore is below the lowest benchmark
+      currentRankMinScoreForPercentage = 0; // Assuming 0 is the absolute minimum
+      if (sortedRankBenchmarks.length > 0) {
+        nextRankMinScoreForPercentage = sortedRankBenchmarks[0].min_threshold;
+        finalRankName = "Unranked"; // Or a specific name for below lowest rank
+      } else {
+        // No benchmarks at all
+        nextRankMinScoreForPercentage = finalScore > 0 ? finalScore : 100; // Avoid division by zero if no benchmarks
+        finalRankName = "Unranked";
+      }
+    }
+
+    for (let i = 0; i < sortedRankBenchmarks.length; i++) {
+      const benchmark = sortedRankBenchmarks[i];
+      const rankInfo = ranksMap.get(benchmark.rank_id);
+      if (!rankInfo) continue;
+
+      const rank_min_score = benchmark.min_threshold;
+      const rank_max_score =
+        i + 1 < sortedRankBenchmarks.length
+          ? sortedRankBenchmarks[i + 1].min_threshold - 1
+          : rank_min_score + (ranksMap.get(benchmark.rank_id)?.rank_weight || 100) * 2; // Heuristic for top rank max
+
+      // Determine if this rank tier is involved in the progression
+      const startsInThisTier = initialScore <= rank_max_score && initialScore >= rank_min_score;
+      const endsInThisTier = finalScore >= rank_min_score && finalScore <= rank_max_score;
+      const passesThroughThisTier = initialScore < rank_min_score && finalScore > rank_max_score;
+      const startsBeforeAndEndsInTier = initialScore < rank_min_score && endsInThisTier;
+      const startsInTierAndEndsAfter = startsInThisTier && finalScore > rank_max_score;
+
+      if (
+        startsInThisTier ||
+        endsInThisTier ||
+        passesThroughThisTier ||
+        startsBeforeAndEndsInTier ||
+        startsInTierAndEndsAfter
+      ) {
+        // Only add stage if there's some animation within this tier
+        const score_animates_from = Math.max(rank_min_score, initialScore);
+        const score_animates_to = Math.min(rank_max_score, finalScore);
+
+        if (
+          score_animates_to >= score_animates_from &&
+          finalScore >= rank_min_score &&
+          initialScore <= rank_max_score
+        ) {
+          stages.push({
+            rank_name: rankInfo.rank_name,
+            rank_min_score: rank_min_score,
+            rank_max_score: rank_max_score,
+            score_animates_from: score_animates_from,
+            score_animates_to: score_animates_to,
+          });
+        }
+      }
+      // If initialScore is below all benchmarks and finalScore is in the first benchmark
+      if (i === 0 && initialScore < rank_min_score && finalScore >= rank_min_score) {
+        stages.unshift({
+          // Add an "Unranked" initial stage if applicable
+          rank_name: "Unranked", // Or a pre-lowest rank name
+          rank_min_score: 0, // Or a theoretical minimum
+          rank_max_score: rank_min_score - 1,
+          score_animates_from: initialScore,
+          score_animates_to: Math.min(finalScore, rank_min_score - 1),
+        });
+      }
+    }
+    // Handle case where final score is below the lowest benchmark
+    if (stages.length === 0 && finalScore < (sortedRankBenchmarks[0]?.min_threshold || 0)) {
+      stages.push({
+        rank_name: "Unranked",
+        rank_min_score: 0,
+        rank_max_score: (sortedRankBenchmarks[0]?.min_threshold || finalScore + 100) - 1,
+        score_animates_from: initialScore,
+        score_animates_to: finalScore,
+      });
+    }
+
+    let percent_to_next_rank = 0;
+    if (nextRankMinScoreForPercentage > currentRankMinScoreForPercentage) {
+      const scoreInCurrentTier = Math.max(0, finalScore - currentRankMinScoreForPercentage);
+      const scoreNeededForTier = nextRankMinScoreForPercentage - currentRankMinScoreForPercentage;
+      percent_to_next_rank = scoreNeededForTier > 0 ? scoreInCurrentTier / scoreNeededForTier : 1; // 100% if scoreNeeded is 0 (e.g. at max rank)
+      percent_to_next_rank = Math.min(1, Math.max(0, percent_to_next_rank)); // Clamp between 0 and 1
+    } else if (
+      finalScore >= currentRankMinScoreForPercentage &&
+      finalScoreRankIndex === sortedRankBenchmarks.length - 1
+    ) {
+      // At the highest rank
+      percent_to_next_rank = 1; // Or 0, depending on how you want to represent "no next rank"
+    }
+
+    return {
+      initial_score_before_session: initialScore,
+      final_score_after_session: finalScore,
+      percent_to_next_rank: parseFloat(percent_to_next_rank.toFixed(2)), // Ensure 2 decimal places
+      stages,
+    };
+  }
+
   // B. Calculate/Update Individual Muscle Scores/Ranks (muscle_ranks)
+  // Capture initial scores for muscle groups before calculations
+  const initialMuscleGroupScores = new Map<string, number>();
+  currentMuscleGroupRanks.forEach((mgRank) => {
+    initialMuscleGroupScores.set(mgRank.muscle_group_id, mgRank.total_score_for_group ?? 0);
+  });
+  const initialOverallScore = currentUserRank?.total_overall_score ?? 0;
+
   const affectedMuscleIdsFromSession = new Set<string>();
   persistedSessionSets.forEach((set) => {
     if (set.exercise_id) {
@@ -488,6 +633,7 @@ export async function _updateUserExerciseAndMuscleGroupRanks( // Function name m
     const old_rank_id_for_muscle = oldMuscleRankData?.rank_id ?? null; // UPDATED: was base_rank_id_for_swr
     const rankChanged = new_rank_id_for_muscle !== old_rank_id_for_muscle;
 
+    // muscleScoreChanges is kept for now as per plan, though not directly in the final response structure
     if (score !== old_score || rankChanged) {
       results.muscleScoreChanges.push({
         muscle_id: muscleId,
@@ -500,9 +646,7 @@ export async function _updateUserExerciseAndMuscleGroupRanks( // Function name m
         new_rank_name: new_rank_id_for_muscle ? ranksMap.get(new_rank_id_for_muscle)?.rank_name ?? null : null,
         rank_changed: rankChanged,
       });
-      if (rankChanged) {
-        results.sessionMuscleRankUpsCount++;
-      }
+      // Removed: results.sessionMuscleRankUpsCount++;
     }
 
     updatedMuscleRanksData.push({
@@ -564,24 +708,28 @@ export async function _updateUserExerciseAndMuscleGroupRanks( // Function name m
     const oldGroupRankData = currentMuscleGroupRanksMap.get(groupId); // UPDATED map name
     const old_total_score_for_group = oldGroupRankData?.total_score_for_group ?? null;
     const old_rank_id_for_group = oldGroupRankData?.rank_id ?? null;
-    const groupRankChanged = new_rank_id_for_group !== old_rank_id_for_group;
+    // const groupRankChanged = new_rank_id_for_group !== old_rank_id_for_group; // Not directly used now
 
-    if (total_score_for_group !== old_total_score_for_group || groupRankChanged) {
-      results.muscleGroupRankUps.push({
-        muscle_group_id: groupId,
-        muscle_group_name: groupName,
-        old_total_score: old_total_score_for_group,
-        new_total_score: total_score_for_group,
-        old_rank_id: old_rank_id_for_group,
-        old_rank_name: old_rank_id_for_group ? ranksMap.get(old_rank_id_for_group)?.rank_name ?? null : null,
-        new_rank_id: new_rank_id_for_group,
-        new_rank_name: new_rank_id_for_group ? ranksMap.get(new_rank_id_for_group)?.rank_name ?? null : null,
-        rank_changed: groupRankChanged,
-      });
-      if (groupRankChanged) {
-        results.sessionMuscleGroupRankUpsCount++;
-      }
-    }
+    // Build progression details for this muscle group
+    const initialGroupScore = initialMuscleGroupScores.get(groupId) ?? 0;
+    const groupBenchmarks = muscleGroupRankBenchmarksMap.get(groupId) || [];
+    // Ensure groupBenchmarks are sorted ascending for buildRankProgressionStages
+    const sortedGroupBenchmarks = [...groupBenchmarks].sort((a, b) => a.min_threshold - b.min_threshold);
+
+    const groupProgressionDetails = buildRankProgressionStages(
+      initialGroupScore,
+      total_score_for_group,
+      sortedGroupBenchmarks,
+      ranksMap
+    );
+
+    results.muscle_group_progressions?.push({
+      muscle_group_id: groupId,
+      muscle_group_name: groupName,
+      progression_details: groupProgressionDetails,
+    });
+    // Removed: results.muscleGroupRankUps.push(...)
+    // Removed: results.sessionMuscleGroupRankUpsCount++;
 
     updatedMuscleGroupRanksData.push({
       // UPDATED variable name
@@ -629,25 +777,25 @@ export async function _updateUserExerciseAndMuscleGroupRanks( // Function name m
 
   const old_total_overall_score = currentUserRank?.total_overall_score ?? null; // UPDATED variable name
   const old_overall_rank_id = currentUserRank?.rank_id ?? null; // UPDATED variable name
-  const overallRankChanged = new_overall_rank_id !== old_overall_rank_id;
+  // const overallRankChanged = new_overall_rank_id !== old_overall_rank_id; // Not directly used now
 
-  if (total_overall_score !== old_total_overall_score || overallRankChanged) {
-    results.overallUserRankUp = {
-      old_total_score: old_total_overall_score,
-      new_total_score: total_overall_score,
-      old_rank_id: old_overall_rank_id,
-      old_rank_name: old_overall_rank_id ? ranksMap.get(old_overall_rank_id)?.rank_name ?? null : null,
-      new_rank_id: new_overall_rank_id,
-      new_rank_name: new_overall_rank_id ? ranksMap.get(new_overall_rank_id)?.rank_name ?? null : null,
-      rank_changed: overallRankChanged,
-    };
-    if (overallRankChanged) {
-      results.sessionOverallRankUpCount = 1;
-    }
-  }
+  // Build progression details for overall user rank
+  // overallRankBenchmarksSorted is already sorted ascending by the change made earlier
+  results.overall_user_rank_progression = buildRankProgressionStages(
+    initialOverallScore,
+    total_overall_score,
+    overallRankBenchmarksSorted, // Already sorted ascending
+    ranksMap
+  );
+  // Removed: results.overallUserRankUp = {...}
+  // Removed: results.sessionOverallRankUpCount = 1;
 
-  if (results.overallUserRankUp || !currentUserRank) {
-    // UPDATED variable name
+  // Upsert user_ranks if score or rank_id changed, or if it's the first time
+  if (
+    total_overall_score !== old_total_overall_score ||
+    new_overall_rank_id !== old_overall_rank_id ||
+    !currentUserRank
+  ) {
     const upsertData: UserRankInsert = {
       // UPDATED type
       id: userId,

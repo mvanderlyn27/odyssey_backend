@@ -34,6 +34,111 @@ export const OverallFeelingEnum = Type.Union(
 );
 export type OverallFeeling = Static<typeof OverallFeelingEnum>;
 
+export const MuscleIntensityEnum = Type.Union(
+  [Type.Literal("primary"), Type.Literal("secondary"), Type.Literal("accessory")],
+  { $id: "MuscleIntensityEnum", description: "Intensity of muscle involvement in an exercise" }
+);
+export type MuscleIntensity = Static<typeof MuscleIntensityEnum>;
+
+export const MuscleWorkedSummaryItemSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid", description: "Muscle ID" }),
+    name: Type.String({ description: "Muscle name" }),
+    muscle_intensity: Type.Ref(MuscleIntensityEnum),
+    muscle_group_id: Type.String({ format: "uuid", description: "Muscle Group ID" }),
+    muscle_group_name: Type.String({ description: "Muscle Group name" }),
+  },
+  {
+    $id: "MuscleWorkedSummaryItemSchema",
+    description: "Summary of an individual muscle worked during the session, including its group.",
+  }
+);
+export type MuscleWorkedSummaryItem = Static<typeof MuscleWorkedSummaryItemSchema>;
+
+// --- New Schemas for Detailed Rank Progression ---
+
+export const RankProgressionStageSchema = Type.Object(
+  {
+    rank_name: Type.String(),
+    rank_min_score: Type.Number(),
+    rank_max_score: Type.Number({
+      description:
+        "Max score for this rank (exclusive for the next rank's min_score, or a high number for the top rank)",
+    }),
+    score_animates_from: Type.Number(),
+    score_animates_to: Type.Number(),
+  },
+  { $id: "RankProgressionStageSchema", description: "A single stage in a rank progression animation." }
+);
+export type RankProgressionStage = Static<typeof RankProgressionStageSchema>;
+
+export const RankProgressionDetailsSchema = Type.Object(
+  {
+    initial_score_before_session: Type.Number(),
+    final_score_after_session: Type.Number(),
+    percent_to_next_rank: Type.Number({
+      minimum: 0,
+      maximum: 1,
+      description: "Decimal representation of percentage to next rank, e.g., 0.27 for 27%",
+    }),
+    stages: Type.Array(Type.Ref(RankProgressionStageSchema)),
+  },
+  { $id: "RankProgressionDetailsSchema", description: "Detailed information for animating rank progression." }
+);
+export type RankProgressionDetails = Static<typeof RankProgressionDetailsSchema>;
+
+export const MuscleGroupInfoSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    name: Type.String(),
+  },
+  { $id: "MuscleGroupInfoSchema", description: "Basic information for a muscle group." }
+);
+export type MuscleGroupInfo = Static<typeof MuscleGroupInfoSchema>;
+
+export const MuscleGroupProgressionSchema = Type.Object(
+  {
+    muscle_group_id: Type.String({ format: "uuid" }),
+    muscle_group_name: Type.String(),
+    progression_details: Type.Ref(RankProgressionDetailsSchema),
+  },
+  { $id: "MuscleGroupProgressionSchema", description: "Rank progression details for a specific muscle group." }
+);
+export type MuscleGroupProgression = Static<typeof MuscleGroupProgressionSchema>;
+
+// --- Schemas for Page 3 of Detailed Finish Session Response ---
+
+export const FailedSetInfoSchema = Type.Object(
+  {
+    set_number: Type.Integer(),
+    reps_achieved: Type.Union([Type.Number(), Type.Null()]),
+    target_reps: Type.Union([Type.Number(), Type.Null()], { description: "Typically planned_min_reps" }),
+    achieved_weight: Type.Union([Type.Number(), Type.Null()]),
+  },
+  { $id: "FailedSetInfoSchema", description: "Information about a failed set." }
+);
+export type FailedSetInfo = Static<typeof FailedSetInfoSchema>;
+
+export const LoggedSetOverviewItemSchema = Type.Object(
+  {
+    exercise_name: Type.String(),
+    failed_set_info: Type.Array(Type.Ref(FailedSetInfoSchema)),
+  },
+  { $id: "LoggedSetOverviewItemSchema", description: "Overview of logged sets for an exercise, focusing on failures." }
+);
+export type LoggedSetOverviewItem = Static<typeof LoggedSetOverviewItemSchema>;
+
+// Renaming PlanWeightIncreaseItemSchema from existing to NewPlanProgressionItemSchema for clarity for Page 3
+export const NewPlanProgressionItemSchema = Type.Object(
+  {
+    exercise_name: Type.String(),
+    old_max_weight: Type.Number({ description: "Old target weight before progression" }),
+    new_max_weight: Type.Number({ description: "New target weight after progression" }),
+  },
+  { $id: "NewPlanProgressionItemSchema", description: "Details of exercise progression in the plan." }
+);
+export type NewPlanProgressionItem = Static<typeof NewPlanProgressionItemSchema>;
+
 // --- Base Schemas (Reflecting DB Tables) ---
 
 export const WorkoutSessionSchema = Type.Object(
@@ -205,6 +310,8 @@ export const OverallUserRankUpSchema = Type.Object(
 );
 export type OverallUserRankUp = Static<typeof OverallUserRankUpSchema>;
 
+// Note: LoggedSetSummaryItemSchema and PlanWeightIncreaseItemSchema are kept for now if used by other parts (e.g. list/summary endpoints)
+// but DetailedFinishSessionResponseSchema will use the new LoggedSetOverviewItemSchema and NewPlanProgressionItemSchema.
 export const LoggedSetSummaryItemSchema = Type.Object(
   // Added export
   {
@@ -235,50 +342,56 @@ export const PlanWeightIncreaseItemSchema = Type.Object(
 // Schema for the new detailed finish session response based on user feedback
 export const DetailedFinishSessionResponseSchema = Type.Object(
   {
+    // Core Session Info & XP
     sessionId: Type.String({ format: "uuid" }),
+    completedAt: Type.String({ format: "date-time" }),
+    exercisesPerformed: Type.String({ description: "Comma-separated list of unique exercise names performed." }),
     xpAwarded: Type.Number(),
     total_xp: Type.Number({ description: "User's total experience points after the workout" }),
     levelUp: Type.Boolean(),
-    newLevelNumber: Type.Optional(Type.Number({ description: "The user's new level number" })), // Represents current level
+    newLevelNumber: Type.Optional(Type.Number({ description: "The user's new level number" })),
     remaining_xp_for_next_level: Type.Optional(
       Type.Number({ description: "XP needed for the user to reach the next level" })
     ),
-    durationSeconds: Type.Integer({ minimum: 0 }),
-    totalVolumeKg: Type.Number({ minimum: 0 }),
-    totalReps: Type.Integer({ minimum: 0 }),
-    totalSets: Type.Integer({ minimum: 0 }),
-    completedAt: Type.String({ format: "date-time" }),
-    notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
-    overallFeeling: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Assuming string for now, could be OverallFeelingEnum
-    exercisesPerformed: Type.String({ description: "Comma-separated list of unique exercise names performed." }),
-    // New fields for richer summary
-    exerciseRankUps: Type.Array(Type.Ref(ExerciseRankUpSchema)),
-    muscleScoreChanges: Type.Array(Type.Ref(MuscleScoreChangeSchema), {
-      description: "Details of individual muscle score changes and SWR-based rank updates.",
+
+    // Page 1: Overview Stats
+    total_volume: Type.Number({ minimum: 0, description: "Total volume for the current session in kg." }),
+    volume_delta: Type.Number({
+      description:
+        "Change in volume compared to the previous session for this plan day (or full value if first session).",
     }),
-    muscleGroupRankUps: Type.Array(Type.Ref(MuscleGroupRankUpSchema)),
-    overallUserRankUp: Type.Union([Type.Ref(OverallUserRankUpSchema), Type.Null()], {
-      description: "Details of the overall user rank change, if any.",
+    total_duration: Type.Integer({ minimum: 0, description: "Total duration of the current session in seconds." }),
+    duration_delta: Type.Integer({
+      description:
+        "Change in duration compared to the previous session for this plan day (or full value if first session).",
     }),
-    loggedSetsSummary: Type.Array(Type.Ref(LoggedSetSummaryItemSchema)),
-    planWeightIncreases: Type.Array(Type.Ref(PlanWeightIncreaseItemSchema)),
-    sessionMuscleRankUpsCount: Type.Number({
-      minimum: 0,
-      description: "Number of individual muscles that had their SWR-based rank increase this session.",
+    total_reps: Type.Integer({ minimum: 0, description: "Total reps performed in the current session." }),
+    rep_delta: Type.Integer({
+      description:
+        "Change in reps compared to the previous session for this plan day (or full value if first session).",
     }),
-    sessionMuscleGroupRankUpsCount: Type.Number({
-      minimum: 0,
-      description: "Number of muscle groups that ranked up this session based on score.",
+    total_sets: Type.Integer({ minimum: 0, description: "Total sets performed in the current session." }),
+    set_delta: Type.Integer({
+      description:
+        "Change in sets compared to the previous session for this plan day (or full value if first session).",
     }),
-    sessionOverallRankUpCount: Type.Number({
-      minimum: 0,
-      maximum: 1,
-      description: "Whether the user's overall rank increased this session (0 or 1).",
+
+    // Page 2: Muscle Groups & Rank Progression
+    muscles_worked_summary: Type.Array(Type.Ref(MuscleWorkedSummaryItemSchema), {
+      // Renamed and type changed
+      description: "Array of individual muscles worked in this session, including their intensity.",
     }),
+    overall_user_rank_progression: Type.Optional(Type.Ref(RankProgressionDetailsSchema)),
+    muscle_group_progressions: Type.Array(Type.Ref(MuscleGroupProgressionSchema)),
+
+    // Page 3: Logged Set Overview & Plan Progression
+    logged_set_overview: Type.Array(Type.Ref(LoggedSetOverviewItemSchema)),
+    plan_progression: Type.Array(Type.Ref(NewPlanProgressionItemSchema)),
   },
   {
     $id: "DetailedFinishSessionResponseSchema",
-    description: "Detailed response after successfully finishing or logging a workout session.",
+    description:
+      "Detailed response after successfully finishing or logging a workout session, structured for a multi-page summary.",
   }
 );
 export type DetailedFinishSessionResponse = Static<typeof DetailedFinishSessionResponseSchema>;

@@ -63,6 +63,7 @@ export const finishWorkoutSession = async (
       exerciseDetailsMap,
       exerciseMuscleMappings, // Destructure renamed variable
       existingUserExercisePRs,
+      muscles_worked_summary, // Changed from muscleGroupsWorkedSummary
     } = await _gatherAndPrepareWorkoutData(fastify, userId, finishData);
 
     // Handle existing_session_id: If provided, this is an update (finalize), otherwise new insert.
@@ -137,131 +138,186 @@ export const finishWorkoutSession = async (
       fastify.log.info(`[FINISH_SESSION_FLOW] Successfully inserted ${persistedSessionSets.length} sets.`);
     }
 
-    // Step 3: Update Workout Plan Progression
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 3: _updateWorkoutPlanProgression (using setsProgressionInputData).");
-    const planProgressionResults = await _updateWorkoutPlanProgression(
-      fastify,
-      newlyCreatedOrFetchedSession.workout_plan_day_id,
-      setsProgressionInputData // Pass the new data structure
-    );
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 3 Complete.");
+    // Step 3 onwards: Parallelize operations
+    fastify.log.info("[FINISH_SESSION_FLOW] Step 3+ : Starting parallel operations.");
 
-    // Step 4: Update User Exercise and Muscle Group Ranks
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 4: _updateUserExerciseAndMuscleGroupRanks.");
-    let rankUpdateResults: RankUpdateResults; // Declare with type
-    if (!userProfile.gender) {
-      fastify.log.warn({ userId }, "User gender is null. Skipping rank updates.");
-      rankUpdateResults = {
-        exerciseRankUps: [],
-        muscleScoreChanges: [],
-        muscleGroupRankUps: [],
-        overallUserRankUp: null,
-        sessionMuscleRankUpsCount: 0,
-        sessionMuscleGroupRankUpsCount: 0,
-        sessionOverallRankUpCount: 0,
-      };
-    } else {
-      rankUpdateResults = await _updateUserExerciseAndMuscleGroupRanks(
+    const [
+      planProgressionResults,
+      rankUpdateResults,
+      xpLevelResult,
+      _muscleLastWorkedResult, // Result not directly used in response, but we await completion
+      _activePlanUpdateResult, // Result not directly used in response, but we await completion
+      previousSessionDataResult,
+    ] = await Promise.all([
+      // Step 3: Update Workout Plan Progression
+      _updateWorkoutPlanProgression(
+        fastify,
+        newlyCreatedOrFetchedSession.workout_plan_day_id,
+        setsProgressionInputData
+      ),
+      // Step 4: Update User Exercise and Muscle Group Ranks
+      (() => {
+        if (!userProfile.gender) {
+          fastify.log.warn({ userId }, "User gender is null. Skipping rank updates and returning default structure.");
+          // Return structure matching RankUpdateResults with undefined progression fields
+          return Promise.resolve<RankUpdateResults>({
+            exerciseRankUps: [],
+            muscleScoreChanges: [],
+            overall_user_rank_progression: undefined,
+            muscle_group_progressions: [],
+          });
+        }
+        return _updateUserExerciseAndMuscleGroupRanks(
+          fastify,
+          userId,
+          userProfile.gender,
+          persistedSessionSets,
+          exerciseDetailsMap,
+          exerciseMuscleMappings,
+          existingUserExercisePRs
+        );
+      })(),
+      // Step 6: Award XP
+      _awardXpAndLevel(fastify, userProfile),
+      // Step 5: Update User Muscle Last Worked
+      _updateUserMuscleLastWorked(
         fastify,
         userId,
-        userProfile.gender, // Gender is essential for rank calculation
-        persistedSessionSets, // The sets performed in this session
-        exerciseDetailsMap, // Map of exerciseId to exercise details (name)
-        exerciseMuscleMappings, // Pass renamed and correctly typed variable
-        existingUserExercisePRs // User's existing PRs for exercises in this session
+        newlyCreatedOrFetchedSession.id,
+        persistedSessionSets,
+        newlyCreatedOrFetchedSession.completed_at!
+      ),
+      // Step 7: Update Active Workout Plan Last Completed Day
+      _updateActiveWorkoutPlanLastCompletedDay(
+        fastify,
+        userId,
+        newlyCreatedOrFetchedSession.workout_plan_id,
+        newlyCreatedOrFetchedSession.workout_plan_day_id
+      ),
+      // Fetch Previous Session Data for Deltas
+      (() => {
+        if (newlyCreatedOrFetchedSession.workout_plan_day_id) {
+          return supabase
+            .from("workout_sessions")
+            .select("total_volume_kg, duration_seconds, total_reps, total_sets")
+            .eq("user_id", userId)
+            .eq("workout_plan_day_id", newlyCreatedOrFetchedSession.workout_plan_day_id!)
+            .lt("completed_at", newlyCreatedOrFetchedSession.completed_at!)
+            .order("completed_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        }
+        return Promise.resolve({ data: null, error: null });
+      })(),
+    ]);
+
+    fastify.log.info("[FINISH_SESSION_FLOW] Parallel operations complete.");
+    if (previousSessionDataResult.error) {
+      fastify.log.warn(
+        { error: previousSessionDataResult.error, userId, planDayId: newlyCreatedOrFetchedSession.workout_plan_day_id },
+        "Failed to fetch previous session data for deltas. Deltas might be full values."
       );
     }
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 4 Complete.");
+    const previousSessionData = previousSessionDataResult.data;
 
-    // Step 4.5: Update workout_sessions table with rank up counts
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 4.5: Updating session with rank up counts.");
-    const { error: updateSessionCountsError } = await supabase
-      .from("workout_sessions")
-      .update({
-        muscle_rank_ups_count: rankUpdateResults.sessionMuscleRankUpsCount,
-        muscle_group_rank_ups_count: rankUpdateResults.sessionMuscleGroupRankUpsCount,
-        overall_rank_up_count: rankUpdateResults.sessionOverallRankUpCount,
-      })
-      .eq("id", newlyCreatedOrFetchedSession.id);
-
-    if (updateSessionCountsError) {
-      fastify.log.error(
-        { error: updateSessionCountsError, sessionId: newlyCreatedOrFetchedSession.id },
-        "Error updating workout_sessions with rank up counts."
-      );
-      // Not throwing, as this is a secondary update. Log and continue.
-    } else {
-      fastify.log.info(
-        `[FINISH_SESSION_FLOW] Successfully updated session ${newlyCreatedOrFetchedSession.id} with rank up counts.`
-      );
-    }
-
-    // Step 5: Update User Muscle Last Worked
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 5: _updateUserMuscleLastWorked.");
-    await _updateUserMuscleLastWorked(
-      fastify,
-      userId,
-      newlyCreatedOrFetchedSession.id,
-      persistedSessionSets,
-      newlyCreatedOrFetchedSession.completed_at!
-    );
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 5 Complete.");
-
-    // Step 6: Award XP
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 6: _awardXpAndLevel.");
-    // Pass the fetched userProfile to _awardXpAndLevel
-    const xpLevelResult = await _awardXpAndLevel(fastify, userProfile);
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 6 Complete.");
-
-    // Step 7: Update Active Workout Plan Last Completed Day
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 7: _updateActiveWorkoutPlanLastCompletedDay.");
-    await _updateActiveWorkoutPlanLastCompletedDay(
-      fastify,
-      userId,
-      newlyCreatedOrFetchedSession.workout_plan_id,
-      newlyCreatedOrFetchedSession.workout_plan_day_id
-    );
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 7 Complete.");
+    // Step 4.5 (Update workout_sessions table with rank up counts) is REMOVED as per plan.
 
     // Step 8: Construct and return the detailed response
     fastify.log.info("[FINISH_SESSION_FLOW] Step 8: Constructing detailed response.");
+
+    // Extract worked muscle group IDs for filtering
+    const workedMuscleGroupIds = new Set<string>();
+    if (muscles_worked_summary && muscles_worked_summary.length > 0) {
+      muscles_worked_summary.forEach((summaryItem) => {
+        if (summaryItem.muscle_group_id) {
+          workedMuscleGroupIds.add(summaryItem.muscle_group_id);
+        }
+      });
+    }
+    fastify.log.info(
+      { workedMuscleGroupIds: Array.from(workedMuscleGroupIds) },
+      "Worked muscle group IDs for filtering progressions."
+    );
+
+    const filteredMuscleGroupProgressions = (rankUpdateResults.muscle_group_progressions || []).filter((progression) =>
+      workedMuscleGroupIds.has(progression.muscle_group_id)
+    );
+    fastify.log.info(
+      {
+        originalCount: rankUpdateResults.muscle_group_progressions?.length || 0,
+        filteredCount: filteredMuscleGroupProgressions.length,
+      },
+      "Muscle group progressions filtered."
+    );
+
     const responsePayload: DetailedFinishSessionResponse = {
+      // Core Session Info & XP
       sessionId: newlyCreatedOrFetchedSession.id,
+      completedAt: newlyCreatedOrFetchedSession.completed_at!,
+      exercisesPerformed: newlyCreatedOrFetchedSession.exercises_performed_summary || "",
       xpAwarded: xpLevelResult.awardedXp,
       total_xp: xpLevelResult.newExperiencePoints,
       levelUp: xpLevelResult.leveledUp,
       newLevelNumber: xpLevelResult.newLevelNumber,
       remaining_xp_for_next_level:
         xpLevelResult.remaining_xp_for_next_level === null ? undefined : xpLevelResult.remaining_xp_for_next_level,
-      durationSeconds: newlyCreatedOrFetchedSession.duration_seconds || 0,
-      totalVolumeKg: newlyCreatedOrFetchedSession.total_volume_kg || 0,
-      totalReps: newlyCreatedOrFetchedSession.total_reps || 0,
-      totalSets: newlyCreatedOrFetchedSession.total_sets || 0,
-      completedAt: newlyCreatedOrFetchedSession.completed_at!,
-      notes: newlyCreatedOrFetchedSession.notes,
-      overallFeeling: finishData.overall_feeling ?? null,
-      exercisesPerformed: newlyCreatedOrFetchedSession.exercises_performed_summary || "",
-      // New fields for richer summary
-      exerciseRankUps: rankUpdateResults.exerciseRankUps,
-      muscleScoreChanges: rankUpdateResults.muscleScoreChanges,
-      muscleGroupRankUps: rankUpdateResults.muscleGroupRankUps,
-      overallUserRankUp: rankUpdateResults.overallUserRankUp,
-      sessionMuscleRankUpsCount: rankUpdateResults.sessionMuscleRankUpsCount,
-      sessionMuscleGroupRankUpsCount: rankUpdateResults.sessionMuscleGroupRankUpsCount,
-      sessionOverallRankUpCount: rankUpdateResults.sessionOverallRankUpCount,
-      loggedSetsSummary: persistedSessionSets.map((s) => ({
-        exercise_id: s.exercise_id,
-        exercise_name: s.exercise_name || "Unknown Exercise", // Fallback, exerciseIdToNameMap is not in this scope
-        set_order: s.set_order,
-        actual_reps: s.actual_reps,
-        actual_weight_kg: s.actual_weight_kg,
-        is_success: s.is_success,
-        calculated_1rm: s.calculated_1rm,
-        calculated_swr: s.calculated_swr,
+
+      // Page 1: Overview Stats
+      total_volume: newlyCreatedOrFetchedSession.total_volume_kg || 0,
+      volume_delta: previousSessionData
+        ? (newlyCreatedOrFetchedSession.total_volume_kg || 0) - (previousSessionData.total_volume_kg || 0)
+        : newlyCreatedOrFetchedSession.total_volume_kg || 0,
+      total_duration: newlyCreatedOrFetchedSession.duration_seconds || 0,
+      duration_delta: previousSessionData
+        ? (newlyCreatedOrFetchedSession.duration_seconds || 0) - (previousSessionData.duration_seconds || 0)
+        : newlyCreatedOrFetchedSession.duration_seconds || 0,
+      total_reps: newlyCreatedOrFetchedSession.total_reps || 0,
+      rep_delta: previousSessionData
+        ? (newlyCreatedOrFetchedSession.total_reps || 0) - (previousSessionData.total_reps || 0)
+        : newlyCreatedOrFetchedSession.total_reps || 0,
+      total_sets: newlyCreatedOrFetchedSession.total_sets || 0,
+      set_delta: previousSessionData
+        ? (newlyCreatedOrFetchedSession.total_sets || 0) - (previousSessionData.total_sets || 0)
+        : newlyCreatedOrFetchedSession.total_sets || 0,
+
+      // Page 2: Muscle Groups & Rank Progression
+      muscles_worked_summary: muscles_worked_summary, // Changed from muscle_groups_worked and uses the new destructured variable
+      overall_user_rank_progression: rankUpdateResults.overall_user_rank_progression,
+      muscle_group_progressions: filteredMuscleGroupProgressions,
+
+      // Page 3: Logged Set Overview & Plan Progression
+      logged_set_overview: Array.from(
+        persistedSessionSets
+          .reduce((acc, set) => {
+            const exerciseName =
+              set.exercise_name || exerciseDetailsMap.get(set.exercise_id)?.name || "Unknown Exercise";
+            if (!acc.has(exerciseName)) {
+              acc.set(exerciseName, {
+                exercise_name: exerciseName,
+                failed_set_info: [],
+              });
+            }
+            if (set.is_success === false) {
+              acc.get(exerciseName)!.failed_set_info.push({
+                set_number: set.set_order,
+                reps_achieved: set.actual_reps,
+                target_reps: set.planned_min_reps, // As per clarification
+                achieved_weight: set.actual_weight_kg,
+              });
+            }
+            return acc;
+          }, new Map<string, { exercise_name: string; failed_set_info: any[] }>())
+          .values()
+      ),
+      plan_progression: planProgressionResults.weightIncreases.map((pi) => ({
+        exercise_name: pi.exercise_name,
+        old_max_weight: pi.old_target_weight,
+        new_max_weight: pi.new_target_weight,
       })),
-      planWeightIncreases: planProgressionResults.weightIncreases,
     };
-    fastify.log.info("[FINISH_SESSION_SUCCESS] Successfully processed finishWorkoutSession.", { responsePayload });
+    fastify.log.info("[FINISH_SESSION_SUCCESS] Successfully processed finishWorkoutSession.", {
+      sessionId: responsePayload.sessionId,
+    });
     return responsePayload;
   } catch (error: any) {
     fastify.log.error(

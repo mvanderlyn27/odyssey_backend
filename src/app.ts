@@ -157,11 +157,21 @@ import {
   OverallFeelingEnum,
   SessionSetInputSchema, // Added for explicit registration
   SessionExerciseInputSchema, // Added for explicit registration
+  // Schemas required by DetailedFinishSessionResponseSchema
+  MuscleIntensityEnum, // Added
+  MuscleWorkedSummaryItemSchema, // Added
+  MuscleGroupInfoSchema,
+  RankProgressionStageSchema,
+  RankProgressionDetailsSchema,
+  MuscleGroupProgressionSchema,
+  FailedSetInfoSchema,
+  LoggedSetOverviewItemSchema,
+  NewPlanProgressionItemSchema,
   // New schemas for richer response
   ExerciseRankUpSchema,
   MuscleGroupRankUpSchema,
-  LoggedSetSummaryItemSchema,
-  PlanWeightIncreaseItemSchema,
+  LoggedSetSummaryItemSchema, // This is the old one, ensure it's distinct from LoggedSetOverviewItemSchema if both are needed
+  PlanWeightIncreaseItemSchema, // This is the old one, ensure it's distinct from NewPlanProgressionItemSchema if both are needed
   // Schemas for Workout Session List & Summary (Phase 2)
   ListWorkoutSessionsQuerySchema,
   WorkoutSessionListItemSchema,
@@ -194,7 +204,7 @@ function configureLoggerOptions(isProduction: boolean): LoggerOptions {
   if (isProduction || isGoogleCloudRun) {
     const loggingWinston = new LoggingWinston();
     return {
-      level: process.env.LOG_LEVEL || "info",
+      level: process.env.LOG_LEVEL || "error", // Changed from "info" to "error" for production
       transports: [new winston.transports.Console(), loggingWinston],
     };
   } else {
@@ -378,11 +388,23 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(SessionSetInputSchema); // Dependency for SessionExerciseInputSchema
   app.addSchema(SessionExerciseInputSchema); // Dependency for NewFinishSessionBodySchema
   app.addSchema(NewFinishSessionBodySchema); // Uses SessionExerciseInputSchema & OverallFeelingEnum
+
+  // Schemas required by DetailedFinishSessionResponseSchema (must be registered before it)
+  app.addSchema(MuscleIntensityEnum); // Added
+  app.addSchema(MuscleWorkedSummaryItemSchema); // Added - ensure MuscleIntensityEnum is registered first if referenced
+  app.addSchema(MuscleGroupInfoSchema);
+  app.addSchema(RankProgressionStageSchema);
+  app.addSchema(RankProgressionDetailsSchema); // Depends on RankProgressionStageSchema
+  app.addSchema(MuscleGroupProgressionSchema); // Depends on RankProgressionDetailsSchema
+  app.addSchema(FailedSetInfoSchema);
+  app.addSchema(LoggedSetOverviewItemSchema); // Depends on FailedSetInfoSchema
+  app.addSchema(NewPlanProgressionItemSchema);
+
   // New response detail schemas
   app.addSchema(ExerciseRankUpSchema);
   app.addSchema(MuscleGroupRankUpSchema);
-  app.addSchema(LoggedSetSummaryItemSchema);
-  app.addSchema(PlanWeightIncreaseItemSchema);
+  app.addSchema(LoggedSetSummaryItemSchema); // Old schema, ensure it's correctly named if still used
+  app.addSchema(PlanWeightIncreaseItemSchema); // Old schema, ensure it's correctly named if still used
   app.addSchema(DetailedFinishSessionResponseSchema); // Now includes Refs to the above
 
   // Workout Session List & Summary Schemas (Phase 2)

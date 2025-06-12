@@ -29,7 +29,7 @@ export async function _updateUserMuscleLastWorked(
       .from("exercise_muscles")
       .select("muscle_id") // Select muscle_id directly
       .in("exercise_id", uniqueExerciseIds)
-      .in("muscle_intensity", ["primary", "secondary"]);
+      .eq("muscle_intensity", "primary"); // Only consider primary muscles
 
     if (emError) {
       fastify.log.error(
@@ -39,7 +39,7 @@ export async function _updateUserMuscleLastWorked(
       return;
     }
     if (!emMappings || emMappings.length === 0) {
-      fastify.log.info("[MUSCLE_LAST_WORKED] No primary or secondary muscle mappings found. Skipping.");
+      fastify.log.info("[MUSCLE_LAST_WORKED] No primary muscle mappings found. Skipping."); // Updated log message
       return;
     }
 
