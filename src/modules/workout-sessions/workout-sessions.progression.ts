@@ -7,7 +7,7 @@ import { SetProgressionInput } from "./workout-sessions.data"; // Import from .d
 export type PlanWeightIncrease = {
   plan_day_exercise_id: string;
   exercise_name: string;
-  plan_set_order: number;
+  // plan_set_order is removed as we now summarize per exercise
   old_target_weight: number;
   new_target_weight: number;
 };
@@ -91,6 +91,43 @@ export async function _updateWorkoutPlanProgression(
       `[PROGRESSION_REFACTOR_V2] Processing progression for exercise '${currentPlanExerciseName}' (PlanDayExercise ID: ${planDayEx.id}).`
     );
 
+    let maxProgressionIncrement = 0;
+    let bestProgressionSetForSummary: SetProgressionInput | null = null;
+
+    // First, find the maximum progression increment for this exercise
+    for (const progressionSet of progressionSetsForThisExercise) {
+      const currentIncrement = progressionSet.planned_weight_increase_kg;
+      if (currentIncrement && currentIncrement > maxProgressionIncrement) {
+        if (
+          progressionSet.planned_weight_kg !== null &&
+          progressionSet.planned_weight_kg !== undefined &&
+          progressionSet.workout_plan_day_exercise_sets_id
+        ) {
+          maxProgressionIncrement = currentIncrement;
+          bestProgressionSetForSummary = progressionSet;
+        }
+      }
+    }
+
+    // If a valid maximum progression was found, add it to results
+    if (bestProgressionSetForSummary && maxProgressionIncrement > 0) {
+      const oldTargetWeightForSummary = bestProgressionSetForSummary.planned_weight_kg!;
+      const newTargetWeightForSummary = oldTargetWeightForSummary + maxProgressionIncrement;
+
+      results.weightIncreases.push({
+        plan_day_exercise_id: planDayEx.id,
+        exercise_name: bestProgressionSetForSummary.exercise_name ?? currentPlanExerciseName,
+        old_target_weight: oldTargetWeightForSummary,
+        new_target_weight: newTargetWeightForSummary,
+      });
+      fastify.log.info(
+        `[PROGRESSION_REFACTOR_V2] Added to summary for exercise '${
+          bestProgressionSetForSummary.exercise_name ?? currentPlanExerciseName
+        }': Max Increment ${maxProgressionIncrement}, Old Target: ${oldTargetWeightForSummary}, New Target: ${newTargetWeightForSummary}`
+      );
+    }
+
+    // Then, process individual set updates for the database (this logic remains to update each set in the plan)
     for (const progressionSet of progressionSetsForThisExercise) {
       const progressionIncrement = progressionSet.planned_weight_increase_kg;
       const oldTargetWeightForCalc = progressionSet.planned_weight_kg;
@@ -103,28 +140,20 @@ export async function _updateWorkoutPlanProgression(
         progressionSet.workout_plan_day_exercise_sets_id
       ) {
         const newTargetWeight = oldTargetWeightForCalc + progressionIncrement;
-
         planSetUpdates.push({
           id: progressionSet.workout_plan_day_exercise_sets_id,
           target_weight: newTargetWeight,
         });
-
-        results.weightIncreases.push({
-          plan_day_exercise_id: planDayEx.id,
-          exercise_name: progressionSet.exercise_name ?? currentPlanExerciseName,
-          plan_set_order: progressionSet.set_order,
-          old_target_weight: oldTargetWeightForCalc,
-          new_target_weight: newTargetWeight,
-        });
-
+        // Logging for individual DB updates can remain or be adjusted
         fastify.log.info(
-          `[PROGRESSION_REFACTOR_V2] Queued update for workout_plan_day_exercise_sets ID '${progressionSet.workout_plan_day_exercise_sets_id}'. ` +
-            `Exercise: '${progressionSet.exercise_name ?? currentPlanExerciseName}', Set Order (from input): ${
+          `[PROGRESSION_REFACTOR_V2] Queued DB update for workout_plan_day_exercise_sets ID '${progressionSet.workout_plan_day_exercise_sets_id}'. ` +
+            `Exercise: '${progressionSet.exercise_name ?? currentPlanExerciseName}', Set Order: ${
               progressionSet.set_order
             }. ` +
-            `Old Target (from input set's planned_weight_kg): ${oldTargetWeightForCalc}, New Target: ${newTargetWeight}, Increment: ${progressionIncrement}`
+            `Old Target: ${oldTargetWeightForCalc}, New Target: ${newTargetWeight}`
         );
       } else {
+        // Optional: Keep logging for skipped individual set updates if useful for debugging DB changes
         let skipReason = "";
         if (!progressionIncrement || progressionIncrement <= 0)
           skipReason += `Invalid progressionIncrement (${progressionIncrement}). `;
@@ -132,10 +161,9 @@ export async function _updateWorkoutPlanProgression(
           skipReason += `oldTargetWeightForCalc is null or undefined. `;
         if (!progressionSet.workout_plan_day_exercise_sets_id)
           skipReason += `workout_plan_day_exercise_sets_id is missing.`;
-
         if (skipReason) {
           fastify.log.warn(
-            `[PROGRESSION_REFACTOR_V2] Skipping progression for a specific set of exercise '${currentPlanExerciseName}' (PlanDayExercise ID: ${planDayEx.id}, Input Set Order: ${progressionSet.set_order}, Plan Set ID: ${progressionSet.workout_plan_day_exercise_sets_id}). Reason: ${skipReason}`
+            `[PROGRESSION_REFACTOR_V2] Skipping DB update for a specific set of exercise '${currentPlanExerciseName}' (PlanDayExercise ID: ${planDayEx.id}, Input Set Order: ${progressionSet.set_order}, Plan Set ID: ${progressionSet.workout_plan_day_exercise_sets_id}). Reason: ${skipReason}`
           );
         }
       }
