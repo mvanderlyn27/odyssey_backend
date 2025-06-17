@@ -21,6 +21,7 @@ import supabaseAuthPlugin, { SupabaseAuthOptions } from "./plugins/supabaseAuth"
 import { SupabaseClient } from "@supabase/supabase-js"; // For mockServices type
 import { GoogleGenerativeAI } from "@google/generative-ai"; // For mockServices type
 import { GeminiService } from "./services/geminiService"; // For mockServices type
+import cacheService from "./services/cache.service";
 
 // --- Import Schemas ---
 import {
@@ -161,7 +162,7 @@ import {
   MuscleIntensityEnum, // Added
   MuscleWorkedSummaryItemSchema, // Added
   MuscleGroupInfoSchema,
-  RankProgressionStageSchema,
+  RankInfoSchema,
   RankProgressionDetailsSchema,
   MuscleGroupProgressionSchema,
   FailedSetInfoSchema,
@@ -182,7 +183,7 @@ import {
   WorkoutSessionSummaryResponseSchema,
   ListWorkoutSessionsSortByEnum,
   ListWorkoutSessionsPeriodEnum,
-  MuscleScoreChangeSchema,
+  MuscleSWRChangeSchema,
   OverallUserRankUpSchema,
 } from "./schemas/workoutSessionsSchemas";
 
@@ -393,8 +394,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(MuscleIntensityEnum); // Added
   app.addSchema(MuscleWorkedSummaryItemSchema); // Added - ensure MuscleIntensityEnum is registered first if referenced
   app.addSchema(MuscleGroupInfoSchema);
-  app.addSchema(RankProgressionStageSchema);
-  app.addSchema(RankProgressionDetailsSchema); // Depends on RankProgressionStageSchema
+  app.addSchema(RankInfoSchema);
+  app.addSchema(RankProgressionDetailsSchema); // Depends on RankInfoSchema
   app.addSchema(MuscleGroupProgressionSchema); // Depends on RankProgressionDetailsSchema
   app.addSchema(FailedSetInfoSchema);
   app.addSchema(LoggedSetOverviewItemSchema); // Depends on FailedSetInfoSchema
@@ -459,7 +460,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(GetMuscleStatsParamsSchema);
   app.addSchema(GetMuscleStatsQuerySchema);
   app.addSchema(MuscleStatsSchema);
-  app.addSchema(MuscleScoreChangeSchema);
+  app.addSchema(MuscleSWRChangeSchema);
 
   // New Stats Schemas from blueprint
   app.addSchema(OverviewStatsQuerySchema);
@@ -510,6 +511,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // Plugins should internally check opts.mockServices first
   app.register(geminiPlugin, { ...opts.geminiOptions, mockServices: opts.mockServices });
   app.register(supabaseAuthPlugin, { ...opts.supabaseOptions, mockServices: opts.mockServices });
+  app.register(cacheService);
 
   // --- Register Swagger (conditionally) ---
   if (!isProduction) {

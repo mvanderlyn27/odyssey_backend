@@ -80,6 +80,7 @@ export async function _updateWorkoutPlanProgression(
     const wasOverallExerciseSuccessful = progressionSetsForThisExercise.every((ps) => ps.is_success === true);
 
     if (!wasOverallExerciseSuccessful) {
+      fastify.log.info("sets", JSON.stringify(progressionSetsForThisExercise));
       fastify.log.info(
         `[PROGRESSION_REFACTOR_V2] Not all relevant sets were successful for exercise '${currentPlanExerciseName}' (PlanDayExercise ID: ${planDayEx.id}). Skipping progression.`
       );
@@ -143,23 +144,29 @@ export async function _updateWorkoutPlanProgression(
 
   if (planSetUpdates.length > 0) {
     fastify.log.info(
-      `[PROGRESSION_REFACTOR_V2] Attempting to batch update ${planSetUpdates.length} plan sets in 'workout_plan_day_exercise_sets'.`
+      `[PROGRESSION_REFACTOR_V2] Attempting to parallel update ${planSetUpdates.length} plan sets in 'workout_plan_day_exercise_sets'.`
     );
-    for (const update of planSetUpdates) {
-      const { error: updateSetError } = await supabase
+
+    const updatePromises = planSetUpdates.map((update) =>
+      supabase
         .from("workout_plan_day_exercise_sets")
         .update({ target_weight: update.target_weight })
-        .eq("id", update.id);
+        .eq("id", update.id)
+        .then(({ error }) => {
+          if (error) {
+            fastify.log.error(
+              { error, setIdToUpdate: update.id, newWeight: update.target_weight },
+              "[PROGRESSION_REFACTOR_V2] Failed to update target_weight for a plan set during parallel operation."
+            );
+            // Optionally, you could collect failures here instead of just logging
+          }
+        })
+    );
 
-      if (updateSetError) {
-        fastify.log.error(
-          { error: updateSetError, setIdToUpdate: update.id, newWeight: update.target_weight },
-          "[PROGRESSION_REFACTOR_V2] Failed to update target_weight for a plan set during batch operation."
-        );
-      }
-    }
+    await Promise.all(updatePromises);
+
     fastify.log.info(
-      `[PROGRESSION_REFACTOR_V2] Batch update process completed for ${planSetUpdates.length} plan sets.`
+      `[PROGRESSION_REFACTOR_V2] Parallel update process completed for ${planSetUpdates.length} plan sets.`
     );
   } else {
     fastify.log.info("[PROGRESSION_REFACTOR_V2] No plan set updates to perform.");

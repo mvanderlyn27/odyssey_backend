@@ -15,7 +15,7 @@ export async function _awardXpAndLevel(
   const userId = userProfile.id;
   fastify.log.info(`[XP_LEVEL] Starting XP and Level update for user: ${userId}`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
-  const xpService = new XpService(supabase);
+  const xpService = new XpService(supabase, fastify);
   const awardedXp = XP_PER_WORKOUT;
 
   const xpResult = await xpService.addXPAndUpdateLevel(userProfile, awardedXp);

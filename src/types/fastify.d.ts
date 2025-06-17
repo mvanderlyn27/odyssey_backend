@@ -1,6 +1,7 @@
 import { SupabaseClient, User } from "@supabase/supabase-js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { FastifyRequest, FastifyReply, FastifyInstance as OriginalFastifyInstance } from "fastify";
+import { CacheService } from "../services/cache.service";
 
 // Extend Fastify interfaces globally
 declare module "fastify" {
@@ -11,6 +12,7 @@ declare module "fastify" {
     // Decorators added by src/plugins/supabaseAuth.ts
     supabase: SupabaseClient | null; // Add Supabase client decorator type
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    appCache: CacheService;
   }
 
   interface FastifyRequest {

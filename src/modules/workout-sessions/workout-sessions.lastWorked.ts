@@ -7,50 +7,61 @@ export async function _updateUserMuscleLastWorked(
   fastify: FastifyInstance,
   userId: string,
   currentSessionId: string,
-  persistedSessionSets: (Tables<"workout_session_sets"> & { exercise_id: string })[], // Ensure exercise_id is present
+  persistedSessionSets: (Tables<"workout_session_sets"> & { exercise_id: string })[],
   sessionEndedAt: string
 ): Promise<void> {
   fastify.log.info(`[MUSCLE_LAST_WORKED] Starting update for user: ${userId}, session: ${currentSessionId}`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
-  if (!persistedSessionSets || persistedSessionSets.length === 0) {
-    fastify.log.info("[MUSCLE_LAST_WORKED] No persisted sets. Skipping.");
+  const workedSets = persistedSessionSets.filter((s) => s.actual_reps && s.actual_reps > 0);
+  if (workedSets.length === 0) {
+    fastify.log.info("[MUSCLE_LAST_WORKED] No sets with actual reps. Skipping.");
+    return;
+  }
+
+  const workedExerciseIds = Array.from(new Set(workedSets.map((s) => s.exercise_id)));
+  if (workedExerciseIds.length === 0) {
+    fastify.log.info("[MUSCLE_LAST_WORKED] No valid exercise IDs from worked sets. Skipping.");
     return;
   }
 
   try {
-    const uniqueExerciseIds = Array.from(new Set(persistedSessionSets.map((s) => s.exercise_id)));
-    if (uniqueExerciseIds.length === 0) {
-      fastify.log.info("[MUSCLE_LAST_WORKED] No valid exercise IDs. Skipping.");
+    const allExerciseMuscles = await fastify.appCache.get("allExerciseMuscles", async () => {
+      const { data, error } = await supabase
+        .from("exercise_muscles")
+        .select("exercise_id, muscle_id, muscle_intensity");
+      if (error) {
+        fastify.log.error({ error }, "[CACHE_FETCH] Error fetching exercise_muscles.");
+        return [];
+      }
+      return data || [];
+    });
+
+    const allMuscleMappings = allExerciseMuscles.filter((em) => workedExerciseIds.includes(em.exercise_id));
+
+    if (!allMuscleMappings || allMuscleMappings.length === 0) {
+      fastify.log.info("[MUSCLE_LAST_WORKED] No muscle mappings found for worked exercises. Skipping.");
       return;
     }
 
-    const { data: emMappings, error: emError } = await supabase
-      .from("exercise_muscles")
-      .select("muscle_id") // Select muscle_id directly
-      .in("exercise_id", uniqueExerciseIds)
-      .eq("muscle_intensity", "primary"); // Only consider primary muscles
+    const primaryMuscleIds = new Set<string>();
+    const secondaryMuscleCounts: Record<string, number> = {};
 
-    if (emError) {
-      fastify.log.error(
-        { error: emError, userId },
-        "[MUSCLE_LAST_WORKED] Error fetching exercise_muscles with muscle_id."
-      );
-      return;
-    }
-    if (!emMappings || emMappings.length === 0) {
-      fastify.log.info("[MUSCLE_LAST_WORKED] No primary muscle mappings found. Skipping."); // Updated log message
-      return;
+    for (const mapping of allMuscleMappings) {
+      if (mapping.muscle_id && workedExerciseIds.includes(mapping.exercise_id)) {
+        if (mapping.muscle_intensity === "primary") {
+          primaryMuscleIds.add(mapping.muscle_id);
+        } else if (mapping.muscle_intensity === "secondary") {
+          secondaryMuscleCounts[mapping.muscle_id] = (secondaryMuscleCounts[mapping.muscle_id] || 0) + 1;
+        }
+      }
     }
 
-    // Extract unique muscle_ids
-    const muscleIdsToUpdate = Array.from(
-      new Set(
-        emMappings
-          .map((em) => em.muscle_id) // Extract muscle_id
-          .filter((mId): mId is string => !!mId) // Filter out null or undefined muscle_ids
-      )
-    );
+    const secondaryMuscleIdsToUpdate = Object.entries(secondaryMuscleCounts)
+      .filter(([muscleId, count]) => count >= 3 && !primaryMuscleIds.has(muscleId))
+      .map(([muscleId]) => muscleId);
+
+    const muscleIdsToUpdate = Array.from(new Set([...primaryMuscleIds, ...secondaryMuscleIdsToUpdate]));
 
     if (muscleIdsToUpdate.length === 0) {
       fastify.log.info("[MUSCLE_LAST_WORKED] No unique muscle IDs to update. Skipping.");
@@ -59,7 +70,7 @@ export async function _updateUserMuscleLastWorked(
 
     const upsertPayloads: TablesInsert<"user_muscle_last_worked">[] = muscleIdsToUpdate.map((mId) => ({
       user_id: userId,
-      muscle_id: mId, // Use muscle_id here
+      muscle_id: mId,
       last_worked_date: sessionEndedAt,
       workout_session_id: currentSessionId,
       updated_at: new Date().toISOString(),
@@ -68,7 +79,7 @@ export async function _updateUserMuscleLastWorked(
     if (upsertPayloads.length > 0) {
       const { error: upsertError } = await supabase
         .from("user_muscle_last_worked")
-        .upsert(upsertPayloads, { onConflict: "user_id,muscle_id" }); // onConflict should use muscle_id
+        .upsert(upsertPayloads, { onConflict: "user_id,muscle_id" });
       if (upsertError) {
         fastify.log.error({ error: upsertError, userId }, "[MUSCLE_LAST_WORKED] Failed to upsert records.");
       } else {
@@ -76,6 +87,6 @@ export async function _updateUserMuscleLastWorked(
       }
     }
   } catch (err: any) {
-    fastify.log.error({ error: err, userId }, "[MUSCLE_LAST_WORKED] Unexpected error.");
+    fastify.log.error({ error: err.message, stack: err.stack, userId }, "[MUSCLE_LAST_WORKED] Unexpected error.");
   }
 }

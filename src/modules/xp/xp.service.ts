@@ -1,4 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { FastifyInstance } from "fastify";
 import { Database } from "../../types/database";
 
 type UserProfile = Database["public"]["Tables"]["user_profiles"]["Row"];
@@ -16,49 +17,37 @@ export interface XPUpdateResult {
 
 export class XpService {
   private supabase: SupabaseClient<Database>;
+  private fastify: FastifyInstance; // Add fastify instance
 
-  constructor(supabaseClient: SupabaseClient<Database>) {
+  constructor(supabaseClient: SupabaseClient<Database>, fastifyInstance: FastifyInstance) {
     this.supabase = supabaseClient;
+    this.fastify = fastifyInstance; // Store fastify instance
+  }
+
+  private async getAllLevels(): Promise<LevelDefinition[]> {
+    return this.fastify.appCache.get("allLevelDefinitions", async () => {
+      const { data, error } = await this.supabase.from("level_definitions").select("*");
+      if (error) {
+        this.fastify.log.error({ error }, "Failed to fetch level definitions for cache.");
+        return [];
+      }
+      return data || [];
+    });
   }
 
   private async getLevelByNumber(levelNumber: number): Promise<LevelDefinition | null> {
-    const { data, error } = await this.supabase
-      .from("level_definitions")
-      .select("*")
-      .eq("level_number", levelNumber)
-      .single();
-
-    if (error) {
-      console.error(`Error fetching level ${levelNumber}:`, error);
-      return null;
-    }
-    return data;
+    const allLevels = await this.getAllLevels();
+    return allLevels.find((l) => l.level_number === levelNumber) || null;
   }
 
   private async getLevelById(levelId: string): Promise<LevelDefinition | null> {
-    const { data, error } = await this.supabase.from("level_definitions").select("*").eq("id", levelId).single();
-
-    if (error) {
-      console.error(`Error fetching level by ID ${levelId}:`, error);
-      return null;
-    }
-    return data;
+    const allLevels = await this.getAllLevels();
+    return allLevels.find((l) => l.id === levelId) || null;
   }
 
   private async getHighestAchievableLevel(xp: number): Promise<LevelDefinition | null> {
-    const { data, error } = await this.supabase
-      .from("level_definitions")
-      .select("*")
-      .lte("xp_required", xp)
-      .order("level_number", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (error) {
-      console.error("Error fetching highest achievable level:", error);
-      return null;
-    }
-    return data;
+    const allLevels = await this.getAllLevels();
+    return allLevels.filter((l) => l.xp_required <= xp).sort((a, b) => b.level_number - a.level_number)[0] || null;
   }
 
   async addXPAndUpdateLevel(userProfile: UserProfile, xpToAdd: number): Promise<XPUpdateResult | null> {

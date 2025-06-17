@@ -175,6 +175,7 @@ export type Database = {
       exercise_muscles: {
         Row: {
           created_at: string | null
+          exercise_coefficient: number
           exercise_id: string
           id: string
           muscle_id: string
@@ -182,6 +183,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          exercise_coefficient?: number
           exercise_id: string
           id?: string
           muscle_id: string
@@ -189,6 +191,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          exercise_coefficient?: number
           exercise_id?: string
           id?: string
           muscle_id?: string
@@ -301,6 +304,30 @@ export type Database = {
         }
         Relationships: []
       }
+      inspirational_quotes: {
+        Row: {
+          created_at: string
+          id: string
+          quote_author: string | null
+          quote_day: string
+          quote_text: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          quote_author?: string | null
+          quote_day: string
+          quote_text: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          quote_author?: string | null
+          quote_day?: string
+          quote_text?: string
+        }
+        Relationships: []
+      }
       level_definitions: {
         Row: {
           created_at: string
@@ -372,32 +399,32 @@ export type Database = {
       }
       muscle_group_ranks: {
         Row: {
+          average_normalized_swr: number
           created_at: string
           id: string
           last_calculated_at: string | null
           muscle_group_id: string
           rank_id: number | null
-          total_score_for_group: number
           updated_at: string
           user_id: string
         }
         Insert: {
+          average_normalized_swr: number
           created_at?: string
           id?: string
           last_calculated_at?: string | null
           muscle_group_id: string
           rank_id?: number | null
-          total_score_for_group?: number
           updated_at?: string
           user_id: string
         }
         Update: {
+          average_normalized_swr?: number
           created_at?: string
           id?: string
           last_calculated_at?: string | null
           muscle_group_id?: string
           rank_id?: number | null
-          total_score_for_group?: number
           updated_at?: string
           user_id?: string
         }
@@ -444,18 +471,21 @@ export type Database = {
           created_at: string | null
           id: string
           name: string
+          overall_weight: number
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           id?: string
           name: string
+          overall_weight?: number
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           id?: string
           name?: string
+          overall_weight?: number
           updated_at?: string | null
         }
         Relationships: []
@@ -507,38 +537,35 @@ export type Database = {
       }
       muscle_ranks: {
         Row: {
-          achieved_swr_value: number | null
           contributing_session_set_id: string | null
           created_at: string
           id: string
           last_calculated_at: string | null
           muscle_id: string
+          normalized_swr: number | null
           rank_id: number | null
-          score: number
           updated_at: string
           user_id: string
         }
         Insert: {
-          achieved_swr_value?: number | null
           contributing_session_set_id?: string | null
           created_at?: string
           id?: string
           last_calculated_at?: string | null
           muscle_id: string
+          normalized_swr?: number | null
           rank_id?: number | null
-          score?: number
           updated_at?: string
           user_id: string
         }
         Update: {
-          achieved_swr_value?: number | null
           contributing_session_set_id?: string | null
           created_at?: string
           id?: string
           last_calculated_at?: string | null
           muscle_id?: string
+          normalized_swr?: number | null
           rank_id?: number | null
-          score?: number
           updated_at?: string
           user_id?: string
         }
@@ -585,6 +612,7 @@ export type Database = {
           created_at: string | null
           id: string
           muscle_group_id: string
+          muscle_group_weight: number
           name: string
           updated_at: string | null
         }
@@ -592,6 +620,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           muscle_group_id: string
+          muscle_group_weight?: number
           name: string
           updated_at?: string | null
         }
@@ -599,6 +628,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           muscle_group_id?: string
+          muscle_group_weight?: number
           name?: string
           updated_at?: string | null
         }
@@ -874,8 +904,8 @@ export type Database = {
           created_at: string
           id: string
           last_calculated_at: string | null
+          overall_swr: number
           rank_id: number | null
-          total_overall_score: number
           updated_at: string
           user_id: string
         }
@@ -883,8 +913,8 @@ export type Database = {
           created_at?: string
           id?: string
           last_calculated_at?: string | null
+          overall_swr: number
           rank_id?: number | null
-          total_overall_score?: number
           updated_at?: string
           user_id: string
         }
@@ -892,8 +922,8 @@ export type Database = {
           created_at?: string
           id?: string
           last_calculated_at?: string | null
+          overall_swr?: number
           rank_id?: number | null
-          total_overall_score?: number
           updated_at?: string
           user_id?: string
         }
@@ -915,7 +945,7 @@ export type Database = {
           {
             foreignKeyName: "user_ranks_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "user_profiles"
             referencedColumns: ["id"]
           },
@@ -1152,7 +1182,7 @@ export type Database = {
           source_description: string | null
           start_date: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           admin_plan?: boolean
@@ -1171,7 +1201,7 @@ export type Database = {
           source_description?: string | null
           start_date?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           admin_plan?: boolean
@@ -1190,7 +1220,7 @@ export type Database = {
           source_description?: string | null
           start_date?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -1386,6 +1416,10 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
+      clone_user_workout_plan: {
+        Args: { template_plan_id_input: string; target_user_id_input: string }
+        Returns: string
+      }
       initialize_user_muscle_groups: {
         Args: { new_user_id: string }
         Returns: undefined
@@ -1417,6 +1451,7 @@ export type Database = {
         | "barbell"
         | "calisthenics"
         | "machine"
+        | "assisted_body_weight"
       gender: "male" | "female"
       meal_type: "breakfast" | "lunch" | "dinner" | "snack"
       muscle_group_type:
@@ -1751,6 +1786,7 @@ export const Constants = {
         "barbell",
         "calisthenics",
         "machine",
+        "assisted_body_weight",
       ],
       gender: ["male", "female"],
       meal_type: ["breakfast", "lunch", "dinner", "snack"],

@@ -57,33 +57,30 @@ export type MuscleWorkedSummaryItem = Static<typeof MuscleWorkedSummaryItemSchem
 
 // --- New Schemas for Detailed Rank Progression ---
 
-export const RankProgressionStageSchema = Type.Object(
+export const RankInfoSchema = Type.Object(
   {
-    rank_name: Type.String(),
-    rank_min_score: Type.Number(),
-    rank_max_score: Type.Number({
-      description:
-        "Max score for this rank (exclusive for the next rank's min_score, or a high number for the top rank)",
-    }),
-    score_animates_from: Type.Number(),
-    score_animates_to: Type.Number(),
+    rank_id: Type.Union([Type.Number(), Type.Null()]),
+    rank_name: Type.Union([Type.String(), Type.Null()]),
+    min_swr: Type.Optional(Type.Number()), // SWR required to achieve this rank
   },
-  { $id: "RankProgressionStageSchema", description: "A single stage in a rank progression animation." }
+  { $id: "RankInfoSchema", description: "Basic information about a rank." }
 );
-export type RankProgressionStage = Static<typeof RankProgressionStageSchema>;
+export type RankInfo = Static<typeof RankInfoSchema>;
 
 export const RankProgressionDetailsSchema = Type.Object(
   {
-    initial_score_before_session: Type.Number(),
-    final_score_after_session: Type.Number(),
+    initial_swr: Type.Number(),
+    final_swr: Type.Number(),
     percent_to_next_rank: Type.Number({
       minimum: 0,
       maximum: 1,
       description: "Decimal representation of percentage to next rank, e.g., 0.27 for 27%",
     }),
-    stages: Type.Array(Type.Ref(RankProgressionStageSchema)),
+    initial_rank: Type.Ref(RankInfoSchema),
+    current_rank: Type.Ref(RankInfoSchema),
+    next_rank: Type.Union([Type.Ref(RankInfoSchema), Type.Null()]), // Null if at the highest rank
   },
-  { $id: "RankProgressionDetailsSchema", description: "Detailed information for animating rank progression." }
+  { $id: "RankProgressionDetailsSchema", description: "Simplified information for displaying rank progression." }
 );
 export type RankProgressionDetails = Static<typeof RankProgressionDetailsSchema>;
 
@@ -262,12 +259,12 @@ export const MuscleGroupRankUpSchema = Type.Object(
   {
     muscle_group_id: Type.String({ format: "uuid" }),
     muscle_group_name: Type.String(),
-    old_total_score: Type.Union([Type.Number({ minimum: 0 }), Type.Null()], {
-      description: "User's total score for this muscle group before this session's calculation.",
+    old_average_normalized_swr: Type.Union([Type.Number({ minimum: 0 }), Type.Null()], {
+      description: "User's total swr for this muscle group before this session's calculation.",
     }),
-    new_total_score: Type.Number({
+    new_average_normalized_swr: Type.Number({
       minimum: 0,
-      description: "User's total score for this muscle group after this session's calculation.",
+      description: "User's total swr for this muscle group after this session's calculation.",
     }),
     old_rank_id: Type.Union([Type.Number(), Type.Null()]),
     old_rank_name: Type.Union([Type.String(), Type.Null()]),
@@ -278,12 +275,12 @@ export const MuscleGroupRankUpSchema = Type.Object(
   { $id: "MuscleGroupRankUpSchema" }
 );
 
-export const MuscleScoreChangeSchema = Type.Object(
+export const MuscleSWRChangeSchema = Type.Object(
   {
     muscle_id: Type.String({ format: "uuid" }),
     muscle_name: Type.String(),
-    old_score: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
-    new_score: Type.Number({ minimum: 0 }),
+    old_normalized_swr: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
+    new_normalized_swr: Type.Number({ minimum: 0 }),
     old_rank_id: Type.Union([Type.Number(), Type.Null()]), // This rank is based on the SWR achieved for the muscle against muscle_rank_swr_benchmark
     old_rank_name: Type.Union([Type.String(), Type.Null()]),
     new_rank_id: Type.Union([Type.Number(), Type.Null()]), // This rank is based on the SWR achieved for the muscle against muscle_rank_swr_benchmark
@@ -292,14 +289,14 @@ export const MuscleScoreChangeSchema = Type.Object(
       description: "True if new_rank_id (SWR-based muscle rank) is different from old_rank_id.",
     }),
   },
-  { $id: "MuscleScoreChangeSchema" }
+  { $id: "MuscleSWRChangeSchema" }
 );
-export type MuscleScoreChange = Static<typeof MuscleScoreChangeSchema>;
+export type MuscleSWRChange = Static<typeof MuscleSWRChangeSchema>;
 
 export const OverallUserRankUpSchema = Type.Object(
   {
-    old_total_score: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
-    new_total_score: Type.Number({ minimum: 0 }),
+    old_overall_swr: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
+    new_overall_swr: Type.Number({ minimum: 0 }),
     old_rank_id: Type.Union([Type.Number(), Type.Null()]),
     old_rank_name: Type.Union([Type.String(), Type.Null()]),
     new_rank_id: Type.Union([Type.Number(), Type.Null()]),

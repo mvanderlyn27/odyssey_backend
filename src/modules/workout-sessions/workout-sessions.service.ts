@@ -13,7 +13,7 @@ import {
   _updateUserExerciseAndMuscleGroupRanks,
   RankUpdateResults,
   ExerciseRankUpInfo,
-  MuscleScoreChangeInfo,
+  MuscleRankChangeInfo,
   MuscleGroupRankUpInfo,
   OverallUserRankUpInfo,
 } from "./workout-sessions.ranking";
@@ -59,8 +59,8 @@ export const finishWorkoutSession = async (
       setInsertPayloads: rawSetInsertPayloads, // Payloads for workout_session_sets table
       setsProgressionInputData, // Data for _updateWorkoutPlanProgression
       userProfile,
-      // userBodyweight,
-      exerciseDetailsMap,
+      userBodyweight,
+      exerciseDetailsMap, // Ensure this is destructured
       exerciseMuscleMappings, // Destructure renamed variable
       existingUserExercisePRs,
       muscles_worked_summary, // Changed from muscleGroupsWorkedSummary
@@ -162,7 +162,7 @@ export const finishWorkoutSession = async (
           // Return structure matching RankUpdateResults with undefined progression fields
           return Promise.resolve<RankUpdateResults>({
             exerciseRankUps: [],
-            muscleScoreChanges: [],
+            muscleRankChanges: [],
             overall_user_rank_progression: undefined,
             muscle_group_progressions: [],
           });
@@ -171,6 +171,7 @@ export const finishWorkoutSession = async (
           fastify,
           userId,
           userProfile.gender,
+          userBodyweight,
           persistedSessionSets,
           exerciseDetailsMap,
           exerciseMuscleMappings,
@@ -290,7 +291,7 @@ export const finishWorkoutSession = async (
         persistedSessionSets
           .reduce((acc, set) => {
             const exerciseName =
-              set.exercise_name || exerciseDetailsMap.get(set.exercise_id)?.name || "Unknown Exercise";
+              set.exercise_name || (exerciseDetailsMap.get(set.exercise_id)?.name ?? "Unknown Exercise");
             if (!acc.has(exerciseName)) {
               acc.set(exerciseName, {
                 exercise_name: exerciseName,
@@ -298,6 +299,7 @@ export const finishWorkoutSession = async (
               });
             }
             if (set.is_success === false) {
+              fastify.log.info("failed set", set.id);
               acc.get(exerciseName)!.failed_set_info.push({
                 set_number: set.set_order,
                 reps_achieved: set.actual_reps,
