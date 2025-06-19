@@ -18,6 +18,7 @@ type UserBodyMeasurementInsert = TablesInsert<"user_body_measurements">;
 type WorkoutSessionInsert = TablesInsert<"workout_sessions">;
 type WorkoutSessionSetInsert = TablesInsert<"workout_session_sets">;
 type UserExercisePrInsert = TablesInsert<"user_exercise_prs">;
+type UserMuscleLastWorkedInsert = TablesInsert<"user_muscle_last_worked">;
 
 // Helper function to calculate estimated 1RM (Epley formula)
 function calculateEstimated1RM(weightKg: number, reps: number): number {
@@ -201,6 +202,49 @@ export const handleOnboarding = async (
         } else {
           createdSetId = setData.id;
           fastify.log.info(`Workout session set saved for session ${workoutSessionId}, set ID ${createdSetId}`);
+
+          // Update user_muscle_last_worked for primary muscles of the exercise
+          if (data.selected_exercise_id && workoutSessionId) {
+            const { data: primaryMuscles, error: primaryMusclesError } = await supabase
+              .from("exercise_muscles")
+              .select("muscle_id")
+              .eq("exercise_id", data.selected_exercise_id)
+              .eq("muscle_intensity", "primary");
+
+            if (primaryMusclesError) {
+              fastify.log.error(
+                { error: primaryMusclesError, exerciseId: data.selected_exercise_id },
+                "Error fetching primary muscles for exercise for user_muscle_last_worked."
+              );
+            } else if (primaryMuscles && primaryMuscles.length > 0) {
+              const lastWorkedPayloads: UserMuscleLastWorkedInsert[] = primaryMuscles.map((pm) => ({
+                user_id: userId,
+                muscle_id: pm.muscle_id,
+                workout_session_id: workoutSessionId as string,
+                last_worked_date: new Date().toISOString(),
+              }));
+
+              const { error: lastWorkedError } = await supabase
+                .from("user_muscle_last_worked")
+                .upsert(lastWorkedPayloads, { onConflict: "user_id,muscle_id" });
+
+              if (lastWorkedError) {
+                fastify.log.error(
+                  { error: lastWorkedError, userId, exerciseId: data.selected_exercise_id },
+                  "Error upserting user_muscle_last_worked records."
+                );
+              } else {
+                fastify.log.info(
+                  `User muscle last worked records upserted for user ${userId}, exercise ${data.selected_exercise_id}`
+                );
+              }
+            } else {
+              fastify.log.info(
+                { exerciseId: data.selected_exercise_id },
+                "No primary muscles found for the exercise to update user_muscle_last_worked."
+              );
+            }
+          }
         }
       }
     }
