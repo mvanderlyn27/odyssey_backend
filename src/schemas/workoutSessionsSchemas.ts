@@ -1,6 +1,5 @@
 import { Type, Static, TSchema } from "@sinclair/typebox"; // Added TSchema for WorkoutPlanDaySchema import
 import { UuidParamsSchema, PaginationQuerySchema } from "./commonSchemas"; // Import common schemas
-import { WorkoutPlanSchema, WorkoutPlanDaySchema } from "./workoutPlansSchemas"; // Import WorkoutPlan & WorkoutPlanDay schemas
 import { ExerciseSchema } from "./exercisesSchemas"; // Import Exercise schema
 
 // --- Enums ---

@@ -74,42 +74,10 @@ import {
   UpdateExerciseBodySchema,
 } from "./schemas/exercisesSchemas";
 // Onboarding
-import {
-  PostOnboardingCompleteResponseSchema,
-  OnboardingStep1BodySchema, // Added Step 1 Schema
-  OnboardingStep3BodySchema, // Added Step 3 Schema
-  OnboardingStep4BodySchema, // Added Step 4 Schema
-} from "./schemas/onboardingSchemas";
+// Removed PostOnboardingCompleteResponseSchema, OnboardingStep1BodySchema, OnboardingStep3BodySchema, OnboardingStep4BodySchema
+// InitialRankBodySchema is registered in the onboarding.routes.ts file itself.
 // Profile
 import { ProfileSchema, UpdateProfileBodySchema, GetProfileResponseSchema } from "./schemas/profileSchemas";
-// Stats
-import {
-  GetExerciseStatsParamsSchema,
-  GetExerciseStatsQuerySchema,
-  ExerciseStatsSchema,
-  GetSessionStatsParamsSchema,
-  SessionStatsSchema,
-  GetUserStatsQuerySchema,
-  UserStatsSchema,
-  GetBodyStatsQuerySchema,
-  BodyStatsSchema,
-  GetMuscleStatsParamsSchema,
-  GetMuscleStatsQuerySchema,
-  MuscleStatsSchema,
-  // New Stats Schemas from blueprint
-  OverviewStatsQuerySchema,
-  OverviewStatsSchema,
-  ExerciseProgressParamsSchema,
-  ExerciseProgressQuerySchema,
-  ExerciseProgressSchema,
-  GraphDataPointSchema, // Though nested, explicit registration can be good practice
-  // Schemas for All Personal Records (Phase 1)
-  AllUserPRsQuerySchema,
-  UserPREntrySchema,
-  AllUserPRsResponseSchema,
-} from "./schemas/statsSchemas";
-// Streaks
-import { UserStreakResponseSchema, RecoverStreakBodySchema } from "./schemas/streaksSchemas";
 // User Goals
 import {
   UserGoalSchema,
@@ -117,38 +85,6 @@ import {
   GetCurrentGoalResponseSchema,
   GetGoalHistoryResponseSchema,
 } from "./schemas/userGoalsSchemas";
-// Workout Plans
-import {
-  WorkoutPlanSchema,
-  WorkoutPlanDaySchema,
-  WorkoutPlanDayExerciseSchema,
-  WorkoutPlanDayExerciseDetailsSchema,
-  WorkoutPlanDayDetailsSchema,
-  WorkoutPlanDetailsSchema,
-  ListWorkoutPlansResponseSchema,
-  CreateWorkoutPlanBodySchema,
-  GetWorkoutPlanParamsSchema,
-  UpdateWorkoutPlanParamsSchema,
-  UpdateWorkoutPlanBodySchema,
-  GeneratePlanBodySchema,
-  ImportPlanBodySchema,
-  CreateWorkoutPlanDayParamsSchema,
-  CreateWorkoutPlanDayBodySchema,
-  ListWorkoutPlanDaysParamsSchema,
-  ListWorkoutPlanDaysResponseSchema,
-  GetWorkoutPlanDayParamsSchema,
-  UpdateWorkoutPlanDayParamsSchema,
-  UpdateWorkoutPlanDayBodySchema,
-  DeleteWorkoutPlanDayParamsSchema,
-  CreateWorkoutPlanDayExerciseParamsSchema,
-  CreateWorkoutPlanDayExerciseBodySchema,
-  ListWorkoutPlanDayExercisesParamsSchema,
-  ListWorkoutPlanDayExercisesResponseSchema,
-  GetWorkoutPlanDayExerciseParamsSchema,
-  UpdateWorkoutPlanDayExerciseParamsSchema,
-  UpdateWorkoutPlanDayExerciseBodySchema,
-  DeleteWorkoutPlanDayExerciseParamsSchema,
-} from "./schemas/workoutPlansSchemas";
 // Workout Sessions
 import {
   WorkoutSessionSchema,
@@ -171,8 +107,8 @@ import {
   // New schemas for richer response
   ExerciseRankUpSchema,
   MuscleGroupRankUpSchema,
-  LoggedSetSummaryItemSchema, // This is the old one, ensure it's distinct from LoggedSetOverviewItemSchema if both are needed
-  PlanWeightIncreaseItemSchema, // This is the old one, ensure it's distinct from NewPlanProgressionItemSchema if both are needed
+  LoggedSetSummaryItemSchema,
+  PlanWeightIncreaseItemSchema,
   // Schemas for Workout Session List & Summary (Phase 2)
   ListWorkoutSessionsQuerySchema,
   WorkoutSessionListItemSchema,
@@ -241,24 +177,18 @@ const swaggerOptions = {
         url: "https://opensource.org/licenses/MIT", // Placeholder URL
       },
     },
-    // schemes: ["https"], // Deprecated in OpenAPI 3. Use servers instead if needed.
-    // consumes: ["application/json"], // Default, often not needed explicitly
     produces: ["application/json"],
     tags: [
-      // Updated Tags
       { name: "Chat", description: "Endpoints for AI chat interactions" },
       { name: "Meal Plan", description: "Endpoints for AI meal plan generation" },
       { name: "Exercise Plan", description: "Endpoints for AI exercise plan generation" },
       { name: "Auth", description: "Endpoints related to authentication (handled by Supabase plugin)" },
       { name: "Status", description: "Endpoints for health checks" },
-      // Module Tags
       { name: "Profile", description: "User profile management endpoints" },
       { name: "Onboarding", description: "User onboarding endpoints" },
       { name: "Exercises", description: "Exercise library and management endpoints" },
-      { name: "Workout Plans", description: "Workout plan generation and management endpoints" },
-      // Add other module tags as needed (e.g., Workout Sessions, Body Measurements)
+      // Removed Workout Plans tag
     ],
-    // Define security schemes
     components: {
       securitySchemes: {
         bearerAuth: {
@@ -267,24 +197,19 @@ const swaggerOptions = {
           bearerFormat: "JWT",
           description: "Supabase JWT token required for protected endpoints.",
         },
-      } as const, // Use 'as const' for stricter type inference
+      } as const,
     },
-    // Optional: Define servers if needed (e.g., for production URL)
-    // servers: [
-    //   { url: 'https://your-production-url.com', description: 'Production server' }
-    // ]
   },
 };
 
 const swaggerUiOptions = {
   routePrefix: "/docs",
-  exposeRoute: true, // Explicitly enable route exposure
+  exposeRoute: true,
 };
 
 // --- Options Interface for buildApp ---
 type RoutePlugin = (instance: FastifyInstance, opts: FastifyRegisterOptions<any>) => Promise<void> | void;
 
-// Export the options interface so it can be imported by the helper
 export interface BuildAppOptions {
   fastifyOptions?: Partial<FastifyServerOptions>;
   supabaseOptions?: SupabaseAuthOptions;
@@ -296,25 +221,16 @@ export interface BuildAppOptions {
   };
 }
 
-/**
- * Builds and configures the Fastify application instance.
- * @param opts Optional Fastify server options.
- * @returns A configured Fastify instance.
- */
-// Use the exported BuildAppOptions type for the opts parameter
 export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInstance> {
   const isProduction = process.env.NODE_ENV === "production";
   const loggerConfig = configureLoggerOptions(isProduction);
 
-  // Initialize with TypeBox provider
   const app = fastify({
     trustProxy: true,
-    // Use logger from fastifyOptions if provided, otherwise use default config
     logger: opts.fastifyOptions?.logger === undefined ? loggerConfig : opts.fastifyOptions.logger,
     disableRequestLogging: true,
-    // Spread other fastifyOptions
     ...opts.fastifyOptions,
-  }).withTypeProvider<TypeBoxTypeProvider>(); // Add the type provider
+  }).withTypeProvider<TypeBoxTypeProvider>();
 
   // --- Register Common Schemas ---
   app.addSchema(ErrorResponseSchema);
@@ -322,7 +238,6 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(DoubleUuidParamsSchema);
   app.addSchema(MessageResponseSchema);
   app.addSchema(PaginationQuerySchema);
-  // Register the enums
   app.addSchema(PrimaryMuscleGroupEnum);
   app.addSchema(ExerciseDifficultyEnum);
   app.log.info("Registered common schemas and enums.");
@@ -330,22 +245,20 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // --- Register ALL Schemas Centrally ---
   app.log.info("Registering all application schemas centrally...");
 
-  // Base Schemas (likely dependencies for others)
+  // Base Schemas
   app.addSchema(EquipmentSchema);
   app.addSchema(ExerciseSchema);
   app.addSchema(ProfileSchema);
   app.addSchema(UserGoalSchema);
-  app.addSchema(WorkoutPlanSchema);
-  app.addSchema(WorkoutPlanDaySchema);
-  app.addSchema(WorkoutPlanDayExerciseSchema);
+  // Removed WorkoutPlanSchema, WorkoutPlanDaySchema, WorkoutPlanDayExerciseSchema
   app.addSchema(WorkoutSessionSchema);
   app.addSchema(OverallUserRankUpSchema);
-  app.addSchema(SessionExerciseSchema); // This is the DB model schema, distinct from SessionExerciseInputSchema
+  app.addSchema(SessionExerciseSchema);
   app.addSchema(AiCoachMessageSchema);
   app.addSchema(BodyMeasurementSchema);
   app.addSchema(AiCoachSessionSummarySchema);
 
-  // Schemas with Dependencies (using Type.Ref or Intersect)
+  // Schemas with Dependencies
   // Exercises
   app.addSchema(ListExercisesQuerySchema);
   app.addSchema(ListExercisesResponseSchema);
@@ -356,68 +269,40 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(CreateExerciseBodySchema);
   app.addSchema(UpdateExerciseBodySchema);
 
-  // Workout Plans
-  app.addSchema(WorkoutPlanDayExerciseDetailsSchema);
-  app.addSchema(WorkoutPlanDayDetailsSchema);
-  app.addSchema(WorkoutPlanDetailsSchema);
-  app.addSchema(ListWorkoutPlansResponseSchema);
-  app.addSchema(CreateWorkoutPlanBodySchema);
-  // GetWorkoutPlanParamsSchema uses UuidParamsSchema (already registered)
-  // UpdateWorkoutPlanParamsSchema uses UuidParamsSchema (already registered)
-  app.addSchema(UpdateWorkoutPlanBodySchema);
-  app.addSchema(GeneratePlanBodySchema);
-  app.addSchema(ImportPlanBodySchema);
-  app.addSchema(CreateWorkoutPlanDayParamsSchema);
-  app.addSchema(CreateWorkoutPlanDayBodySchema);
-  app.addSchema(ListWorkoutPlanDaysParamsSchema);
-  app.addSchema(ListWorkoutPlanDaysResponseSchema);
-  app.addSchema(GetWorkoutPlanDayParamsSchema);
-  app.addSchema(UpdateWorkoutPlanDayParamsSchema);
-  app.addSchema(UpdateWorkoutPlanDayBodySchema);
-  app.addSchema(DeleteWorkoutPlanDayParamsSchema);
-  app.addSchema(CreateWorkoutPlanDayExerciseParamsSchema);
-  app.addSchema(CreateWorkoutPlanDayExerciseBodySchema);
-  app.addSchema(ListWorkoutPlanDayExercisesParamsSchema);
-  app.addSchema(ListWorkoutPlanDayExercisesResponseSchema);
-  app.addSchema(GetWorkoutPlanDayExerciseParamsSchema);
-  app.addSchema(UpdateWorkoutPlanDayExerciseParamsSchema);
-  app.addSchema(UpdateWorkoutPlanDayExerciseBodySchema);
-  app.addSchema(DeleteWorkoutPlanDayExerciseParamsSchema);
+  // Removed Workout Plans Schemas
 
-  // Session Schemas (ensure dependencies are registered first)
-  app.addSchema(OverallFeelingEnum); // Dependency for NewFinishSessionBodySchema
-  app.addSchema(SessionSetInputSchema); // Dependency for SessionExerciseInputSchema
-  app.addSchema(SessionExerciseInputSchema); // Dependency for NewFinishSessionBodySchema
-  app.addSchema(NewFinishSessionBodySchema); // Uses SessionExerciseInputSchema & OverallFeelingEnum
+  // Session Schemas
+  app.addSchema(OverallFeelingEnum);
+  app.addSchema(SessionSetInputSchema);
+  app.addSchema(SessionExerciseInputSchema);
+  app.addSchema(NewFinishSessionBodySchema);
 
-  // Schemas required by DetailedFinishSessionResponseSchema (must be registered before it)
-  app.addSchema(MuscleIntensityEnum); // Added
-  app.addSchema(MuscleWorkedSummaryItemSchema); // Added - ensure MuscleIntensityEnum is registered first if referenced
+  app.addSchema(MuscleIntensityEnum);
+  app.addSchema(MuscleWorkedSummaryItemSchema);
   app.addSchema(MuscleGroupInfoSchema);
   app.addSchema(RankInfoSchema);
-  app.addSchema(RankProgressionDetailsSchema); // Depends on RankInfoSchema
-  app.addSchema(MuscleGroupProgressionSchema); // Depends on RankProgressionDetailsSchema
+  app.addSchema(RankProgressionDetailsSchema);
+  app.addSchema(MuscleGroupProgressionSchema);
   app.addSchema(FailedSetInfoSchema);
-  app.addSchema(LoggedSetOverviewItemSchema); // Depends on FailedSetInfoSchema
+  app.addSchema(LoggedSetOverviewItemSchema);
   app.addSchema(NewPlanProgressionItemSchema);
 
-  // New response detail schemas
   app.addSchema(ExerciseRankUpSchema);
   app.addSchema(MuscleGroupRankUpSchema);
-  app.addSchema(LoggedSetSummaryItemSchema); // Old schema, ensure it's correctly named if still used
-  app.addSchema(PlanWeightIncreaseItemSchema); // Old schema, ensure it's correctly named if still used
-  app.addSchema(DetailedFinishSessionResponseSchema); // Now includes Refs to the above
+  app.addSchema(LoggedSetSummaryItemSchema);
+  app.addSchema(PlanWeightIncreaseItemSchema);
+  app.addSchema(DetailedFinishSessionResponseSchema);
 
-  // Workout Session List & Summary Schemas (Phase 2)
   app.addSchema(ListWorkoutSessionsSortByEnum);
   app.addSchema(ListWorkoutSessionsPeriodEnum);
   app.addSchema(ListWorkoutSessionsQuerySchema);
-  app.addSchema(WorkoutSessionListItemSchema); // Dependency for ListWorkoutSessionsResponseSchema
+  app.addSchema(WorkoutSessionListItemSchema);
   app.addSchema(ListWorkoutSessionsResponseSchema);
   app.addSchema(WorkoutSessionSummaryParamsSchema);
-  app.addSchema(WorkoutSessionSetSummarySchema); // Dependency for WorkoutSessionExerciseSummarySchema
-  app.addSchema(WorkoutSessionExerciseSummarySchema); // Dependency for WorkoutSessionSummaryResponseSchema
+  app.addSchema(WorkoutSessionSetSummarySchema);
+  app.addSchema(WorkoutSessionExerciseSummarySchema);
   app.addSchema(WorkoutSessionSummaryResponseSchema);
+  app.addSchema(MuscleSWRChangeSchema); // This was from workoutSessionsSchemas
 
   // AI Coach Messages
   app.addSchema(PostChatBodySchema);
@@ -438,46 +323,15 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(PutUserEquipmentResponseSchema);
 
   // Onboarding
-  app.addSchema(PostOnboardingCompleteResponseSchema);
-  +app.addSchema(OnboardingStep1BodySchema); // Added Step 1 Schema
-  +app.addSchema(OnboardingStep3BodySchema); // Added Step 3 Schema
-  +app.addSchema(OnboardingStep4BodySchema); // Added Step 4 Schema
+  // Schemas like InitialRankBodySchema are registered within their respective route files if needed, or globally if shared.
+  // Removed app.addSchema for PostOnboardingCompleteResponseSchema, OnboardingStep1BodySchema, OnboardingStep3BodySchema, OnboardingStep4BodySchema
 
   // Profile
   app.addSchema(UpdateProfileBodySchema);
   app.addSchema(GetProfileResponseSchema);
 
-  // Stats
-  // GetExerciseStatsParamsSchema uses UuidParamsSchema (already registered)
-  app.addSchema(GetExerciseStatsQuerySchema);
-  app.addSchema(ExerciseStatsSchema);
-  // GetSessionStatsParamsSchema uses UuidParamsSchema (already registered)
-  app.addSchema(SessionStatsSchema);
-  app.addSchema(GetUserStatsQuerySchema);
-  app.addSchema(UserStatsSchema);
-  app.addSchema(GetBodyStatsQuerySchema);
-  app.addSchema(BodyStatsSchema);
-  app.addSchema(GetMuscleStatsParamsSchema);
-  app.addSchema(GetMuscleStatsQuerySchema);
-  app.addSchema(MuscleStatsSchema);
-  app.addSchema(MuscleSWRChangeSchema);
-
-  // New Stats Schemas from blueprint
-  app.addSchema(OverviewStatsQuerySchema);
-  app.addSchema(OverviewStatsSchema);
-  app.addSchema(ExerciseProgressParamsSchema);
-  app.addSchema(ExerciseProgressQuerySchema);
-  app.addSchema(GraphDataPointSchema); // Register GraphDataPointSchema before ExerciseProgressSchema if it's referenced directly
-  app.addSchema(ExerciseProgressSchema);
-
-  // New Stats Schemas for "All Personal Records" (Phase 1)
-  app.addSchema(AllUserPRsQuerySchema);
-  app.addSchema(UserPREntrySchema);
-  app.addSchema(AllUserPRsResponseSchema);
-
-  // Streaks
-  app.addSchema(UserStreakResponseSchema);
-  app.addSchema(RecoverStreakBodySchema);
+  // Removed Stats Schemas
+  // Removed Streaks Schemas
 
   // User Goals
   console.log("DEBUG: UserGoalSchema:", UserGoalSchema);
@@ -501,14 +355,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   });
   app.register(fastifyRequestLogger);
   app.register(multipart, {
-    // Register multipart plugin with limits
     limits: {
       fileSize: 10 * 1024 * 1024, // 10 MiB limit
     },
   });
 
-  // --- Register Application-Specific Plugins (passing mockServices) ---
-  // Plugins should internally check opts.mockServices first
+  // --- Register Application-Specific Plugins ---
   app.register(geminiPlugin, { ...opts.geminiOptions, mockServices: opts.mockServices });
   app.register(supabaseAuthPlugin, { ...opts.supabaseOptions, mockServices: opts.mockServices });
   app.register(cacheService);
@@ -524,14 +376,12 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   // --- Register Routes Explicitly ---
   app.register(statusRoutes, { prefix: "/status" });
-  // app.register(aiRoutes, { prefix: "/ai" });
-  // Removed deprecated workout route registrations
 
   // --- Register New Module Routes ---
-  // Rely solely on autoload now
   app.register(fastifyAutoload, {
     dir: path.join(__dirname, "modules"),
-    options: { prefix: "/api" }, // Set a common prefix for all modules
+    indexPattern: /\.routes\.ts$/, // Only load files ending with .routes.ts
+    options: { prefix: "/api" }, // Options passed to each loaded plugin
   });
   app.log.info("Explicitly registered all application routes.");
 

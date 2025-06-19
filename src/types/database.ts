@@ -679,16 +679,19 @@ export type Database = {
       }
       ranks: {
         Row: {
+          description: string | null
           id: number
           rank_name: string
           rank_weight: number
         }
         Insert: {
+          description?: string | null
           id?: number
           rank_name: string
           rank_weight: number
         }
         Update: {
+          description?: string | null
           id?: number
           rank_name?: string
           rank_weight?: number
@@ -792,6 +795,27 @@ export type Database = {
           },
         ]
       }
+      user_feedback: {
+        Row: {
+          created_at: string
+          id: number
+          text: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          text: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          text?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_muscle_last_worked: {
         Row: {
           deleted: boolean
@@ -846,6 +870,7 @@ export type Database = {
           deleted: boolean
           experience_points: number
           full_name: string | null
+          funnel: string | null
           gender: Database["public"]["Enums"]["gender"] | null
           id: string
           onboard_complete: boolean
@@ -863,6 +888,7 @@ export type Database = {
           deleted?: boolean
           experience_points?: number
           full_name?: string | null
+          funnel?: string | null
           gender?: Database["public"]["Enums"]["gender"] | null
           id: string
           onboard_complete?: boolean
@@ -880,6 +906,7 @@ export type Database = {
           deleted?: boolean
           experience_points?: number
           full_name?: string | null
+          funnel?: string | null
           gender?: Database["public"]["Enums"]["gender"] | null
           id?: string
           onboard_complete?: boolean

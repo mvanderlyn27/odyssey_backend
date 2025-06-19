@@ -7,7 +7,6 @@ import {
   SessionSetInput,
   SessionStatus,
 } from "@/schemas/workoutSessionsSchemas";
-// import { updateUserMuscleGroupStatsAfterSession } from "../stats/stats.service"; // Currently commented out
 import { _gatherAndPrepareWorkoutData } from "./workout-sessions.data";
 import {
   _updateUserExerciseAndMuscleGroupRanks,

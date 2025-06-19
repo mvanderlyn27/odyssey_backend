@@ -37,6 +37,7 @@ export const ProfileSchema = Type.Object(
     experience_level: Type.Union([Type.String(), Type.Null()]), // e.g., 'beginner', 'intermediate', 'advanced'
     age: Type.Union([Type.Integer(), Type.Null()]),
     gender: Type.Union([Type.String(), Type.Null()]),
+    funnel: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Added funnel field
   },
   { $id: "ProfileSchema", description: "User profile data" }
 );
