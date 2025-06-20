@@ -17,10 +17,10 @@ import { alternativesSchema } from "../types/geminiSchemas/alternativesSchema";
 import { mealPlanMetadataSchema } from "../types/geminiSchemas/mealPlanMetadataSchema";
 import { v4 as uuidv4 } from "uuid"; // Import uuid
 import { exercisePlanSchema } from "../types/geminiSchemas/exercisePlanSchema";
-import { UpdatedWorkoutPlanResponse } from "../modules/ai-coach-messages/ai-coach-messages.types"; // For plan return type
+// import { UpdatedWorkoutPlanResponse } from "../modules/ai-coach-messages/ai-coach-messages.types"; // For plan return type
 import { Equipment } from "@/schemas/equipmentSchemas";
 import { Exercise } from "@/schemas/exercisesSchemas";
-import { WorkoutPlanDetails } from "@/schemas/workoutPlansSchemas";
+// import { WorkoutPlanDetails } from "@/schemas/workoutPlansSchemas";
 
 // Helper function to convert buffer/mimetype to Gemini Part format
 function fileToGenerativePart(buffer: Buffer, mimeType: string): Part {
@@ -477,73 +477,73 @@ Example response format:
  * @param options.modificationDescription - The user's text request for changes.
  * @returns The raw JSON plan structure from Gemini and a text summary, or an Error.
  */
-export const generateUpdatedWorkoutPlan = async (
-  fastify: FastifyInstance,
-  userId: string, // Keep for logging/context
-  options: { currentPlanDetails: WorkoutPlanDetails; modificationDescription: string } // Expect WorkoutPlanDetails
-): Promise<{ planJson: any; text: string } | Error> => {
-  // Return raw JSON and text
-  const { log, gemini } = fastify;
-  if (!gemini) {
-    return new Error("Gemini client is not initialized.");
-  }
+// export const generateUpdatedWorkoutPlan = async (
+//   fastify: FastifyInstance,
+//   userId: string, // Keep for logging/context
+//   options: { currentPlanDetails: WorkoutPlanDetails; modificationDescription: string } // Expect WorkoutPlanDetails
+// ): Promise<{ planJson: any; text: string } | Error> => {
+//   // Return raw JSON and text
+//   const { log, gemini } = fastify;
+//   if (!gemini) {
+//     return new Error("Gemini client is not initialized.");
+//   }
 
-  const modelName = process.env.GEMINI_MODEL_NAME!; // Use standard model
-  log.debug(
-    { modelName, userId, planId: options.currentPlanDetails.id }, // Use ID from details
-    "Generating updated workout plan with Gemini (structured)"
-  );
+//   const modelName = process.env.GEMINI_MODEL_NAME!; // Use standard model
+//   log.debug(
+//     { modelName, userId, planId: options.currentPlanDetails.id }, // Use ID from details
+//     "Generating updated workout plan with Gemini (structured)"
+//   );
 
-  // Define the generation config using the imported schema
-  const generationConfig: GenerationConfig = {
-    responseMimeType: "application/json",
-    responseSchema: exercisePlanSchema as any, // Use imported schema
-  };
+//   // Define the generation config using the imported schema
+//   const generationConfig: GenerationConfig = {
+//     responseMimeType: "application/json",
+//     responseSchema: exercisePlanSchema as any, // Use imported schema
+//   };
 
-  // Construct the prompt using the detailed plan structure
-  const prompt = `Given the following current detailed workout plan:
-${JSON.stringify(options.currentPlanDetails, null, 2)}
+//   // Construct the prompt using the detailed plan structure
+//   const prompt = `Given the following current detailed workout plan:
+// ${JSON.stringify(options.currentPlanDetails, null, 2)}
 
-Please modify this plan based on the user's request: "${options.modificationDescription}".
+// Please modify this plan based on the user's request: "${options.modificationDescription}".
 
-Generate a complete, new workout plan structure based on these modifications.
-Respond ONLY with the JSON object matching the provided schema. Include a brief summary of the changes made within the 'description' field of the new plan. Ensure all required fields from the schema are present in your response.`;
+// Generate a complete, new workout plan structure based on these modifications.
+// Respond ONLY with the JSON object matching the provided schema. Include a brief summary of the changes made within the 'description' field of the new plan. Ensure all required fields from the schema are present in your response.`;
 
-  try {
-    const model = gemini.getGenerativeModel({ model: modelName });
-    const result = await model.generateContent({
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      generationConfig,
-    });
-    const response = result.response;
-    const responseText = response.text();
+//   try {
+//     const model = gemini.getGenerativeModel({ model: modelName });
+//     const result = await model.generateContent({
+//       contents: [{ role: "user", parts: [{ text: prompt }] }],
+//       generationConfig,
+//     });
+//     const response = result.response;
+//     const responseText = response.text();
 
-    log.debug({ modelName, userId }, "Gemini workout plan update successful (structured)");
+//     log.debug({ modelName, userId }, "Gemini workout plan update successful (structured)");
 
-    try {
-      const parsedJson = JSON.parse(responseText);
-      // TODO: Add more robust validation based on the exercisePlanSchema
-      if (!parsedJson.planName || !Array.isArray(parsedJson.dailyWorkouts)) {
-        throw new Error("Parsed JSON does not match expected exercise plan schema.");
-      }
+//     try {
+//       const parsedJson = JSON.parse(responseText);
+//       // TODO: Add more robust validation based on the exercisePlanSchema
+//       if (!parsedJson.planName || !Array.isArray(parsedJson.dailyWorkouts)) {
+//         throw new Error("Parsed JSON does not match expected exercise plan schema.");
+//       }
 
-      // Return the raw JSON and the description text
-      return {
-        planJson: parsedJson,
-        text: parsedJson.description || "Workout plan updated.", // Use description as summary text
-      };
-    } catch (e: any) {
-      log.error(
-        { error: e.message, responseText, userId },
-        "Failed to parse structured JSON response for workout plan update"
-      );
-      return new Error(`Failed to parse updated plan from AI response: ${e.message}`);
-    }
-  } catch (error: any) {
-    log.error(error, `Gemini API error during generateUpdatedWorkoutPlan (model: ${modelName})`);
-    return new Error(`Gemini API error updating workout plan: ${error.message}`);
-  }
-};
+//       // Return the raw JSON and the description text
+//       return {
+//         planJson: parsedJson,
+//         text: parsedJson.description || "Workout plan updated.", // Use description as summary text
+//       };
+//     } catch (e: any) {
+//       log.error(
+//         { error: e.message, responseText, userId },
+//         "Failed to parse structured JSON response for workout plan update"
+//       );
+//       return new Error(`Failed to parse updated plan from AI response: ${e.message}`);
+//     }
+//   } catch (error: any) {
+//     log.error(error, `Gemini API error during generateUpdatedWorkoutPlan (model: ${modelName})`);
+//     return new Error(`Gemini API error updating workout plan: ${error.message}`);
+//   }
+// };
 
 /**
  * Suggests alternative exercises based on user criteria.
