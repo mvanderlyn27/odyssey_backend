@@ -19,6 +19,8 @@ type WorkoutSessionInsert = TablesInsert<"workout_sessions">;
 type WorkoutSessionSetInsert = TablesInsert<"workout_session_sets">;
 type UserExercisePrInsert = TablesInsert<"user_exercise_prs">;
 type UserMuscleLastWorkedInsert = TablesInsert<"user_muscle_last_worked">;
+type ActiveWorkoutPlanInsert = TablesInsert<"active_workout_plans">;
+type ActiveWorkoutSessionInsert = TablesInsert<"active_workout_sessions">;
 
 // Helper function to calculate estimated 1RM (Epley formula)
 function calculateEstimated1RM(weightKg: number, reps: number): number {
@@ -484,7 +486,26 @@ export const handleOnboarding = async (
     }
     // --- End Simplified Ranking Calculations ---
 
-    // 8. Fetch the fully updated profile to return
+    // 8. Create blank entries for active_workout_plans and active_workout_sessions
+    const activeWorkoutPlanPayload: ActiveWorkoutPlanInsert = {
+      user_id: userId,
+    };
+    const { error: activePlanError } = await supabase.from("active_workout_plans").insert(activeWorkoutPlanPayload);
+    if (activePlanError) {
+      fastify.log.error({ error: activePlanError, userId }, "Error creating blank active workout plan entry");
+    }
+
+    const activeWorkoutSessionPayload: ActiveWorkoutSessionInsert = {
+      user_id: userId,
+    };
+    const { error: activeSessionError } = await supabase
+      .from("active_workout_sessions")
+      .insert(activeWorkoutSessionPayload);
+    if (activeSessionError) {
+      fastify.log.error({ error: activeSessionError, userId }, "Error creating blank active workout session entry");
+    }
+
+    // 9. Fetch the fully updated profile to return
     const { data: finalProfileData, error: finalProfileError } = await supabase
       .from("user_profiles")
       .select(
