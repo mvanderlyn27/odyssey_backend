@@ -1,6 +1,8 @@
 import { Static } from "@sinclair/typebox";
 import { FastifyInstance } from "fastify";
+import axios from "axios";
 import { Profile } from "../../schemas/profileSchemas";
+import config from "../../config";
 import { InitialRankBodySchema } from "../../schemas/onboardSchemas";
 import { TablesInsert, TablesUpdate, Database, Tables, Enums } from "../../types/database"; // Added Tables, Enums
 import {
@@ -520,6 +522,38 @@ export const handleOnboarding = async (
     }
 
     fastify.log.info(`Onboarding fully completed for user ${userId}.`);
+
+    // Send event to Loops.so
+    try {
+      const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(userId);
+      if (authError) {
+        fastify.log.error({ error: authError, userId }, "Error fetching user for Loops.so event");
+      } else if (authUser) {
+        const { loopsApiKey } = config;
+        if (loopsApiKey) {
+          await axios.post(
+            "https://app.loops.so/api/v1/events/send",
+            {
+              email: authUser.user.email,
+              eventName: "beta_onboard",
+              userGroup: "beta_users",
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${loopsApiKey}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+          fastify.log.info(`Event sent to Loops.so for user ${userId}`);
+        } else {
+          fastify.log.warn("LOOPS_API_KEY not configured, skipping event send.");
+        }
+      }
+    } catch (error) {
+      fastify.log.error({ error, userId }, "Failed to send event to Loops.so");
+    }
+
     return {
       id: finalProfileData.id,
       username: finalProfileData.username,

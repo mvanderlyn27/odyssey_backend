@@ -22,6 +22,12 @@ async function statusRoutes(fastify: FastifyInstance, options: FastifyPluginOpti
       },
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
+      if (fastify.posthog) {
+        fastify.posthog.capture({
+          distinctId: "system",
+          event: "ping",
+        });
+      }
       return { message: "pong" };
     }
   );

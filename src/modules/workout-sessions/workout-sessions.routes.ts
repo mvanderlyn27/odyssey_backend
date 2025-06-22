@@ -62,6 +62,16 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
         return reply.send(result);
       } catch (error: any) {
         fastify.log.error(error, `Failed finishing/logging session`);
+        if (fastify.posthog) {
+          fastify.posthog.capture({
+            distinctId: userId,
+            event: "finish_workout_error",
+            properties: {
+              error: error.message,
+              stack: error.stack,
+            },
+          });
+        }
         if (
           error.message.includes("not found") ||
           error.message.includes("Invalid status") ||

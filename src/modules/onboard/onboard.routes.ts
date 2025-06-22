@@ -67,6 +67,16 @@ async function onboardRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
         return reply.send(updatedProfile);
       } catch (error: any) {
         fastify.log.error(error, "Failed saving initial rank");
+        if (fastify.posthog) {
+          fastify.posthog.capture({
+            distinctId: userId,
+            event: "onboarding_error",
+            properties: {
+              error: error.message,
+              stack: error.stack,
+            },
+          });
+        }
         return reply
           .code(500)
           .send({ error: "Internal Server Error", message: error.message || "Failed to save initial rank data." });

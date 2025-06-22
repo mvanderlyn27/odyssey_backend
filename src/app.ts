@@ -18,6 +18,7 @@ import "dotenv/config"; // Ensure env vars are loaded
 // Import custom plugins & options interfaces
 import geminiPlugin, { GeminiPluginOptions } from "./plugins/gemini";
 import supabaseAuthPlugin, { SupabaseAuthOptions } from "./plugins/supabaseAuth";
+import posthogPlugin from "./plugins/posthog";
 import { SupabaseClient } from "@supabase/supabase-js"; // For mockServices type
 import { GoogleGenerativeAI } from "@google/generative-ai"; // For mockServices type
 import { GeminiService } from "./services/geminiService"; // For mockServices type
@@ -364,6 +365,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.register(geminiPlugin, { ...opts.geminiOptions, mockServices: opts.mockServices });
   app.register(supabaseAuthPlugin, { ...opts.supabaseOptions, mockServices: opts.mockServices });
   app.register(cacheService);
+  app.register(posthogPlugin);
 
   // --- Register Swagger (conditionally) ---
   if (!isProduction) {
