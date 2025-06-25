@@ -31,6 +31,12 @@ type PerformanceLog = {
   mcw_weight: number;
 };
 
+type UserPerformanceLog = {
+  pl_value: number;
+  sps_score: number;
+  mcw_weight: number;
+};
+
 type UserPerformanceLogInsert = TablesInsert<"muscle_ranks">;
 type UserScoresInsert = TablesInsert<"user_ranks">;
 type UserRankInsert = TablesInsert<"user_ranks">;
@@ -39,13 +45,18 @@ type UserMuscleRankInsert = TablesInsert<"muscle_ranks">;
 
 // --- HELPER FUNCTIONS ---
 
-function findRankId(score: number, allRanks: { id: number; min_score: number }[]): number | null {
+function findRankId(
+  score: number,
+  allRanks: { id: number; min_score: number }[],
+  sortedRanks: { id: number; min_score: number }[]
+): number | null {
   for (const rank of allRanks) {
     if (score >= rank.min_score) {
       return rank.id;
     }
   }
-  return null;
+  // If the score is lower than any rank, assign the lowest rank
+  return sortedRanks.length > 0 ? sortedRanks[0].id : null;
 }
 
 function buildRankProgression(
@@ -105,7 +116,7 @@ function buildRankProgression(
   const currentRankMinScore = current_rank.min_strength_score ?? 0;
   const nextRankMinScore = next_rank?.min_strength_score;
 
-  if (nextRankMinScore && nextRankMinScore > currentRankMinScore) {
+  if (typeof nextRankMinScore === "number" && nextRankMinScore > currentRankMinScore) {
     const scoreInCurrentTier = Math.max(0, finalScore - currentRankMinScore);
     const scoreNeededForTier = nextRankMinScore - currentRankMinScore;
     percent_to_next_rank = scoreNeededForTier > 0 ? scoreInCurrentTier / scoreNeededForTier : 1;
@@ -190,10 +201,7 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
       "allMuscles",
       async () => (await supabase.from("muscles").select("id, name, muscle_group_id, muscle_group_weight")).data || []
     ),
-    fastify.appCache.get(
-      "allMuscleGroups",
-      async () => (await supabase.from("muscle_groups").select("id, name, overall_weight")).data || []
-    ),
+    fastify.appCache.get("allMuscleGroups", async () => (await supabase.from("muscle_groups").select("*")).data || []),
     fastify.appCache.get("allRanks", async () => (await supabase.from("ranks").select("id, rank_name")).data || []),
     fastify.appCache.get(
       "allRankThresholds",
@@ -241,24 +249,48 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   // --- Step 3: Update user_muscle_performance (The Top 5 Logic) ---
   const affectedMuscleIds = [...new Set(newPerformances.map((p) => p.muscle_id))];
   for (const muscleId of affectedMuscleIds) {
-    const { data: currentLog } = await supabase
+    // 1. Fetch the user's current Top 5 log for this muscle from the DB.
+    const { data: currentLog, error: currentLogError } = await supabase
       .from("user_muscle_performance")
       .select("pl_value, sps_score, mcw_weight")
       .eq("user_id", userId)
       .eq("muscle_id", muscleId);
+
+    if (currentLogError) {
+      fastify.log.error(
+        `[RANK_SYSTEM_V2] Error fetching current performance log for muscle ${muscleId}: ${currentLogError.message}`
+      );
+      continue; // Skip this muscle if we can't get its log
+    }
+
+    // 2. Get all new performances for this specific muscle from our collection.
     const newPerformancesForThisMuscle = newPerformances.filter((p) => p.muscle_id === muscleId);
-    const combinedLog = [...(currentLog || []), ...newPerformancesForThisMuscle];
+
+    // 3. Combine the existing log with the new performances into a single array.
+    const combinedLog: UserPerformanceLog[] = [...(currentLog || []), ...newPerformancesForThisMuscle];
+
+    // 4. Sort the combined list by Performance Level (PL) to find the new true Top 5.
     combinedLog.sort((a, b) => b.pl_value - a.pl_value);
-    const newTop5Log = combinedLog.slice(0, 5);
-    const newLogInserts: any[] = newTop5Log.map((log) => ({
-      user_id: userId,
-      muscle_id: muscleId,
-      pl_value: log.pl_value,
-      sps_score: log.sps_score,
-      mcw_weight: log.mcw_weight,
-    }));
+    const newTop5Log = combinedLog.slice(0, 5); // Take the best 5 records.
+
+    // 5. Atomically update the database for this muscle.
     await supabase.from("user_muscle_performance").delete().eq("user_id", userId).eq("muscle_id", muscleId);
-    await supabase.from("user_muscle_performance").insert(newLogInserts);
+
+    if (newTop5Log.length > 0) {
+      const newLogInserts = newTop5Log.map((log) => ({
+        user_id: userId,
+        muscle_id: muscleId,
+        pl_value: log.pl_value,
+        sps_score: log.sps_score,
+        mcw_weight: log.mcw_weight,
+      }));
+      const { error: insertError } = await supabase.from("user_muscle_performance").insert(newLogInserts);
+      if (insertError) {
+        fastify.log.error(
+          `[RANK_SYSTEM_V2] Error inserting new performance log for muscle ${muscleId}: ${insertError.message}`
+        );
+      }
+    }
   }
 
   // --- Step 4: Full Recalculation of All Scores (IMS, MGS, OSS) ---
@@ -292,57 +324,102 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
       individualMuscleScores.set(muscleId, 0);
       continue;
     }
+
+    // This is the numerator of the weighted average
     const numerator = validLogs.reduce((sum, log) => sum + log.sps_score * log.mcw_weight, 0);
+
+    // THIS IS THE MISSING STEP: The denominator of the weighted average
     const denominator = validLogs.reduce((sum, log) => sum + log.mcw_weight, 0);
+
+    // The final, correct IMS calculation
     const ims = Math.round(denominator > 0 ? numerator / denominator : 0);
     individualMuscleScores.set(muscleId, ims);
   }
 
-  const muscleGroupScores = new Map<string, number>();
+  const muscleGroupNumerators = new Map<string, number>();
+  const muscleGroupDenominators = new Map<string, number>();
+
   for (const [muscleId, ims] of individualMuscleScores.entries()) {
     const muscleInfo = musclesMap.get(muscleId);
     if (muscleInfo?.muscle_group_id && muscleInfo.muscle_group_weight) {
-      const currentMgs = muscleGroupScores.get(muscleInfo.muscle_group_id) || 0;
-      muscleGroupScores.set(muscleInfo.muscle_group_id, currentMgs + ims * muscleInfo.muscle_group_weight);
+      const groupId = muscleInfo.muscle_group_id;
+      // Add to the numerator: score * weight
+      const currentNumerator = muscleGroupNumerators.get(groupId) || 0;
+      muscleGroupNumerators.set(groupId, currentNumerator + ims * muscleInfo.muscle_group_weight);
+      // Add to the denominator: weight
+      const currentDenominator = muscleGroupDenominators.get(groupId) || 0;
+      muscleGroupDenominators.set(groupId, currentDenominator + muscleInfo.muscle_group_weight);
     }
   }
 
-  let overallScore = 0;
+  const muscleGroupScores = new Map<string, number>();
+  for (const [groupId, numerator] of muscleGroupNumerators.entries()) {
+    const denominator = muscleGroupDenominators.get(groupId) || 1; // Avoid division by zero
+    muscleGroupScores.set(groupId, Math.round(numerator / denominator));
+  }
+
+  // Corrected OSS Calculation
+  let ossNumerator = 0;
+  let ossDenominator = 0;
+
   for (const [groupId, mgs] of muscleGroupScores.entries()) {
     const groupInfo = muscleGroupsMap.get(groupId);
     if (groupInfo?.overall_weight) {
-      overallScore += mgs * groupInfo.overall_weight;
+      ossNumerator += mgs * groupInfo.overall_weight;
+      ossDenominator += groupInfo.overall_weight;
     }
   }
-  overallScore = Math.round(overallScore);
+  const overallScore = Math.round(ossDenominator > 0 ? ossNumerator / ossDenominator : 0);
 
   // --- Step 5: Persist All New Scores and Ranks ---
   const rankThresholdsSorted = (rankThresholdsData || [])
-    .filter((r): r is { id: number; min_score: number } => r !== null)
-    .map((r) => ({ rank_id: r.id, min_score: r.min_score }));
+    .filter((r): r is { id: number; min_score: number } => r !== null && r.min_score !== null)
+    .map((r) => ({ rank_id: r.id, min_score: r.min_score as number }));
   const rankUpsertPromises: Promise<any>[] = [];
+  const lastCalculatedAt = new Date().toISOString();
+  const sortedRanks = [...(rankThresholdsData || [])]
+    .filter((r) => r.min_score !== null)
+    .sort((a, b) => (a.min_score as number) - (b.min_score as number));
 
   const overallRankId = findRankId(
     overallScore,
-    (rankThresholdsData || []).map((r) => ({ id: r.id, min_score: r.min_score || 0 }))
+    (rankThresholdsData || [])
+      .filter((r) => r.min_score !== null)
+      .map((r) => ({ id: r.id, min_score: r.min_score as number })),
+    sortedRanks as { id: number; min_score: number }[]
   );
   rankUpsertPromises.push(
     Promise.resolve(
-      supabase
-        .from("user_ranks")
-        .upsert({ user_id: userId, strength_score: overallScore, rank_id: overallRankId }, { onConflict: "user_id" })
+      supabase.from("user_ranks").upsert(
+        {
+          user_id: userId,
+          strength_score: overallScore,
+          rank_id: overallRankId,
+          last_calculated_at: lastCalculatedAt,
+        },
+        { onConflict: "user_id" }
+      )
     )
   );
 
   for (const [groupId, score] of muscleGroupScores.entries()) {
     const rankId = findRankId(
       score,
-      (rankThresholdsData || []).map((r) => ({ id: r.id, min_score: r.min_score || 0 }))
+      (rankThresholdsData || [])
+        .filter((r) => r.min_score !== null)
+        .map((r) => ({ id: r.id, min_score: r.min_score as number })),
+      sortedRanks as { id: number; min_score: number }[]
     );
     rankUpsertPromises.push(
       Promise.resolve(
         supabase.from("muscle_group_ranks").upsert(
-          { user_id: userId, muscle_group_id: groupId, strength_score: score, rank_id: rankId },
+          {
+            user_id: userId,
+            muscle_group_id: groupId,
+            strength_score: score,
+            rank_id: rankId,
+            last_calculated_at: lastCalculatedAt,
+          },
           {
             onConflict: "user_id,muscle_group_id",
           }
@@ -353,7 +430,10 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   for (const [muscleId, score] of individualMuscleScores.entries()) {
     const rankId = findRankId(
       score,
-      (rankThresholdsData || []).map((r) => ({ id: r.id, min_score: r.min_score || 0 }))
+      (rankThresholdsData || [])
+        .filter((r) => r.min_score !== null)
+        .map((r) => ({ id: r.id, min_score: r.min_score as number })),
+      sortedRanks as { id: number; min_score: number }[]
     );
 
     const oldRankData = oldMuscleRanksMap.get(muscleId);
@@ -378,12 +458,16 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
 
     rankUpsertPromises.push(
       Promise.resolve(
-        supabase
-          .from("muscle_ranks")
-          .upsert(
-            { user_id: userId, muscle_id: muscleId, strength_score: score, rank_id: rankId },
-            { onConflict: "user_id,muscle_id" }
-          )
+        supabase.from("muscle_ranks").upsert(
+          {
+            user_id: userId,
+            muscle_id: muscleId,
+            strength_score: score,
+            rank_id: rankId,
+            last_calculated_at: lastCalculatedAt,
+          },
+          { onConflict: "user_id,muscle_id" }
+        )
       )
     );
   }
@@ -395,10 +479,12 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
     currentMuscleGroupScores.data?.map((s) => [s.muscle_group_id, s.strength_score || 0]) || []
   );
 
+  const rankThresholdsSortedAsc = [...rankThresholdsSorted].sort((a, b) => a.min_score - b.min_score);
+
   results.overall_user_rank_progression = buildRankProgression(
     oldOverallScore,
     overallScore,
-    rankThresholdsSorted,
+    rankThresholdsSortedAsc,
     ranksMap
   );
   results.muscle_group_progressions = Array.from(muscleGroupScores.entries()).map(([groupId, newScore]) => {
@@ -406,7 +492,7 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
     return {
       muscle_group_id: groupId,
       muscle_group_name: muscleGroupsMap.get(groupId)?.name || "Unknown Group",
-      progression_details: buildRankProgression(oldMGS, newScore, rankThresholdsSorted, ranksMap),
+      progression_details: buildRankProgression(oldMGS, newScore, rankThresholdsSortedAsc, ranksMap),
     };
   });
 

@@ -289,6 +289,42 @@ export async function _gatherAndPrepareWorkoutData(
     exercises_performed_summary: exercisesPerformedSummary,
   };
 
+  // --- Update User Exercise PRs ---
+  const bestSessionPerformances = new Map<string, { swr: number }>();
+  for (const set of setInsertPayloads) {
+    if (set.exercise_id && typeof set.calculated_swr === "number") {
+      const currentBest = bestSessionPerformances.get(set.exercise_id);
+      if (!currentBest || set.calculated_swr > currentBest.swr) {
+        bestSessionPerformances.set(set.exercise_id, { swr: set.calculated_swr });
+      }
+    }
+  }
+
+  if (bestSessionPerformances.size > 0) {
+    const prUpsertPayloads: TablesInsert<"user_exercise_prs">[] = [];
+    for (const [exerciseId, performance] of bestSessionPerformances.entries()) {
+      const existingPR = existingUserExercisePRs.get(exerciseId);
+      if (!existingPR || performance.swr > (existingPR.best_swr ?? -1)) {
+        prUpsertPayloads.push({
+          user_id: userId,
+          exercise_id: exerciseId,
+          best_swr: performance.swr,
+        });
+      }
+    }
+
+    if (prUpsertPayloads.length > 0) {
+      fastify.log.info(`[PREPARE_WORKOUT_DATA] Updating ${prUpsertPayloads.length} user exercise PRs.`);
+      const { error: upsertError } = await supabase
+        .from("user_exercise_prs")
+        .upsert(prUpsertPayloads, { onConflict: "user_id,exercise_id" });
+
+      if (upsertError) {
+        fastify.log.error({ error: upsertError }, "[PREPARE_WORKOUT_DATA] Failed to upsert user exercise PRs.");
+      }
+    }
+  }
+
   fastify.log.info(`[PREPARE_WORKOUT_DATA] Completed for user: ${userId}.`, {
     calculatedTotalSets,
     calculatedTotalReps,

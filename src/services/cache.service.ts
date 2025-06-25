@@ -78,7 +78,7 @@ export class CacheService {
         return data || [];
       }),
       this.get("allMuscleGroups", async () => {
-        const { data, error } = await supabase.from("muscle_groups").select("id, name");
+        const { data, error } = await supabase.from("muscle_groups").select("id, name, overall_weight");
         if (error) throw error;
         return data || [];
       }),
