@@ -61,7 +61,7 @@ export class CacheService {
 
     const cacheJobs = [
       this.get("allRanks", async () => {
-        const { data, error } = await supabase.from("ranks").select("id, rank_name, min_score");
+        const { data, error } = await supabase.from("ranks").select("id, rank_name, min_score").neq("id", 0);
         if (error) throw error;
         return data || [];
       }),
