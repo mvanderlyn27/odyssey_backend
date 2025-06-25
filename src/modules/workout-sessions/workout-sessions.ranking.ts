@@ -24,40 +24,7 @@ export type RankUpdateResults = {
   muscle_group_progressions?: MuscleGroupProgression[];
 };
 
-type PerformanceLog = {
-  muscle_id: string;
-  pl_value: number;
-  sps_score: number;
-  mcw_weight: number;
-};
-
-type UserPerformanceLog = {
-  pl_value: number;
-  sps_score: number;
-  mcw_weight: number;
-};
-
-type UserPerformanceLogInsert = TablesInsert<"muscle_ranks">;
-type UserScoresInsert = TablesInsert<"user_ranks">;
-type UserRankInsert = TablesInsert<"user_ranks">;
-type UserMuscleGroupRankInsert = TablesInsert<"muscle_group_ranks">;
-type UserMuscleRankInsert = TablesInsert<"muscle_ranks">;
-
 // --- HELPER FUNCTIONS ---
-
-function findRankId(
-  score: number,
-  allRanks: { id: number; min_score: number }[],
-  sortedRanks: { id: number; min_score: number }[]
-): number | null {
-  for (const rank of allRanks) {
-    if (score >= rank.min_score) {
-      return rank.id;
-    }
-  }
-  // If the score is lower than any rank, assign the lowest rank
-  return sortedRanks.length > 0 ? sortedRanks[0].id : null;
-}
 
 function buildRankProgression(
   initialScore: number,
@@ -134,7 +101,7 @@ function buildRankProgression(
   };
 }
 
-// --- MAIN RANKING LOGIC ---
+// --- MAIN RANKING LOGIC (REFACTORED for "Peak Contribution Model") ---
 
 export async function _updateUserExerciseAndMuscleGroupRanks(
   fastify: FastifyInstance,
@@ -146,47 +113,26 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   const supabase = fastify.supabase as SupabaseClient<Database>;
   const K = 4000; // System Constant
 
-  fastify.log.info(`[RANK_SYSTEM_V2] Starting for user: ${userId}`);
+  fastify.log.info(`[RANK_SYSTEM_PEAK] Starting for user: ${userId}`);
 
   if (!userBodyweight) {
-    fastify.log.warn(`[RANK_SYSTEM_V2] User ${userId} has no bodyweight. Skipping rank calculation.`);
-    return {
-      exerciseRankUps: [],
-      muscleRankChanges: [],
-      overall_user_rank_progression: undefined,
-      muscle_group_progressions: [],
-    };
+    fastify.log.warn(`[RANK_SYSTEM_PEAK] User ${userId} has no bodyweight. Skipping.`);
+    return { exerciseRankUps: [], muscleRankChanges: [], muscle_group_progressions: [] };
   }
 
-  const results: RankUpdateResults = {
-    exerciseRankUps: [],
-    muscleRankChanges: [],
-    overall_user_rank_progression: undefined,
-    muscle_group_progressions: [],
-  };
-
-  // --- Step 1: Identify Best Sets & Fetch Rule Data ---
-  const bestPerformancesMap = new Map<string, Tables<"workout_session_sets">>();
-  for (const set of persistedSessionSets) {
-    if (set.exercise_id && set.calculated_swr !== null) {
-      const currentBest = bestPerformancesMap.get(set.exercise_id);
-      if (!currentBest || set.calculated_swr > (currentBest.calculated_swr ?? -1)) {
-        bestPerformancesMap.set(set.exercise_id, set);
-      }
-    }
-  }
-  const uniqueExerciseIds = Array.from(bestPerformancesMap.keys());
+  // --- Step 1: Initial Data Fetching ---
+  const uniqueExerciseIds = [...new Set(persistedSessionSets.map((s) => s.exercise_id).filter(Boolean) as string[])];
 
   const [
-    eliteBenchmarksData,
-    mcwData,
-    allMusclesData,
-    allMuscleGroupsData,
-    allRanksData,
-    rankThresholdsData,
-    currentScoresData,
-    currentMuscleGroupScores,
-    currentMuscleRanks,
+    eliteBenchmarksRes,
+    mcwRes,
+    allMuscles,
+    allMuscleGroups,
+    allRanks,
+    allRankThresholds,
+    initialUserRank,
+    initialMuscleGroupRanks,
+    initialMuscleRanks,
   ] = await Promise.all([
     supabase
       .from("exercise_performance_benchmarks")
@@ -194,206 +140,122 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
       .in("exercise_id", uniqueExerciseIds),
     supabase
       .from("exercise_muscles")
-      .select("exercise_id, muscle_id, exercise_muscle_weight, muscle_intensity")
+      .select("exercise_id, muscle_id, exercise_muscle_weight")
       .in("exercise_id", uniqueExerciseIds)
       .eq("muscle_intensity", "primary"),
     fastify.appCache.get(
       "allMuscles",
       async () => (await supabase.from("muscles").select("id, name, muscle_group_id, muscle_group_weight")).data || []
     ),
-    fastify.appCache.get("allMuscleGroups", async () => (await supabase.from("muscle_groups").select("*")).data || []),
+    fastify.appCache.get(
+      "allMuscleGroups",
+      async () => (await supabase.from("muscle_groups").select("id, name, overall_weight")).data || []
+    ),
     fastify.appCache.get("allRanks", async () => (await supabase.from("ranks").select("id, rank_name")).data || []),
     fastify.appCache.get(
       "allRankThresholds",
       async () =>
         (await supabase.from("ranks").select("id, min_score").order("min_score", { ascending: false })).data || []
     ),
-    supabase.from("user_ranks").select("strength_score").eq("user_id", userId).single(),
+    supabase.from("user_ranks").select("strength_score").eq("user_id", userId).maybeSingle(),
     supabase.from("muscle_group_ranks").select("muscle_group_id, strength_score").eq("user_id", userId),
-    supabase.from("muscle_ranks").select("muscle_id, strength_score, rank_id").eq("user_id", userId),
+    supabase.from("muscle_ranks").select("muscle_id, strength_score").eq("user_id", userId),
   ]);
 
-  const benchmarkMap = new Map(eliteBenchmarksData.data?.map((b) => [b.exercise_id, b.sps_elite_value]) || []);
+  // Create maps for efficient lookups
+  const benchmarkMap = new Map(eliteBenchmarksRes.data?.map((b) => [b.exercise_id, b.sps_elite_value]) || []);
   const mcwMap = new Map<string, { muscle_id: string; mcw: number }[]>();
-  mcwData.data?.forEach((m) => {
+  mcwRes.data?.forEach((m) => {
     if (!mcwMap.has(m.exercise_id)) mcwMap.set(m.exercise_id, []);
     mcwMap.get(m.exercise_id)!.push({ muscle_id: m.muscle_id, mcw: m.exercise_muscle_weight as number });
   });
-  const ranksMap = new Map(allRanksData?.map((r) => [r.id, { id: r.id, rank_name: r.rank_name }]) || []);
-  const musclesMap = new Map(allMusclesData?.map((m) => [m.id, m]) || []);
-  const muscleGroupsMap = new Map(allMuscleGroupsData?.map((mg) => [mg.id, mg]) || []);
-  const oldMuscleRanksMap = new Map(currentMuscleRanks.data?.map((r) => [r.muscle_id, r]) || []);
+  const musclesMap = new Map(allMuscles.map((m) => [m.id, m]));
+  const muscleGroupsMap = new Map(allMuscleGroups.map((mg) => [mg.id, mg]));
+  const ranksMap = new Map(allRanks.map((r) => [r.id, r]));
 
-  // --- Step 2: Calculate Performance for All Workout Sets ---
-  const newPerformances: PerformanceLog[] = [];
-  for (const [exerciseId, set] of bestPerformancesMap.entries()) {
-    if (set.actual_reps === null || set.actual_weight_kg === null) continue;
+  // --- Step 2: Calculate New Potential Peak Scores ---
+  const newMuscleScoresMap = new Map<string, number>(
+    initialMuscleRanks.data?.map((r) => [r.muscle_id, r.strength_score || 0]) || []
+  );
+
+  for (const set of persistedSessionSets) {
+    if (set.actual_reps === null || set.actual_weight_kg === null || !set.exercise_id) continue;
+
     const e1RM = set.actual_weight_kg * (1 + set.actual_reps / 30);
     const ups = e1RM / userBodyweight;
     const sps = Math.round(ups * K);
-    const eliteSps = benchmarkMap.get(exerciseId);
-    if (!eliteSps) continue;
-    const pl = sps / eliteSps;
-    const primaryMusclesForSet = mcwMap.get(exerciseId);
+
+    const primaryMusclesForSet = mcwMap.get(set.exercise_id);
     if (!primaryMusclesForSet) continue;
+
     for (const muscle of primaryMusclesForSet) {
-      newPerformances.push({
-        muscle_id: muscle.muscle_id,
-        pl_value: pl,
-        sps_score: sps,
-        mcw_weight: muscle.mcw,
-      });
-    }
-  }
+      const contributionScore = Math.round(sps * muscle.mcw);
+      const currentBestScore = newMuscleScoresMap.get(muscle.muscle_id) || 0;
 
-  // --- Step 3: Update user_muscle_performance (The Top 5 Logic) ---
-  const affectedMuscleIds = [...new Set(newPerformances.map((p) => p.muscle_id))];
-  for (const muscleId of affectedMuscleIds) {
-    // 1. Fetch the user's current Top 5 log for this muscle from the DB.
-    const { data: currentLog, error: currentLogError } = await supabase
-      .from("user_muscle_performance")
-      .select("pl_value, sps_score, mcw_weight")
-      .eq("user_id", userId)
-      .eq("muscle_id", muscleId);
-
-    if (currentLogError) {
-      fastify.log.error(
-        `[RANK_SYSTEM_V2] Error fetching current performance log for muscle ${muscleId}: ${currentLogError.message}`
-      );
-      continue; // Skip this muscle if we can't get its log
-    }
-
-    // 2. Get all new performances for this specific muscle from our collection.
-    const newPerformancesForThisMuscle = newPerformances.filter((p) => p.muscle_id === muscleId);
-
-    // 3. Combine the existing log with the new performances into a single array.
-    const combinedLog: UserPerformanceLog[] = [...(currentLog || []), ...newPerformancesForThisMuscle];
-
-    // 4. Sort the combined list by Performance Level (PL) to find the new true Top 5.
-    combinedLog.sort((a, b) => b.pl_value - a.pl_value);
-    const newTop5Log = combinedLog.slice(0, 5); // Take the best 5 records.
-
-    // 5. Atomically update the database for this muscle.
-    await supabase.from("user_muscle_performance").delete().eq("user_id", userId).eq("muscle_id", muscleId);
-
-    if (newTop5Log.length > 0) {
-      const newLogInserts = newTop5Log.map((log) => ({
-        user_id: userId,
-        muscle_id: muscleId,
-        pl_value: log.pl_value,
-        sps_score: log.sps_score,
-        mcw_weight: log.mcw_weight,
-      }));
-      const { error: insertError } = await supabase.from("user_muscle_performance").insert(newLogInserts);
-      if (insertError) {
-        fastify.log.error(
-          `[RANK_SYSTEM_V2] Error inserting new performance log for muscle ${muscleId}: ${insertError.message}`
-        );
+      if (contributionScore > currentBestScore) {
+        newMuscleScoresMap.set(muscle.muscle_id, contributionScore);
       }
     }
   }
 
-  // --- Step 4: Full Recalculation of All Scores (IMS, MGS, OSS) ---
-  const { data: allUserLogsData } = await supabase
-    .from("user_muscle_performance")
-    .select("muscle_id, sps_score, mcw_weight")
-    .eq("user_id", userId);
-  const logsByMuscle: Record<
-    string,
-    {
-      muscle_id: string;
-      sps_score: number;
-      mcw_weight: number;
-    }[]
-  > = {};
-  if (allUserLogsData) {
-    allUserLogsData.forEach((log) => {
-      if (log && log.muscle_id) {
-        if (!logsByMuscle[log.muscle_id]) {
-          logsByMuscle[log.muscle_id] = [];
-        }
-        logsByMuscle[log.muscle_id].push(log);
-      }
-    });
-  }
-
-  const individualMuscleScores = new Map<string, number>();
-  for (const [muscleId, logs] of Object.entries(logsByMuscle)) {
-    const validLogs = logs?.filter(Boolean) || [];
-    if (validLogs.length === 0) {
-      individualMuscleScores.set(muscleId, 0);
-      continue;
-    }
-
-    // This is the numerator of the weighted average
-    const numerator = validLogs.reduce((sum, log) => sum + log.sps_score * log.mcw_weight, 0);
-
-    // THIS IS THE MISSING STEP: The denominator of the weighted average
-    const denominator = validLogs.reduce((sum, log) => sum + log.mcw_weight, 0);
-
-    // The final, correct IMS calculation
-    const ims = Math.round(denominator > 0 ? numerator / denominator : 0);
-    individualMuscleScores.set(muscleId, ims);
-  }
+  // --- Step 3: Aggregate Final Scores (IMS, MGS, OSS) ---
+  const finalIndividualMuscleScores = newMuscleScoresMap;
 
   const muscleGroupNumerators = new Map<string, number>();
   const muscleGroupDenominators = new Map<string, number>();
-
-  for (const [muscleId, ims] of individualMuscleScores.entries()) {
+  for (const [muscleId, ims] of finalIndividualMuscleScores.entries()) {
     const muscleInfo = musclesMap.get(muscleId);
     if (muscleInfo?.muscle_group_id && muscleInfo.muscle_group_weight) {
       const groupId = muscleInfo.muscle_group_id;
-      // Add to the numerator: score * weight
-      const currentNumerator = muscleGroupNumerators.get(groupId) || 0;
-      muscleGroupNumerators.set(groupId, currentNumerator + ims * muscleInfo.muscle_group_weight);
-      // Add to the denominator: weight
-      const currentDenominator = muscleGroupDenominators.get(groupId) || 0;
-      muscleGroupDenominators.set(groupId, currentDenominator + muscleInfo.muscle_group_weight);
+      const currentNum = muscleGroupNumerators.get(groupId) || 0;
+      const currentDen = muscleGroupDenominators.get(groupId) || 0;
+      muscleGroupNumerators.set(groupId, currentNum + ims * muscleInfo.muscle_group_weight);
+      muscleGroupDenominators.set(groupId, currentDen + muscleInfo.muscle_group_weight);
     }
   }
-
-  const muscleGroupScores = new Map<string, number>();
+  const finalMuscleGroupScores = new Map<string, number>();
   for (const [groupId, numerator] of muscleGroupNumerators.entries()) {
-    const denominator = muscleGroupDenominators.get(groupId) || 1; // Avoid division by zero
-    muscleGroupScores.set(groupId, Math.round(numerator / denominator));
+    const denominator = muscleGroupDenominators.get(groupId) || 1;
+    finalMuscleGroupScores.set(groupId, Math.round(numerator / denominator));
   }
 
-  // Corrected OSS Calculation
   let ossNumerator = 0;
   let ossDenominator = 0;
-
-  for (const [groupId, mgs] of muscleGroupScores.entries()) {
+  for (const [groupId, mgs] of finalMuscleGroupScores.entries()) {
     const groupInfo = muscleGroupsMap.get(groupId);
     if (groupInfo?.overall_weight) {
       ossNumerator += mgs * groupInfo.overall_weight;
       ossDenominator += groupInfo.overall_weight;
     }
   }
-  const overallScore = Math.round(ossDenominator > 0 ? ossNumerator / ossDenominator : 0);
+  const finalOverallScore = Math.round(ossDenominator > 0 ? ossNumerator / ossDenominator : 0);
 
-  // --- Step 5: Persist All New Scores and Ranks ---
-  const rankThresholdsSorted = (rankThresholdsData || [])
-    .filter((r): r is { id: number; min_score: number } => r !== null && r.min_score !== null)
-    .map((r) => ({ rank_id: r.id, min_score: r.min_score as number }));
-  const rankUpsertPromises: Promise<any>[] = [];
+  // --- Step 4 & 5: Persist New Scores & Ranks, and Build Response ---
+  const upsertPromises: Promise<any>[] = [];
   const lastCalculatedAt = new Date().toISOString();
-  const sortedRanks = [...(rankThresholdsData || [])]
-    .filter((r) => r.min_score !== null)
-    .sort((a, b) => (a.min_score as number) - (b.min_score as number));
 
-  const overallRankId = findRankId(
-    overallScore,
-    (rankThresholdsData || [])
-      .filter((r) => r.min_score !== null)
-      .map((r) => ({ id: r.id, min_score: r.min_score as number })),
-    sortedRanks as { id: number; min_score: number }[]
-  );
-  rankUpsertPromises.push(
+  const rankThresholdsSortedDesc = (allRankThresholds || [])
+    .filter((r) => r.min_score !== null)
+    .map((r) => ({ id: r.id, min_score: r.min_score as number }));
+  const rankThresholdsSortedAsc = [...rankThresholdsSortedDesc]
+    .sort((a, b) => a.min_score - b.min_score)
+    .map((r) => ({ rank_id: r.id, min_score: r.min_score as number }));
+
+  const findRank = (score: number) => {
+    for (const rank of rankThresholdsSortedDesc) {
+      if (score >= rank.min_score) return rank.id;
+    }
+    return rankThresholdsSortedAsc[0]?.rank_id || null;
+  };
+
+  const overallRankId = findRank(finalOverallScore);
+  upsertPromises.push(
     Promise.resolve(
       supabase.from("user_ranks").upsert(
         {
+          id: userId,
           user_id: userId,
-          strength_score: overallScore,
+          strength_score: finalOverallScore,
           rank_id: overallRankId,
           last_calculated_at: lastCalculatedAt,
         },
@@ -402,68 +264,32 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
     )
   );
 
-  for (const [groupId, score] of muscleGroupScores.entries()) {
-    const rankId = findRankId(
-      score,
-      (rankThresholdsData || [])
-        .filter((r) => r.min_score !== null)
-        .map((r) => ({ id: r.id, min_score: r.min_score as number })),
-      sortedRanks as { id: number; min_score: number }[]
-    );
-    rankUpsertPromises.push(
+  for (const [groupId, score] of finalMuscleGroupScores.entries()) {
+    upsertPromises.push(
       Promise.resolve(
         supabase.from("muscle_group_ranks").upsert(
           {
             user_id: userId,
             muscle_group_id: groupId,
             strength_score: score,
-            rank_id: rankId,
+            rank_id: findRank(score),
             last_calculated_at: lastCalculatedAt,
           },
-          {
-            onConflict: "user_id,muscle_group_id",
-          }
+          { onConflict: "user_id,muscle_group_id" }
         )
       )
     );
   }
-  for (const [muscleId, score] of individualMuscleScores.entries()) {
-    const rankId = findRankId(
-      score,
-      (rankThresholdsData || [])
-        .filter((r) => r.min_score !== null)
-        .map((r) => ({ id: r.id, min_score: r.min_score as number })),
-      sortedRanks as { id: number; min_score: number }[]
-    );
 
-    const oldRankData = oldMuscleRanksMap.get(muscleId);
-    const oldStrengthScore = oldRankData?.strength_score ?? null;
-    const oldRankId = oldRankData?.rank_id ?? null;
-    const rankChanged = rankId !== oldRankId;
-    const muscleInfo = musclesMap.get(muscleId);
-
-    if (score !== oldStrengthScore || rankChanged) {
-      results.muscleRankChanges.push({
-        muscle_id: muscleId,
-        muscle_name: muscleInfo?.name ?? "Unknown Muscle",
-        old_strength_score: oldStrengthScore,
-        new_strength_score: score,
-        old_rank_id: oldRankId,
-        old_rank_name: oldRankId ? ranksMap.get(oldRankId)?.rank_name ?? null : null,
-        new_rank_id: rankId,
-        new_rank_name: rankId ? ranksMap.get(rankId)?.rank_name ?? null : null,
-        rank_changed: rankChanged,
-      });
-    }
-
-    rankUpsertPromises.push(
+  for (const [muscleId, score] of finalIndividualMuscleScores.entries()) {
+    upsertPromises.push(
       Promise.resolve(
         supabase.from("muscle_ranks").upsert(
           {
             user_id: userId,
             muscle_id: muscleId,
             strength_score: score,
-            rank_id: rankId,
+            rank_id: findRank(score),
             last_calculated_at: lastCalculatedAt,
           },
           { onConflict: "user_id,muscle_id" }
@@ -471,31 +297,44 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
       )
     );
   }
-  await Promise.all(rankUpsertPromises);
 
-  // --- Step 6: Construct and Return the Final Response ---
-  const oldOverallScore = currentScoresData.data?.strength_score || 0;
-  const oldMuscleGroupScores = new Map(
-    currentMuscleGroupScores.data?.map((s) => [s.muscle_group_id, s.strength_score || 0]) || []
-  );
+  const settledPromises = await Promise.allSettled(upsertPromises);
 
-  const rankThresholdsSortedAsc = [...rankThresholdsSorted].sort((a, b) => a.min_score - b.min_score);
-
-  results.overall_user_rank_progression = buildRankProgression(
-    oldOverallScore,
-    overallScore,
-    rankThresholdsSortedAsc,
-    ranksMap
-  );
-  results.muscle_group_progressions = Array.from(muscleGroupScores.entries()).map(([groupId, newScore]) => {
-    const oldMGS = oldMuscleGroupScores.get(groupId) || 0;
-    return {
-      muscle_group_id: groupId,
-      muscle_group_name: muscleGroupsMap.get(groupId)?.name || "Unknown Group",
-      progression_details: buildRankProgression(oldMGS, newScore, rankThresholdsSortedAsc, ranksMap),
-    };
+  settledPromises.forEach((result, index) => {
+    if (result.status === "rejected") {
+      fastify.log.error(
+        { error: result.reason, promiseIndex: index },
+        `[RANK_SYSTEM_PEAK] Upsert promise at index ${index} was rejected.`
+      );
+    }
   });
 
-  fastify.log.info(`[RANK_SYSTEM_V2] Finished for user: ${userId}`);
+  const initialOverallScore = initialUserRank.data?.strength_score || 0;
+  const initialGroupScores = new Map(
+    initialMuscleGroupRanks.data?.map((r) => [r.muscle_group_id, r.strength_score || 0]) || []
+  );
+
+  const results: RankUpdateResults = {
+    exerciseRankUps: [],
+    muscleRankChanges: [],
+    overall_user_rank_progression: buildRankProgression(
+      initialOverallScore,
+      finalOverallScore,
+      rankThresholdsSortedAsc,
+      ranksMap
+    ),
+    muscle_group_progressions: Array.from(finalMuscleGroupScores.entries()).map(([groupId, newScore]) => ({
+      muscle_group_id: groupId,
+      muscle_group_name: muscleGroupsMap.get(groupId)?.name || "Unknown Group",
+      progression_details: buildRankProgression(
+        initialGroupScores.get(groupId) || 0,
+        newScore,
+        rankThresholdsSortedAsc,
+        ranksMap
+      ),
+    })),
+  };
+
+  fastify.log.info(`[RANK_SYSTEM_PEAK] Finished for user: ${userId}`);
   return results;
 }
