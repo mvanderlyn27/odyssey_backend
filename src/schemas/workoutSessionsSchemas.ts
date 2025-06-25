@@ -60,7 +60,7 @@ export const RankInfoSchema = Type.Object(
   {
     rank_id: Type.Union([Type.Number(), Type.Null()]),
     rank_name: Type.Union([Type.String(), Type.Null()]),
-    min_swr: Type.Optional(Type.Number()), // SWR required to achieve this rank
+    min_strength_score: Type.Optional(Type.Number()), // Strength score required to achieve this rank
   },
   { $id: "RankInfoSchema", description: "Basic information about a rank." }
 );
@@ -68,8 +68,8 @@ export type RankInfo = Static<typeof RankInfoSchema>;
 
 export const RankProgressionDetailsSchema = Type.Object(
   {
-    initial_swr: Type.Number(),
-    final_swr: Type.Number(),
+    initial_strength_score: Type.Number(),
+    final_strength_score: Type.Number(),
     percent_to_next_rank: Type.Number({
       minimum: 0,
       maximum: 1,
@@ -258,12 +258,12 @@ export const MuscleGroupRankUpSchema = Type.Object(
   {
     muscle_group_id: Type.String({ format: "uuid" }),
     muscle_group_name: Type.String(),
-    old_average_normalized_swr: Type.Union([Type.Number({ minimum: 0 }), Type.Null()], {
-      description: "User's total swr for this muscle group before this session's calculation.",
+    old_average_strength_score: Type.Union([Type.Number({ minimum: 0 }), Type.Null()], {
+      description: "User's total strength score for this muscle group before this session's calculation.",
     }),
-    new_average_normalized_swr: Type.Number({
+    new_average_strength_score: Type.Number({
       minimum: 0,
-      description: "User's total swr for this muscle group after this session's calculation.",
+      description: "User's total strength score for this muscle group after this session's calculation.",
     }),
     old_rank_id: Type.Union([Type.Number(), Type.Null()]),
     old_rank_name: Type.Union([Type.String(), Type.Null()]),
@@ -274,28 +274,28 @@ export const MuscleGroupRankUpSchema = Type.Object(
   { $id: "MuscleGroupRankUpSchema" }
 );
 
-export const MuscleSWRChangeSchema = Type.Object(
+export const MuscleStrengthScoreChangeSchema = Type.Object(
   {
     muscle_id: Type.String({ format: "uuid" }),
     muscle_name: Type.String(),
-    old_normalized_swr: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
-    new_normalized_swr: Type.Number({ minimum: 0 }),
-    old_rank_id: Type.Union([Type.Number(), Type.Null()]), // This rank is based on the SWR achieved for the muscle against muscle_rank_swr_benchmark
+    old_strength_score: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
+    new_strength_score: Type.Number({ minimum: 0 }),
+    old_rank_id: Type.Union([Type.Number(), Type.Null()]),
     old_rank_name: Type.Union([Type.String(), Type.Null()]),
-    new_rank_id: Type.Union([Type.Number(), Type.Null()]), // This rank is based on the SWR achieved for the muscle against muscle_rank_swr_benchmark
+    new_rank_id: Type.Union([Type.Number(), Type.Null()]),
     new_rank_name: Type.Union([Type.String(), Type.Null()]),
     rank_changed: Type.Boolean({
-      description: "True if new_rank_id (SWR-based muscle rank) is different from old_rank_id.",
+      description: "True if new_rank_id (strength score-based muscle rank) is different from old_rank_id.",
     }),
   },
-  { $id: "MuscleSWRChangeSchema" }
+  { $id: "MuscleStrengthScoreChangeSchema" }
 );
-export type MuscleSWRChange = Static<typeof MuscleSWRChangeSchema>;
+export type MuscleStrengthScoreChange = Static<typeof MuscleStrengthScoreChangeSchema>;
 
 export const OverallUserRankUpSchema = Type.Object(
   {
-    old_overall_swr: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
-    new_overall_swr: Type.Number({ minimum: 0 }),
+    old_overall_strength_score: Type.Union([Type.Number({ minimum: 0 }), Type.Null()]),
+    new_overall_strength_score: Type.Number({ minimum: 0 }),
     old_rank_id: Type.Union([Type.Number(), Type.Null()]),
     old_rank_name: Type.Union([Type.String(), Type.Null()]),
     new_rank_id: Type.Union([Type.Number(), Type.Null()]),

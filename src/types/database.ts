@@ -175,24 +175,24 @@ export type Database = {
       exercise_muscles: {
         Row: {
           created_at: string | null
-          exercise_coefficient: number
           exercise_id: string
+          exercise_muscle_weight: number | null
           id: string
           muscle_id: string
           muscle_intensity: Database["public"]["Enums"]["muscle_intensity"]
         }
         Insert: {
           created_at?: string | null
-          exercise_coefficient?: number
           exercise_id: string
+          exercise_muscle_weight?: number | null
           id?: string
           muscle_id: string
           muscle_intensity: Database["public"]["Enums"]["muscle_intensity"]
         }
         Update: {
           created_at?: string | null
-          exercise_coefficient?: number
           exercise_id?: string
+          exercise_muscle_weight?: number | null
           id?: string
           muscle_id?: string
           muscle_intensity?: Database["public"]["Enums"]["muscle_intensity"]
@@ -210,6 +210,35 @@ export type Database = {
             columns: ["muscle_id"]
             isOneToOne: false
             referencedRelation: "muscles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exercise_performance_benchmarks: {
+        Row: {
+          exercise_id: string
+          id: string
+          max_e1rm_ratio: number
+          sps_elite_value: number
+        }
+        Insert: {
+          exercise_id: string
+          id?: string
+          max_e1rm_ratio: number
+          sps_elite_value: number
+        }
+        Update: {
+          exercise_id?: string
+          id?: string
+          max_e1rm_ratio?: number
+          sps_elite_value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_performance_benchmarks_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
             referencedColumns: ["id"]
           },
         ]
@@ -399,32 +428,32 @@ export type Database = {
       }
       muscle_group_ranks: {
         Row: {
-          average_normalized_swr: number
           created_at: string
           id: string
           last_calculated_at: string | null
           muscle_group_id: string
           rank_id: number | null
+          strength_score: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
-          average_normalized_swr: number
           created_at?: string
           id?: string
           last_calculated_at?: string | null
           muscle_group_id: string
           rank_id?: number | null
+          strength_score?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
-          average_normalized_swr?: number
           created_at?: string
           id?: string
           last_calculated_at?: string | null
           muscle_group_id?: string
           rank_id?: number | null
+          strength_score?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -537,35 +566,32 @@ export type Database = {
       }
       muscle_ranks: {
         Row: {
-          contributing_session_set_id: string | null
           created_at: string
           id: string
           last_calculated_at: string | null
           muscle_id: string
-          normalized_swr: number | null
           rank_id: number | null
+          strength_score: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
-          contributing_session_set_id?: string | null
           created_at?: string
           id?: string
           last_calculated_at?: string | null
           muscle_id: string
-          normalized_swr?: number | null
           rank_id?: number | null
+          strength_score?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
-          contributing_session_set_id?: string | null
           created_at?: string
           id?: string
           last_calculated_at?: string | null
           muscle_id?: string
-          normalized_swr?: number | null
           rank_id?: number | null
+          strength_score?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -575,13 +601,6 @@ export type Database = {
             columns: ["muscle_id"]
             isOneToOne: false
             referencedRelation: "muscles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_muscle_ranks_contributing_session_set"
-            columns: ["contributing_session_set_id"]
-            isOneToOne: false
-            referencedRelation: "workout_session_sets"
             referencedColumns: ["id"]
           },
           {
@@ -681,20 +700,20 @@ export type Database = {
         Row: {
           description: string | null
           id: number
+          min_score: number | null
           rank_name: string
-          rank_weight: number
         }
         Insert: {
           description?: string | null
           id?: number
+          min_score?: number | null
           rank_name: string
-          rank_weight: number
         }
         Update: {
           description?: string | null
           id?: number
+          min_score?: number | null
           rank_name?: string
-          rank_weight?: number
         }
         Relationships: []
       }
@@ -798,23 +817,34 @@ export type Database = {
       user_feedback: {
         Row: {
           created_at: string
-          id: number
+          id: string
+          requested_response: boolean
           text: string
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string
-          id?: number
+          id?: string
+          requested_response?: boolean
           text: string
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string
-          id?: number
+          id?: string
+          requested_response?: boolean
           text?: string
-          user_id?: string | null
+          user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_feedback_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_muscle_last_worked: {
         Row: {
@@ -857,6 +887,41 @@ export type Database = {
             columns: ["workout_session_id"]
             isOneToOne: false
             referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_muscle_performance: {
+        Row: {
+          id: number
+          mcw_weight: number
+          muscle_id: string
+          pl_value: number
+          sps_score: number
+          user_id: string
+        }
+        Insert: {
+          id?: number
+          mcw_weight: number
+          muscle_id: string
+          pl_value: number
+          sps_score: number
+          user_id: string
+        }
+        Update: {
+          id?: number
+          mcw_weight?: number
+          muscle_id?: string
+          pl_value?: number
+          sps_score?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_muscle_performance_muscle_id_fkey"
+            columns: ["muscle_id"]
+            isOneToOne: false
+            referencedRelation: "muscles"
             referencedColumns: ["id"]
           },
         ]
@@ -931,8 +996,8 @@ export type Database = {
           created_at: string
           id: string
           last_calculated_at: string | null
-          overall_swr: number
           rank_id: number | null
+          strength_score: number | null
           updated_at: string
           user_id: string
         }
@@ -940,8 +1005,8 @@ export type Database = {
           created_at?: string
           id?: string
           last_calculated_at?: string | null
-          overall_swr: number
           rank_id?: number | null
+          strength_score?: number | null
           updated_at?: string
           user_id: string
         }
@@ -949,8 +1014,8 @@ export type Database = {
           created_at?: string
           id?: string
           last_calculated_at?: string | null
-          overall_swr?: number
           rank_id?: number | null
+          strength_score?: number | null
           updated_at?: string
           user_id?: string
         }

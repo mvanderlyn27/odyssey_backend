@@ -61,7 +61,7 @@ export class CacheService {
 
     const cacheJobs = [
       this.get("allRanks", async () => {
-        const { data, error } = await supabase.from("ranks").select("id, rank_name, rank_weight");
+        const { data, error } = await supabase.from("ranks").select("id, rank_name, min_score");
         if (error) throw error;
         return data || [];
       }),
@@ -73,7 +73,7 @@ export class CacheService {
       this.get("allExerciseMuscles", async () => {
         const { data, error } = await supabase
           .from("exercise_muscles")
-          .select("exercise_id, muscle_id, muscle_intensity, exercise_coefficient");
+          .select("exercise_id, muscle_id, muscle_intensity, exercise_muscle_weight");
         if (error) throw error;
         return data || [];
       }),
@@ -130,6 +130,11 @@ export class CacheService {
       }),
       this.get("exercise_benchmarks_female", async () => {
         const { data, error } = await supabase.from("exercise_rank_benchmarks").select("*").eq("gender", "female");
+        if (error) throw error;
+        return data || [];
+      }),
+      this.get("exercise_performance_benchmarks", async () => {
+        const { data, error } = await supabase.from("exercise_performance_benchmarks").select("*");
         if (error) throw error;
         return data || [];
       }),

@@ -16,12 +16,6 @@ import { InitialRankBodySchema } from "../../schemas/onboardSchemas"; // Correct
 async function onboardRoutes(fastify: FastifyInstance, options: FastifyPluginOptions): Promise<void> {
   // Renamed function
   // Add schema if not added globally
-  if (!fastify.getSchema("InitialRankBodySchema")) {
-    fastify.addSchema(InitialRankBodySchema);
-  }
-  if (!fastify.getSchema("ProfileSchema")) {
-    fastify.addSchema(ProfileSchema);
-  }
   // If ErrorResponseSchema is used and not global, it should be added too.
   // Example: if (!fastify.getSchema("ErrorResponseSchema")) { fastify.addSchema(ErrorResponseSchema); }
 

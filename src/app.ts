@@ -76,7 +76,7 @@ import {
 } from "./schemas/exercisesSchemas";
 // Onboarding
 // Removed PostOnboardingCompleteResponseSchema, OnboardingStep1BodySchema, OnboardingStep3BodySchema, OnboardingStep4BodySchema
-// InitialRankBodySchema is registered in the onboarding.routes.ts file itself.
+import { InitialRankBodySchema } from "./schemas/onboardSchemas";
 // Profile
 import { ProfileSchema, UpdateProfileBodySchema, GetProfileResponseSchema } from "./schemas/profileSchemas";
 // User Goals
@@ -120,7 +120,6 @@ import {
   WorkoutSessionSummaryResponseSchema,
   ListWorkoutSessionsSortByEnum,
   ListWorkoutSessionsPeriodEnum,
-  MuscleSWRChangeSchema,
   OverallUserRankUpSchema,
 } from "./schemas/workoutSessionsSchemas";
 
@@ -303,7 +302,6 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(WorkoutSessionSetSummarySchema);
   app.addSchema(WorkoutSessionExerciseSummarySchema);
   app.addSchema(WorkoutSessionSummaryResponseSchema);
-  app.addSchema(MuscleSWRChangeSchema); // This was from workoutSessionsSchemas
 
   // AI Coach Messages
   app.addSchema(PostChatBodySchema);
@@ -325,6 +323,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
 
   // Onboarding
   // Schemas like InitialRankBodySchema are registered within their respective route files if needed, or globally if shared.
+  app.addSchema(InitialRankBodySchema);
   // Removed app.addSchema for PostOnboardingCompleteResponseSchema, OnboardingStep1BodySchema, OnboardingStep3BodySchema, OnboardingStep4BodySchema
 
   // Profile

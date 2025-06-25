@@ -8,14 +8,7 @@ import {
   SessionStatus,
 } from "@/schemas/workoutSessionsSchemas";
 import { _gatherAndPrepareWorkoutData } from "./workout-sessions.data";
-import {
-  _updateUserExerciseAndMuscleGroupRanks,
-  RankUpdateResults,
-  ExerciseRankUpInfo,
-  MuscleRankChangeInfo,
-  MuscleGroupRankUpInfo,
-  OverallUserRankUpInfo,
-} from "./workout-sessions.ranking";
+import { _updateUserExerciseAndMuscleGroupRanks, RankUpdateResults } from "./workout-sessions.ranking";
 import {
   _updateWorkoutPlanProgression,
   PlanProgressionResults,
@@ -171,10 +164,7 @@ export const finishWorkoutSession = async (
           userId,
           userProfile.gender,
           userBodyweight,
-          persistedSessionSets,
-          exerciseDetailsMap,
-          exerciseMuscleMappings,
-          existingUserExercisePRs
+          persistedSessionSets
         );
       })(),
       // Step 6: Award XP

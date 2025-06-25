@@ -33,7 +33,9 @@ export const InitialRankBodySchema = Type.Object(
     rank_exercise_weight_kg: Type.Optional(
       Type.Number({ description: "Weight (in kg) used for the rank exercise", minimum: 0 })
     ),
-    exercise_swr: Type.Number({ description: "SWR calculated for the onboarding ranking exercise" }),
+    rank_exercise_strength_score: Type.Optional(
+      Type.Number({ description: "Strength score calculated for the onboarding ranking exercise" })
+    ),
   },
   {
     $id: "InitialRankBodySchema",
