@@ -4,6 +4,7 @@ import axios from "axios";
 import { Profile } from "../../schemas/profileSchemas";
 import config from "../../config";
 import { InitialRankBodySchema } from "../../schemas/onboardSchemas";
+import { _updateUserExerciseAndMuscleGroupRanks } from "../workout-sessions/workout-sessions.ranking";
 import { TablesInsert, TablesUpdate, Database, Tables, Enums } from "../../types/database";
 
 export type OnboardingData = Static<typeof InitialRankBodySchema>;
@@ -167,12 +168,12 @@ export const handleOnboarding = async (
 
         const setPayload: WorkoutSessionSetInsert = {
           workout_session_id: workoutSessionId as string,
-          exercise_id: data.selected_exercise_id,
+          exercise_id: data.selected_exercise_id as string,
           set_order: 1,
           actual_reps: data.rank_exercise_reps,
           actual_weight_kg: data.rank_exercise_weight_kg,
           performed_at: new Date().toISOString(),
-          calculated_swr: data.rank_exercise_strength_score,
+          calculated_swr: data.rank_exercise_strength_score ?? null,
         };
         const { data: setData, error: setsInsertError } = await supabase
           .from("workout_session_sets")
@@ -188,6 +189,51 @@ export const handleOnboarding = async (
         } else {
           createdSetId = setData.id;
           fastify.log.info(`Workout session set saved for session ${workoutSessionId}, set ID ${createdSetId}`);
+
+          const userGenderForRanking = data.gender ?? existingProfileData.gender;
+          const userBodyweight = data.weight ?? null;
+
+          if (
+            userGenderForRanking &&
+            userBodyweight &&
+            data.selected_exercise_id &&
+            data.rank_exercise_reps &&
+            data.rank_exercise_weight_kg
+          ) {
+            const setForRanking = {
+              id: createdSetId as string,
+              workout_session_id: workoutSessionId as string,
+              exercise_id: data.selected_exercise_id,
+              set_order: 1,
+              actual_reps: data.rank_exercise_reps,
+              actual_weight_kg: data.rank_exercise_weight_kg,
+              performed_at: setPayload.performed_at ?? "",
+              updated_at: new Date().toISOString(),
+              planned_min_reps: null,
+              planned_max_reps: null,
+              planned_weight_kg: null,
+              notes: null,
+              calculated_swr: data.rank_exercise_strength_score ?? null,
+              calculated_1rm: null,
+              is_warmup: false,
+              is_success: true,
+              rest_seconds_taken: null,
+            } as Tables<"workout_session_sets">;
+            const persistedSessionSets = [setForRanking];
+            fastify.log.info(`Starting peak contribution rank calculation for user ${userId}`);
+            try {
+              await _updateUserExerciseAndMuscleGroupRanks(
+                fastify,
+                userId,
+                userGenderForRanking as Enums<"gender">,
+                userBodyweight,
+                persistedSessionSets
+              );
+              fastify.log.info(`Peak contribution rank calculation completed for user ${userId}`);
+            } catch (rankingError: any) {
+              fastify.log.error({ error: rankingError, userId }, "Error during peak contribution ranking calculation.");
+            }
+          }
 
           if (data.selected_exercise_id && workoutSessionId) {
             const { data: primaryMuscles, error: primaryMusclesError } = await supabase
@@ -234,22 +280,6 @@ export const handleOnboarding = async (
       }
     }
 
-    if (data.muscle_id) {
-      const muscleRankPayload: MuscleRankInsert = {
-        user_id: userId,
-        muscle_id: data.muscle_id,
-        rank_id: data.calculated_rank_id ?? null,
-        strength_score: data.rank_exercise_strength_score,
-        last_calculated_at: new Date().toISOString(),
-      };
-      const { error: rankInsertError } = await supabase.from("muscle_ranks").insert(muscleRankPayload);
-      if (rankInsertError) {
-        fastify.log.error({ error: rankInsertError, userId, payload: muscleRankPayload }, "Error saving muscle rank");
-      } else {
-        fastify.log.info(`Muscle rank saved for user ${userId}, muscle ${data.muscle_id}`);
-      }
-    }
-
     if (
       data.selected_exercise_id &&
       data.rank_exercise_reps &&
@@ -277,170 +307,6 @@ export const handleOnboarding = async (
           fastify.log.info(`User exercise PR saved for user ${userId}, exercise ${data.selected_exercise_id}`);
         }
       }
-    }
-
-    const userGenderForRanking = data.gender ?? existingProfileData.gender;
-
-    if (
-      data.muscle_id &&
-      userGenderForRanking &&
-      data.rank_exercise_strength_score !== undefined &&
-      data.rank_exercise_strength_score !== null
-    ) {
-      fastify.log.info(
-        `Starting simplified rank calculation for user ${userId}, muscle ${data.muscle_id}, strength_score ${data.rank_exercise_strength_score}`
-      );
-      try {
-        const { data: muscleData, error: muscleError } = await supabase
-          .from("muscles")
-          .select("muscle_group_id, name, muscle_group_weight")
-          .eq("id", data.muscle_id)
-          .single();
-
-        if (muscleError || !muscleData) {
-          fastify.log.warn(
-            { error: muscleError, muscleId: data.muscle_id },
-            "Could not fetch muscle details for ranking during onboarding."
-          );
-        } else if (muscleData.muscle_group_weight === null || muscleData.muscle_group_weight === undefined) {
-          fastify.log.warn(
-            { muscleId: data.muscle_id, muscleName: muscleData.name },
-            "Muscle group weight is null or undefined for the selected muscle. Skipping ranking."
-          );
-        } else {
-          const muscleGroupIdForRanking = muscleData.muscle_group_id;
-          const muscleGroupWeight = muscleData.muscle_group_weight;
-          fastify.log.info(
-            `Muscle ${muscleData.name} (group ${muscleGroupIdForRanking}) has muscle_group_weight: ${muscleGroupWeight}`
-          );
-
-          const muscleGroupSpecificScore = data.rank_exercise_strength_score * muscleGroupWeight;
-          fastify.log.info(
-            `Calculated muscle_group_specific_score for group ${muscleGroupIdForRanking}: ${data.rank_exercise_strength_score} * ${muscleGroupWeight} = ${muscleGroupSpecificScore}`
-          );
-
-          const { data: groupBenchmarks, error: groupBenchError } = await supabase
-            .from("ranks")
-            .select("id, min_score")
-            .not("min_score", "is", null)
-            .order("min_score", { ascending: false });
-
-          let newMuscleGroupRankId: number | null = null;
-          if (groupBenchError) {
-            fastify.log.error(
-              { error: groupBenchError, muscleGroupId: muscleGroupIdForRanking },
-              "Error fetching muscle group benchmarks."
-            );
-          } else if (groupBenchmarks) {
-            for (const benchmark of groupBenchmarks) {
-              if (muscleGroupSpecificScore >= benchmark.min_score) {
-                newMuscleGroupRankId = benchmark.id;
-                break;
-              }
-            }
-          }
-          fastify.log.info(
-            `Determined muscle group rank_id ${newMuscleGroupRankId} for score ${muscleGroupSpecificScore}`
-          );
-
-          const muscleGroupRankPayload: TablesInsert<"muscle_group_ranks"> = {
-            user_id: userId,
-            muscle_group_id: muscleGroupIdForRanking,
-            strength_score: muscleGroupSpecificScore,
-            rank_id: newMuscleGroupRankId,
-            last_calculated_at: new Date().toISOString(),
-          };
-          const { error: mgRankUpsertError } = await supabase
-            .from("muscle_group_ranks")
-            .upsert(muscleGroupRankPayload, { onConflict: "user_id,muscle_group_id" });
-
-          if (mgRankUpsertError) {
-            fastify.log.error(
-              { error: mgRankUpsertError, payload: muscleGroupRankPayload },
-              "Error upserting muscle group rank."
-            );
-          } else {
-            fastify.log.info(
-              `Muscle group rank upserted for group ${muscleGroupIdForRanking} with score ${muscleGroupSpecificScore}`
-            );
-
-            const { data: muscleGroupDetails, error: mgDetailsError } = await supabase
-              .from("muscle_groups")
-              .select("id, overall_weight")
-              .eq("id", muscleGroupIdForRanking)
-              .single();
-
-            if (mgDetailsError || !muscleGroupDetails) {
-              fastify.log.warn(
-                { error: mgDetailsError, muscleGroupId: muscleGroupIdForRanking },
-                "Could not fetch muscle group details (overall_weight) for overall ranking."
-              );
-            } else if (muscleGroupDetails.overall_weight === null || muscleGroupDetails.overall_weight === undefined) {
-              fastify.log.warn(
-                { muscleGroupId: muscleGroupIdForRanking },
-                "Overall weight is null or undefined for the muscle group. Skipping overall user rank calculation."
-              );
-            } else {
-              const overallWeight = muscleGroupDetails.overall_weight;
-              const overallUserRankScore = muscleGroupSpecificScore * overallWeight;
-              fastify.log.info(
-                `Calculated overall_user_rank_score: ${muscleGroupSpecificScore} * ${overallWeight} = ${overallUserRankScore}`
-              );
-
-              const { data: overallBenchmarks, error: overallBenchError } = await supabase
-                .from("ranks")
-                .select("id, min_score")
-                .not("min_score", "is", null)
-                .order("min_score", { ascending: false });
-
-              let newOverallRankId: number | null = null;
-              if (overallBenchError) {
-                fastify.log.error({ error: overallBenchError }, "Error fetching overall rank benchmarks.");
-              } else if (overallBenchmarks) {
-                for (const benchmark of overallBenchmarks) {
-                  if (benchmark.min_score !== null && overallUserRankScore >= benchmark.min_score) {
-                    newOverallRankId = benchmark.id;
-                    break;
-                  }
-                }
-              }
-              fastify.log.info(`Determined overall user rank_id ${newOverallRankId} for score ${overallUserRankScore}`);
-
-              const userRankPayload: TablesInsert<"user_ranks"> = {
-                id: userId,
-                user_id: userId,
-                strength_score: overallUserRankScore,
-                rank_id: newOverallRankId,
-                last_calculated_at: new Date().toISOString(),
-              };
-              const { error: userRankUpsertError } = await supabase
-                .from("user_ranks")
-                .upsert(userRankPayload, { onConflict: "user_id" });
-
-              if (userRankUpsertError) {
-                fastify.log.error(
-                  { error: userRankUpsertError, payload: userRankPayload },
-                  "Error upserting user overall rank."
-                );
-              } else {
-                fastify.log.info(`User overall rank upserted with score ${overallUserRankScore}`);
-              }
-            }
-          }
-        }
-      } catch (rankingError: any) {
-        fastify.log.error({ error: rankingError, userId }, "Error during simplified onboarding ranking calculations.");
-      }
-    } else {
-      fastify.log.warn(
-        {
-          userId,
-          muscleId: data.muscle_id,
-          userGenderForRanking,
-          exerciseSwr: data.rank_exercise_strength_score,
-        },
-        "Skipping simplified rank calculation due to missing data (muscle_id, gender, or rank_exercise_strength_score)."
-      );
     }
 
     const activeWorkoutPlanPayload: ActiveWorkoutPlanInsert = {
