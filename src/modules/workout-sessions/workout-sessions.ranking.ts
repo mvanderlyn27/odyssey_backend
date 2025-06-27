@@ -255,7 +255,8 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
 
   const rankThresholdsSortedDesc = (allRankThresholds || [])
     .filter((r) => r.min_score !== null)
-    .map((r) => ({ id: r.id, min_score: r.min_score as number }));
+    .map((r) => ({ id: r.id, min_score: r.min_score as number }))
+    .sort((a, b) => b.min_score - a.min_score); // Ensure descending order
   const rankThresholdsSortedAsc = [...rankThresholdsSortedDesc]
     .sort((a, b) => a.min_score - b.min_score)
     .map((r) => ({ rank_id: r.id, min_score: r.min_score as number }));
@@ -270,12 +271,16 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   // Upsert Ranks
   upsertPromises.push(
     Promise.resolve(
-      supabase
-        .from("user_ranks")
-        .upsert(
-          { id: userId, user_id: userId, strength_score: finalOverallScore, rank_id: findRank(finalOverallScore) },
-          { onConflict: "user_id" }
-        )
+      supabase.from("user_ranks").upsert(
+        {
+          id: userId,
+          user_id: userId,
+          strength_score: finalOverallScore,
+          rank_id: findRank(finalOverallScore),
+          last_calculated_at: new Date().toISOString(),
+        },
+        { onConflict: "user_id" }
+      )
     )
   );
 
@@ -283,12 +288,16 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   for (const [groupId, score] of finalMuscleGroupScores.entries()) {
     upsertPromises.push(
       Promise.resolve(
-        supabase
-          .from("muscle_group_ranks")
-          .upsert(
-            { user_id: userId, muscle_group_id: groupId, strength_score: score, rank_id: findRank(score) },
-            { onConflict: "user_id,muscle_group_id" }
-          )
+        supabase.from("muscle_group_ranks").upsert(
+          {
+            user_id: userId,
+            muscle_group_id: groupId,
+            strength_score: score,
+            rank_id: findRank(score),
+            last_calculated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,muscle_group_id" }
+        )
       )
     );
   }
@@ -297,12 +306,16 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   for (const [muscleId, score] of finalIndividualMuscleScores.entries()) {
     upsertPromises.push(
       Promise.resolve(
-        supabase
-          .from("muscle_ranks")
-          .upsert(
-            { user_id: userId, muscle_id: muscleId, strength_score: score, rank_id: findRank(score) },
-            { onConflict: "user_id,muscle_id" }
-          )
+        supabase.from("muscle_ranks").upsert(
+          {
+            user_id: userId,
+            muscle_id: muscleId,
+            strength_score: score,
+            rank_id: findRank(score),
+            last_calculated_at: new Date().toISOString(),
+          },
+          { onConflict: "user_id,muscle_id" }
+        )
       )
     );
   }

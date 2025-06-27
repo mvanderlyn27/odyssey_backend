@@ -17,6 +17,7 @@ import {
 import { _awardXpAndLevel } from "./workout-sessions.xp";
 import { _updateActiveWorkoutPlanLastCompletedDay } from "./workout-sessions.activePlan";
 import { _updateUserMuscleLastWorked } from "./workout-sessions.lastWorked";
+import { _updateUserExercisePRs } from "./workout-sessions.prs";
 
 // Comments for types/constants moved or no longer used have been removed.
 
@@ -139,6 +140,7 @@ export const finishWorkoutSession = async (
       xpLevelResult,
       _muscleLastWorkedResult, // Result not directly used in response, but we await completion
       _activePlanUpdateResult, // Result not directly used in response, but we await completion
+      _prsUpdateResult, // Result not directly used in response, but we await completion
       previousSessionDataResult,
     ] = await Promise.all([
       // Step 3: Update Workout Plan Progression
@@ -179,6 +181,8 @@ export const finishWorkoutSession = async (
         newlyCreatedOrFetchedSession.workout_plan_id,
         newlyCreatedOrFetchedSession.workout_plan_day_id
       ),
+      // Step 8: Update User Exercise PRs
+      _updateUserExercisePRs(fastify, userId, persistedSessionSets, existingUserExercisePRs),
       // Fetch Previous Session Data for Deltas
       (() => {
         if (newlyCreatedOrFetchedSession.workout_plan_day_id) {

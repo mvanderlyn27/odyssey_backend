@@ -5,6 +5,8 @@ import { Profile } from "../../schemas/profileSchemas";
 import config from "../../config";
 import { InitialRankBodySchema } from "../../schemas/onboardSchemas";
 import { _updateUserExerciseAndMuscleGroupRanks } from "../workout-sessions/workout-sessions.ranking";
+import { _updateUserExercisePRs } from "../workout-sessions/workout-sessions.prs";
+import { calculate_1RM, calculate_SWR } from "../workout-sessions/workout-sessions.helpers";
 import { TablesInsert, TablesUpdate, Database, Tables, Enums } from "../../types/database";
 
 export type OnboardingData = Static<typeof InitialRankBodySchema>;
@@ -19,13 +21,14 @@ type UserMuscleLastWorkedInsert = TablesInsert<"user_muscle_last_worked">;
 type ActiveWorkoutPlanInsert = TablesInsert<"active_workout_plans">;
 type ActiveWorkoutSessionInsert = TablesInsert<"active_workout_sessions">;
 
-function calculateEstimated1RM(weightKg: number, reps: number): number {
-  if (reps === 1) {
-    return weightKg;
-  }
-  if (reps <= 0 || weightKg <= 0) return 0;
-  return weightKg * (1 + reps / 30);
-}
+// This function is now imported from helpers
+// function calculateEstimated1RM(weightKg: number, reps: number): number {
+//   if (reps === 1) {
+//     return weightKg;
+//   }
+//   if (reps <= 0 || weightKg <= 0) return 0;
+//   return weightKg * (1 + reps / 30);
+// }
 
 function mapUnitsToWeightPreference(
   units: "kg" | "lbs" | undefined | null
@@ -166,6 +169,10 @@ export const handleOnboarding = async (
         workoutSessionId = sessionData.id;
         fastify.log.info(`Workout session created for onboarding rank, user ${userId}, session ID ${workoutSessionId}`);
 
+        // Calculate 1RM and SWR consistently
+        const calculated_1rm = calculate_1RM(data.rank_exercise_weight_kg, data.rank_exercise_reps);
+        const calculated_swr = calculate_SWR(calculated_1rm, data.weight ?? null);
+
         const setPayload: WorkoutSessionSetInsert = {
           workout_session_id: workoutSessionId as string,
           exercise_id: data.selected_exercise_id as string,
@@ -173,7 +180,8 @@ export const handleOnboarding = async (
           actual_reps: data.rank_exercise_reps,
           actual_weight_kg: data.rank_exercise_weight_kg,
           performed_at: new Date().toISOString(),
-          calculated_swr: data.rank_exercise_strength_score ?? null,
+          calculated_1rm: calculated_1rm,
+          calculated_swr: calculated_swr,
         };
         const { data: setData, error: setsInsertError } = await supabase
           .from("workout_session_sets")
@@ -213,8 +221,8 @@ export const handleOnboarding = async (
               planned_max_reps: null,
               planned_weight_kg: null,
               notes: null,
-              calculated_swr: data.rank_exercise_strength_score ?? null,
-              calculated_1rm: null,
+              calculated_swr: setPayload.calculated_swr, // Use the correctly calculated value
+              calculated_1rm: setPayload.calculated_1rm, // Use the correctly calculated value
               is_warmup: false,
               is_success: true,
               rest_seconds_taken: null,
@@ -233,78 +241,17 @@ export const handleOnboarding = async (
             } catch (rankingError: any) {
               fastify.log.error({ error: rankingError, userId }, "Error during peak contribution ranking calculation.");
             }
+
+            // Also update the PR for this first set
+            try {
+              // For a new user, the existing PRs map is empty.
+              const existingUserExercisePRs = new Map();
+              await _updateUserExercisePRs(fastify, userId, persistedSessionSets, existingUserExercisePRs);
+              fastify.log.info(`Initial exercise PR calculation completed for user ${userId}`);
+            } catch (prError: any) {
+              fastify.log.error({ error: prError, userId }, "Error during initial exercise PR calculation.");
+            }
           }
-
-          // if (data.selected_exercise_id && workoutSessionId) {
-          //   const { data: primaryMuscles, error: primaryMusclesError } = await supabase
-          //     .from("exercise_muscles")
-          //     .select("muscle_id")
-          //     .eq("exercise_id", data.selected_exercise_id)
-          //     .eq("muscle_intensity", "primary");
-
-          //   if (primaryMusclesError) {
-          //     fastify.log.error(
-          //       { error: primaryMusclesError, exerciseId: data.selected_exercise_id },
-          //       "Error fetching primary muscles for exercise for user_muscle_last_worked."
-          //     );
-          //   } else if (primaryMuscles && primaryMuscles.length > 0) {
-          //     const lastWorkedPayloads: UserMuscleLastWorkedInsert[] = primaryMuscles.map((pm) => ({
-          //       user_id: userId,
-          //       muscle_id: pm.muscle_id,
-          //       workout_session_id: workoutSessionId as string,
-          //       last_worked_date: new Date().toISOString(),
-          //     }));
-
-          //     const { error: lastWorkedError } = await supabase
-          //       .from("user_muscle_last_worked")
-          //       .upsert(lastWorkedPayloads, { onConflict: "user_id,muscle_id" });
-
-          //     if (lastWorkedError) {
-          //       fastify.log.error(
-          //         { error: lastWorkedError, userId, exerciseId: data.selected_exercise_id },
-          //         "Error upserting user_muscle_last_worked records."
-          //       );
-          //     } else {
-          //       fastify.log.info(
-          //         `User muscle last worked records upserted for user ${userId}, exercise ${data.selected_exercise_id}`
-          //       );
-          //     }
-          //   } else {
-          //     fastify.log.info(
-          //       { exerciseId: data.selected_exercise_id },
-          //       "No primary muscles found for the exercise to update user_muscle_last_worked."
-          //     );
-          //   }
-          // }
-        }
-      }
-    }
-
-    if (
-      data.selected_exercise_id &&
-      data.rank_exercise_reps &&
-      data.rank_exercise_reps > 0 &&
-      data.rank_exercise_weight_kg !== undefined &&
-      data.rank_exercise_weight_kg !== null
-    ) {
-      const estimated1RM = calculateEstimated1RM(data.rank_exercise_weight_kg, data.rank_exercise_reps);
-      if (estimated1RM > 0) {
-        const userExercisePrPayload: UserExercisePrInsert = {
-          user_id: userId,
-          exercise_id: data.selected_exercise_id,
-          best_1rm: estimated1RM,
-          achieved_at: new Date().toISOString(),
-          source_set_id: createdSetId,
-        };
-
-        const { error: prInsertError } = await supabase.from("user_exercise_prs").insert(userExercisePrPayload);
-        if (prInsertError) {
-          fastify.log.warn(
-            { error: prInsertError, userId, exerciseId: data.selected_exercise_id, payload: userExercisePrPayload },
-            "Error saving user exercise PR"
-          );
-        } else {
-          fastify.log.info(`User exercise PR saved for user ${userId}, exercise ${data.selected_exercise_id}`);
         }
       }
     }
