@@ -149,20 +149,15 @@ export const finishWorkoutSession = async (
       ),
       // Step 4: Update User Exercise and Muscle Group Ranks
       (() => {
+        // Assume 'male' for ranking if gender is not specified.
+        const genderForRanking = userProfile.gender || "male";
         if (!userProfile.gender) {
-          fastify.log.warn({ userId }, "User gender is null. Skipping rank updates and returning default structure.");
-          // Return structure matching RankUpdateResults with undefined progression fields
-          return Promise.resolve<RankUpdateResults>({
-            exerciseRankUps: [],
-            muscleRankChanges: [],
-            overall_user_rank_progression: undefined,
-            muscle_group_progressions: [],
-          });
+          fastify.log.warn({ userId }, "User gender is not specified. Defaulting to 'male' for ranking calculations.");
         }
         return _updateUserExerciseAndMuscleGroupRanks(
           fastify,
           userId,
-          userProfile.gender,
+          genderForRanking,
           userBodyweight,
           persistedSessionSets
         );
