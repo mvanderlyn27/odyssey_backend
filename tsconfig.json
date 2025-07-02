@@ -20,5 +20,5 @@
     ]
   },
   "include": ["index.ts", "src/**/*.ts"],
-  "exclude": ["node_modules", "tests", "build", "cloudrun_template"]
+  "exclude": ["node_modules", "tests", "build", "cloudrun_template", "src/**/*.test.ts"]
 }
