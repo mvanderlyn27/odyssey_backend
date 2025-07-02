@@ -1,22 +1,21 @@
-name: Deploy to Cloud Run
+name: Build and Deploy to Cloud Run
 
 on:
   push:
-    branches: [main] # Trigger only on pushes to the main branch
-  workflow_dispatch: # Allows manual triggering from the Actions tab
+    branches:
+      - main # Trigger for production deployments
+      - staging # Trigger for staging deployments
+  workflow_dispatch: # Allows manual triggering
 
 env:
-  GCP_PROJECT_ID: aura-fitness-457121
-  GCP_SA_EMAIL: aura-github@aura-fitness-457121.iam.gserviceaccount.com
-  WIF_PROVIDER: projects/113655940311/locations/global/workloadIdentityPools/aura-github-pool/providers/aura-provider
-  ARTIFACT_REGISTRY_REGION: us-central1
-  ARTIFACT_REGISTRY_REPO: aura-backend
-  CLOUD_RUN_SERVICE: aura-backend-service
-  CLOUD_RUN_REGION: us-central1
-  IMAGE_NAME: aura-backend
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GCP_REGION: ${{ secrets.GCP_REGION }} # e.g., us-central1
+  GCP_ARTIFACT_REGISTRY_REPO_NAME: ${{ secrets.GCP_ARTIFACT_REGISTRY_REPO_NAME }} # e.g., odyssey-backend-images
+  IMAGE_NAME_BASE: ${{ secrets.GCP_REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ secrets.GCP_ARTIFACT_REGISTRY_REPO_NAME }}/odyssey-backend
 
 jobs:
-  build-and-deploy:
+  build_and_push_image:
+    name: Build and Push Docker Image
     runs-on: ubuntu-latest
     permissions:
       contents: "read"
@@ -27,52 +26,94 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud
-        id: auth
         uses: google-github-actions/auth@v2
         with:
-          workload_identity_provider: ${{ env.WIF_PROVIDER }}
-          service_account: ${{ env.GCP_SA_EMAIL }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }} # e.g., projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }} # e.g., github-actions-deployer@aura-fitness-457121.iam.gserviceaccount.com
+          # Fallback to SA Key if WIF is not set up (less secure)
+          # create_credentials_file: true
+          # credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
-      # Configure Docker to use gcloud credential helper for Artifact Registry
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - name: Build Docker image
+        run: docker build -t "${{ env.IMAGE_NAME_BASE }}:${{ github.sha }}" .
+
+      - name: Push Docker image to Artifact Registry
+        run: docker push "${{ env.IMAGE_NAME_BASE }}:${{ github.sha }}"
+
+  deploy_staging:
+    name: Deploy to Staging Cloud Run
+    needs: build_and_push_image
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/staging'
+    permissions:
+      contents: "read"
+      id-token: "write"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4 # Though not strictly needed for deploy if image is already built
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          context: .
-          push: true
-          tags: ${{ env.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+          # create_credentials_file: true
+          # credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Deploy to Cloud Run
-        id: deploy
-        uses: google-github-actions/deploy-cloudrun@v2
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Staging Cloud Run
+        run: |
+          gcloud run deploy ${{ secrets.CLOUD_RUN_SERVICE_STAGING }} \
+            --image "${{ env.IMAGE_NAME_BASE }}:${{ github.sha }}" \
+            --region "${{ env.GCP_REGION }}" \
+            --platform managed \
+            --project "${{ env.GCP_PROJECT_ID }}" \
+            --allow-unauthenticated \
+            --set-env-vars="NODE_ENV=production,SUPABASE_URL=${{ secrets.STAGING_SUPABASE_URL }},SUPABASE_SERVICE_ROLE_KEY=${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }},GEMINI_API_KEY=${{ secrets.STAGING_GEMINI_API_KEY }}" \
+            `# Add other staging-specific env vars here, comma-separated` \
+            --quiet
+
+  deploy_production:
+    name: Deploy to Production Cloud Run
+    needs: build_and_push_image
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: "read"
+      id-token: "write"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
         with:
-          service: ${{ env.CLOUD_RUN_SERVICE }}
-          region: ${{ env.CLOUD_RUN_REGION }}
-          image: ${{ env.ARTIFACT_REGISTRY_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          # Optional: Set environment variables for Cloud Run service if needed
-          # env_vars: |
-          # Set environment variables using GitHub Actions secrets
-          env_vars: |
-            SUPABASE_URL=${{ secrets.SUPABASE_URL }}
-            SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
-            GEMINI_MODEL_NAME=${{ vars.GEMINI_MODEL_NAME }}
-            GEMINI_VISION_MODEL_NAME=${{ vars.GEMINI_VISION_MODEL_NAME }}
-            LOOPS_API_KEY=${{ secrets.LOOPS_API_KEY }}
-            POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }}
-            POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT_EMAIL }}
+          # create_credentials_file: true
+          # credentials_json: ${{ secrets.GCP_SA_KEY }}
 
-          # Optional: Set secrets for Cloud Run service if needed (using Google Secret Manager)
-          # secrets: |
-          #   SECRET_NAME=projects/${{ env.GCP_PROJECT_ID }}/secrets/YOUR_SECRET_NAME:latest
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
 
-      # Optional: Output the deployed service URL
-      - name: Show Deployed URL
-        run: echo "Deployed to ${{ steps.deploy.outputs.url }}"
+      - name: Deploy to Production Cloud Run
+        run: |
+          gcloud run deploy ${{ secrets.CLOUD_RUN_SERVICE_PROD }} \
+            --image "${{ env.IMAGE_NAME_BASE }}:${{ github.sha }}" \
+            --region "${{ env.GCP_REGION }}" \
+            --platform managed \
+            --project "${{ env.GCP_PROJECT_ID }}" \
+            --allow-unauthenticated \
+            --set-env-vars="NODE_ENV=production,SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }},SUPABASE_SERVICE_ROLE_KEY=${{ secrets.PROD_SUPABASE_SERVICE_ROLE_KEY }},GEMINI_API_KEY=${{ secrets.PROD_GEMINI_API_KEY }}" \
+            `# Add other production-specific env vars here, comma-separated` \
+            --quiet

@@ -39,3 +39,4 @@ coverage/
 *.sln
 *.sw?
 .tap
+scripts/gcp/github-actions-key.json
