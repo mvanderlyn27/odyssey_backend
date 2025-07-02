@@ -3,8 +3,11 @@ name: Build and Deploy to Cloud Run
 on:
   push:
     branches:
-      - main # Trigger for production deployments
       - staging # Trigger for staging deployments
+  pull_request:
+    types: [closed]
+    branches:
+      - main # Trigger for production deployments on merge
   workflow_dispatch: # Allows manual triggering
 
 env:
@@ -86,9 +89,9 @@ jobs:
     name: Deploy to Production Cloud Run
     needs: build_and_push_image
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == 'main'
     permissions:
-      contents: "read"
+      contents: "write" # Needed to update staging branch
       id-token: "write"
 
     steps:
@@ -117,3 +120,24 @@ jobs:
             --set-env-vars="NODE_ENV=production,SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }},SUPABASE_SERVICE_ROLE_KEY=${{ secrets.PROD_SUPABASE_SERVICE_ROLE_KEY }},GEMINI_API_KEY=${{ secrets.PROD_GEMINI_API_KEY }},GEMINI_MODEL_NAME=${{ vars.PROD_GEMINI_MODEL_NAME }},GEMINI_VISION_MODEL_NAME=${{ vars.PROD_GEMINI_VISION_MODEL_NAME }},LOOPS_API_KEY=${{ secrets.LOOPS_API_KEY }},POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }},POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}" \
             `# Add other production-specific env vars here, comma-separated` \
             --quiet
+
+  update_staging_branch:
+    name: Update Staging Branch
+    needs: deploy_production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch all history for all branches
+
+      - name: Configure Git
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "github-actions@github.com"
+
+      - name: Update staging from main
+        run: |
+          git push origin --delete staging || echo "Staging branch did not exist"
+          git checkout -b staging main
+          git push origin staging

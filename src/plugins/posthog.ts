@@ -9,12 +9,21 @@ import config from "../config";
  * @see https://posthog.com/docs/libraries/node
  */
 async function posthogPlugin(fastify: FastifyInstance) {
-  const { posthogApiKey, posthogHost } = config;
+  const { posthogApiKey, posthogHost, nodeEnv } = config;
+
+  if (nodeEnv === "development") {
+    fastify.log.info("Skipping PostHog initialization in development environment.");
+    return;
+  }
 
   if (posthogApiKey && posthogHost) {
     const posthog = new PostHog(posthogApiKey, {
       host: posthogHost,
     });
+
+    if (nodeEnv === "staging") {
+      posthog.register({ environment_tag: "test" });
+    }
     fastify.decorate("posthog", posthog);
 
     fastify.addHook("onClose", (instance, done) => {
