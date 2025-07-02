@@ -50,7 +50,7 @@ export async function _updateActiveWorkoutPlanLastCompletedDay(
 
     if (updateError) {
       fastify.log.error(
-        { userId, sessionPlanId, sessionPlanDayId, error: updateError, updatePayload },
+        { err: updateError, userId, sessionPlanId, sessionPlanDayId },
         "[FINISH_SESSION_STEP_9_UPDATE_ACTIVE_PLAN] Failed to update last_completed_day_id in active_workout_plans."
       );
     } else {

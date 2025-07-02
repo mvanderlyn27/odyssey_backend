@@ -23,9 +23,4 @@ jobs:
         run: npm install # Use npm to install dependencies
 
       - name: Run tests
-        # Run tap via npx. The runner will automatically fail the step on non-zero exit codes.
-        run: npm test > results.tap
-      - name: Summarize TAP results
-        uses: pcolby/tap-summary@v1
-        with:
-          path: results.tap
+        run: npm test
