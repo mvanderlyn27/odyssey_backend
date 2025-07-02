@@ -78,7 +78,7 @@ jobs:
             --platform managed \
             --project "${{ env.GCP_PROJECT_ID }}" \
             --allow-unauthenticated \
-            --set-env-vars="NODE_ENV=production,SUPABASE_URL=${{ secrets.STAGING_SUPABASE_URL }},SUPABASE_SERVICE_ROLE_KEY=${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }},GEMINI_API_KEY=${{ secrets.STAGING_GEMINI_API_KEY }}" \
+            --set-env-vars="NODE_ENV=production,SUPABASE_URL=${{ secrets.STAGING_SUPABASE_URL }},SUPABASE_SERVICE_ROLE_KEY=${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }},GEMINI_API_KEY=${{ secrets.STAGING_GEMINI_API_KEY }},GEMINI_MODEL_NAME=${{ vars.STAGING_GEMINI_MODEL_NAME }},GEMINI_VISION_MODEL_NAME=${{ vars.STAGING_GEMINI_VISION_MODEL_NAME }},LOOPS_API_KEY=${{ secrets.LOOPS_API_KEY }},POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }},POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}" \
             `# Add other staging-specific env vars here, comma-separated` \
             --quiet
 
@@ -114,6 +114,6 @@ jobs:
             --platform managed \
             --project "${{ env.GCP_PROJECT_ID }}" \
             --allow-unauthenticated \
-            --set-env-vars="NODE_ENV=production,SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }},SUPABASE_SERVICE_ROLE_KEY=${{ secrets.PROD_SUPABASE_SERVICE_ROLE_KEY }},GEMINI_API_KEY=${{ secrets.PROD_GEMINI_API_KEY }}" \
+            --set-env-vars="NODE_ENV=production,SUPABASE_URL=${{ secrets.PROD_SUPABASE_URL }},SUPABASE_SERVICE_ROLE_KEY=${{ secrets.PROD_SUPABASE_SERVICE_ROLE_KEY }},GEMINI_API_KEY=${{ secrets.PROD_GEMINI_API_KEY }},GEMINI_MODEL_NAME=${{ vars.PROD_GEMINI_MODEL_NAME }},GEMINI_VISION_MODEL_NAME=${{ vars.PROD_GEMINI_VISION_MODEL_NAME }},LOOPS_API_KEY=${{ secrets.LOOPS_API_KEY }},POSTHOG_API_KEY=${{ secrets.POSTHOG_API_KEY }},POSTHOG_HOST=${{ secrets.POSTHOG_HOST }}" \
             `# Add other production-specific env vars here, comma-separated` \
             --quiet
