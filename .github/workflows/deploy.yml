@@ -125,6 +125,8 @@ jobs:
     name: Update Staging Branch
     needs: deploy_production
     runs-on: ubuntu-latest
+    permissions:
+      contents: "write"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -133,8 +135,8 @@ jobs:
 
       - name: Configure Git
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "github-actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Update staging from main
         run: |
