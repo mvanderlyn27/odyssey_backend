@@ -14,6 +14,7 @@ interface Config {
   loopsApiKey: string;
   posthogApiKey: string;
   posthogHost: string;
+  nodeEnv: string;
 }
 
 // Function to safely get environment variables
@@ -35,6 +36,7 @@ const config: Config = {
   loopsApiKey: getEnvVar("LOOPS_API_KEY"),
   posthogApiKey: getEnvVar("POSTHOG_API_KEY"),
   posthogHost: getEnvVar("POSTHOG_HOST"),
+  nodeEnv: getEnvVar("NODE_ENV", "development"),
 };
 
 // Basic validation for Supabase URL format (optional but recommended)

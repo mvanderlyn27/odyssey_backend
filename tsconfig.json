@@ -1,25 +1,24 @@
 {
   "compilerOptions": {
-    "target": "ES2020",                     /* Keep newer target */
-    "module": "CommonJS",                   /* Keep module type */
-    "lib": ["ES2020"],                      /* Keep specified libs */
-    "outDir": "./build",                    /* Use template's output directory */
-    "strict": true,                         /* Keep strict mode */
-    "esModuleInterop": true,                /* Keep interop */
-    "skipLibCheck": true,                   /* Keep skipLibCheck */
-    "forceConsistentCasingInFileNames": true, /* Keep consistent casing */
-    "resolveJsonModule": true,              /* Keep JSON module resolution */
-    "baseUrl": ".",                         /* Keep base URL */
-    "paths": {                              /* Add path alias */
+    "target": "ES2020",
+    "module": "CommonJS",
+    "lib": ["ES2020"],
+    "outDir": "./build",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "baseUrl": ".",
+    "paths": {
       "@/*": ["src/*"]
     },
-    "sourceMap": true,                      /* Keep source maps */
-    "declaration": true,                    /* Keep declaration files */
-    "typeRoots": [                          /* Keep custom type roots */
+    "sourceMap": true,
+    "declaration": true,
+    "typeRoots": [
       "./node_modules/@types"
-      // Removed "./src/types" as it's included via "include" below
-     ]
-   },
-   "include": ["index.ts", "src/**/*.ts"],   /* Include root index and all src files */
-   "exclude": ["node_modules", "tests", "build", "cloudrun_template"] /* Exclude tests, build output, template */
- }
+    ]
+  },
+  "include": ["index.ts", "src/**/*.ts"],
+  "exclude": ["node_modules", "tests", "build", "cloudrun_template", "src/**/*.test.ts"]
+}
