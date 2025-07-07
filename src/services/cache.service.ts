@@ -133,11 +133,6 @@ export class CacheService {
         if (error) throw error;
         return data || [];
       }),
-      this.get("exercise_performance_benchmarks", async () => {
-        const { data, error } = await supabase.from("exercise_performance_benchmarks").select("*");
-        if (error) throw error;
-        return data || [];
-      }),
     ];
 
     try {

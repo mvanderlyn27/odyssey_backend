@@ -124,8 +124,8 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   const uniqueExerciseIds = [...new Set(persistedSessionSets.map((s) => s.exercise_id).filter(Boolean) as string[])];
 
   const [
-    eliteBenchmarksRes,
-    mcwRes,
+    exercises,
+    mcw,
     allMuscles,
     allMuscleGroups,
     allRanks,
@@ -134,15 +134,21 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
     initialMuscleGroupRanks,
     initialMuscleRanks,
   ] = await Promise.all([
-    supabase
-      .from("exercise_performance_benchmarks")
-      .select("exercise_id, sps_elite_value")
-      .in("exercise_id", uniqueExerciseIds),
-    supabase
-      .from("exercise_muscles")
-      .select("exercise_id, muscle_id, exercise_muscle_weight")
-      .in("exercise_id", uniqueExerciseIds)
-      .eq("muscle_intensity", "primary"),
+    fastify.appCache.get(
+      "allExercises",
+      async () =>
+        (await supabase.from("exercises").select("id, exercise_type, is_bilateral, bodyweight_percentage")).data || []
+    ),
+    fastify.appCache.get(
+      "allExerciseMuscles",
+      async () =>
+        (
+          await supabase
+            .from("exercise_muscles")
+            .select("exercise_id, muscle_id, exercise_muscle_weight")
+            .eq("muscle_intensity", "primary")
+        ).data || []
+    ),
     fastify.appCache.get(
       "allMuscles",
       async () => (await supabase.from("muscles").select("id, name, muscle_group_id, muscle_group_weight")).data || []
@@ -166,9 +172,9 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   ]);
 
   // Create maps for efficient lookups
-  const benchmarkMap = new Map(eliteBenchmarksRes.data?.map((b) => [b.exercise_id, b.sps_elite_value]) || []);
+  const exercisesMap = new Map(exercises.map((e) => [e.id, e]));
   const mcwMap = new Map<string, { muscle_id: string; mcw: number }[]>();
-  mcwRes.data?.forEach((m) => {
+  mcw.forEach((m) => {
     if (!mcwMap.has(m.exercise_id)) mcwMap.set(m.exercise_id, []);
     mcwMap.get(m.exercise_id)!.push({ muscle_id: m.muscle_id, mcw: m.exercise_muscle_weight as number });
   });
@@ -186,11 +192,62 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   const updatedMuscleIds = new Set<string>();
 
   for (const set of persistedSessionSets) {
-    if (set.actual_reps === null || set.actual_weight_kg === null || !set.exercise_id) continue;
+    // --- Replacement logic inside the `for (const set of persistedSessionSets)` loop ---
 
-    const e1RM = set.actual_weight_kg * (1 + set.actual_reps / 30);
-    const ups = e1RM / userBodyweight;
-    const sps = Math.round(ups * K);
+    if (set.actual_reps === null || !set.exercise_id) continue;
+
+    const exerciseInfo = exercisesMap.get(set.exercise_id);
+    if (!exerciseInfo) continue;
+
+    let effectiveWeight = 0;
+    let repsForEpley = set.actual_reps;
+
+    // 1. Determine the 'effective weight' based on the exercise type.
+    switch (exerciseInfo.exercise_type) {
+      case "weighted_bodyweight":
+        // User adds weight to their body. Total load is bodyweight + added weight.
+        effectiveWeight = userBodyweight + (set.actual_weight_kg ?? 0);
+        break;
+
+      case "assisted_body_weight":
+        // Machine removes weight. Total load is bodyweight - assistance.
+        effectiveWeight = userBodyweight - (set.actual_weight_kg ?? 0);
+        break;
+
+      case "calisthenics":
+        // Pure bodyweight. Total load is a percentage of bodyweight.
+        const bwModifier = (exerciseInfo.bodyweight_percentage as number) ?? 1.0;
+        effectiveWeight = userBodyweight * bwModifier;
+
+        // ** CRITICAL: Cap reps for high-rep calisthenics to prevent formula abuse. **
+        if (repsForEpley > 30) {
+          repsForEpley = 30;
+        }
+        break;
+
+      case "barbell":
+      case "machine":
+      case "free_weights":
+      default:
+        // Standard weighted lift.
+        let weightInput = set.actual_weight_kg ?? 0;
+        // Check if it's a bilateral exercise (e.g., dumbbells) and double the weight.
+        if (exerciseInfo.is_bilateral) {
+          weightInput = weightInput * 2;
+        }
+        effectiveWeight = weightInput;
+        break;
+    }
+
+    // If the final effective weight is not positive, skip this set.
+    if (effectiveWeight <= 0) continue;
+
+    // 2. Calculate e1RM using the Epley formula and the determined effective weight.
+    const e1rm = effectiveWeight * (1 + repsForEpley / 30);
+
+    // 3. The rest of the calculation is now universal for all exercise types.
+    const ups = e1rm / userBodyweight;
+    const sps = Math.round(ups * K); // K = 4000
 
     const primaryMusclesForSet = mcwMap.get(set.exercise_id);
     if (!primaryMusclesForSet) continue;
