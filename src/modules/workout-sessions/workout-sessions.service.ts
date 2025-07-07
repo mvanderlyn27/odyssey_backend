@@ -182,7 +182,10 @@ export const finishWorkoutSession = async (
         newlyCreatedOrFetchedSession.workout_plan_day_id
       ),
       // Step 8: Update User Exercise PRs
-      _updateUserExercisePRs(fastify, userId, persistedSessionSets, existingUserExercisePRs),
+      (() => {
+        const genderForRanking = userProfile.gender || "male";
+        return _updateUserExercisePRs(fastify, userId, genderForRanking, persistedSessionSets, existingUserExercisePRs);
+      })(),
       // Fetch Previous Session Data for Deltas
       (() => {
         if (newlyCreatedOrFetchedSession.workout_plan_day_id) {
