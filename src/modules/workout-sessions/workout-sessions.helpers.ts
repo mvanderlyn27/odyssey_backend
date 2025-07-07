@@ -32,7 +32,7 @@ export function findRank(score: number, rankThresholds: { id: number; min_score:
 }
 
 export function findExerciseRank(
-  swr: number,
+  sps: number,
   gender: "male" | "female",
   benchmarks: { rank_id: number | null; min_threshold: number; gender: "male" | "female" }[]
 ): number | null {
@@ -43,7 +43,7 @@ export function findExerciseRank(
 
   // Find the highest rank achieved
   for (const benchmark of sortedBenchmarks) {
-    if (swr >= benchmark.min_threshold) {
+    if (sps >= benchmark.min_threshold) {
       return benchmark.rank_id;
     }
   }

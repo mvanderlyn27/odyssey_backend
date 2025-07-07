@@ -71,6 +71,8 @@ export async function _updateUserExercisePRs(
   // Step 3: Compare session's best against existing PRs and prepare upserts
   const prUpsertPayloads: TablesInsert<"user_exercise_prs">[] = [];
 
+  const K = 4000; // System Constant
+
   for (const [exerciseId, bestSet] of bestSessionPerformances.entries()) {
     const existingPR = existingUserExercisePRs.get(exerciseId);
     const newBestSWR = bestSet.calculated_swr as number; // Already checked for null in step 1
@@ -84,8 +86,9 @@ export async function _updateUserExercisePRs(
       );
 
       // Find the rank for this new PR
+      const newBestSPS = Math.round(newBestSWR * K);
       const exerciseBenchmarks = benchmarksByExercise.get(exerciseId) || [];
-      const newRankId = findExerciseRank(newBestSWR, userGender, exerciseBenchmarks);
+      const newRankId = findExerciseRank(newBestSPS, userGender, exerciseBenchmarks);
 
       prUpsertPayloads.push({
         user_id: userId,
