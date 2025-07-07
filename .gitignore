@@ -40,3 +40,11 @@ coverage/
 *.sw?
 .tap
 scripts/gcp/github-actions-key.json
+.tap/test-results/test/routes/ai.test.ts.tap
+supabase/.temp/gotrue-version
+supabase/.temp/pooler-url
+supabase/.temp/postgres-version
+supabase/.temp/rest-version
+supabase/.temp/storage-version
+.tap/test-results/test/routes/ai.test.ts.tap
+.tap/processinfo/ae693ada-03ee-4188-90fc-1907451aeea2.json
