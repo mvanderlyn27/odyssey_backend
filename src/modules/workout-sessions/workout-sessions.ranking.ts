@@ -2,6 +2,7 @@ import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Tables, TablesInsert, Enums } from "../../types/database";
 import { RankProgressionDetails, MuscleGroupProgression, RankInfo } from "../../schemas/workoutSessionsSchemas";
+import { findRank as findRankHelper } from "./workout-sessions.helpers";
 
 // --- TYPE DEFINITIONS ---
 
@@ -34,7 +35,7 @@ function buildRankProgression(
 ): RankProgressionDetails {
   const mortalInfo: RankInfo = { rank_id: 1, rank_name: "Mortal", min_strength_score: 0 };
 
-  const findRank = (score: number): RankInfo => {
+  const findRankInfo = (score: number): RankInfo => {
     if (score <= 0) {
       return mortalInfo;
     }
@@ -54,8 +55,8 @@ function buildRankProgression(
     return achievedRank;
   };
 
-  const initial_rank = findRank(initialScore);
-  const current_rank = findRank(finalScore);
+  const initial_rank = findRankInfo(initialScore);
+  const current_rank = findRankInfo(finalScore);
 
   let next_rank: RankInfo | null = null;
   if (current_rank.rank_id) {
@@ -317,21 +318,24 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
     .map((r) => ({ rank_id: r.id, min_score: r.min_score as number }));
 
   const findRank = (score: number) => {
-    for (const rank of rankThresholdsSortedDesc) {
-      if (score >= rank.min_score) return rank.id;
-    }
-    return rankThresholdsSortedAsc[0]?.rank_id || null;
+    return findRankHelper(
+      score,
+      rankThresholdsSortedDesc.map((r) => ({ id: r.id, min_score: r.min_score }))
+    );
   };
 
   // Always update the single overall rank
   upsertPromises.push(
     Promise.resolve(
-      supabase
-        .from("user_ranks")
-        .upsert(
-          { id: userId, user_id: userId, strength_score: finalOverallScore, rank_id: findRank(finalOverallScore) },
-          { onConflict: "user_id" }
-        )
+      supabase.from("user_ranks").upsert(
+        {
+          id: userId,
+          user_id: userId,
+          strength_score: finalOverallScore,
+          rank_id: findRank(finalOverallScore),
+        },
+        { onConflict: "user_id" }
+      )
     )
   );
 

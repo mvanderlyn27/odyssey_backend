@@ -246,7 +246,13 @@ export const handleOnboarding = async (
             try {
               // For a new user, the existing PRs map is empty.
               const existingUserExercisePRs = new Map();
-              await _updateUserExercisePRs(fastify, userId, persistedSessionSets, existingUserExercisePRs);
+              await _updateUserExercisePRs(
+                fastify,
+                userId,
+                userGenderForRanking as Enums<"gender">,
+                persistedSessionSets,
+                existingUserExercisePRs
+              );
               fastify.log.info(`Initial exercise PR calculation completed for user ${userId}`);
             } catch (prError: any) {
               fastify.log.error({ error: prError, userId }, "Error during initial exercise PR calculation.");
