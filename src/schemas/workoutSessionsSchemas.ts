@@ -110,6 +110,7 @@ export const FailedSetInfoSchema = Type.Object(
     reps_achieved: Type.Union([Type.Number(), Type.Null()]),
     target_reps: Type.Union([Type.Number(), Type.Null()], { description: "Typically planned_min_reps" }),
     achieved_weight: Type.Union([Type.Number(), Type.Null()]),
+    exercise_type: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   },
   { $id: "FailedSetInfoSchema", description: "Information about a failed set." }
 );
@@ -128,8 +129,13 @@ export type LoggedSetOverviewItem = Static<typeof LoggedSetOverviewItemSchema>;
 export const NewPlanProgressionItemSchema = Type.Object(
   {
     exercise_name: Type.String(),
-    old_max_weight: Type.Number({ description: "Old target weight before progression" }),
-    new_max_weight: Type.Number({ description: "New target weight after progression" }),
+    exercise_type: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    old_max_weight: Type.Optional(Type.Number({ description: "Old target weight before progression" })),
+    new_max_weight: Type.Optional(Type.Number({ description: "New target weight after progression" })),
+    old_min_reps: Type.Optional(Type.Number()),
+    new_min_reps: Type.Optional(Type.Number()),
+    old_max_reps: Type.Optional(Type.Number()),
+    new_max_reps: Type.Optional(Type.Number()),
   },
   { $id: "NewPlanProgressionItemSchema", description: "Details of exercise progression in the plan." }
 );
@@ -198,6 +204,9 @@ export const SessionSetInputSchema = Type.Object(
     planned_weight_increase_kg: Type.Optional(
       Type.Number({ description: "The planned weight increase for this set, if applicable, in kg." })
     ),
+    target_rep_increase: Type.Optional(
+      Type.Number({ description: "The planned rep increase for this set, if applicable." })
+    ),
     workout_plan_day_exercise_sets_id: Type.Optional(Type.String({ format: "uuid" })),
   },
   { $id: "SessionSetInputSchema", description: "Input for a single set within a finished exercise" }
@@ -210,6 +219,7 @@ export const SessionExerciseInputSchema = Type.Object(
     workout_plan_day_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
     order_index: Type.Integer({ minimum: 0 }),
     user_notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    auto_progression_enabled: Type.Optional(Type.Boolean()),
     sets: Type.Array(Type.Ref(SessionSetInputSchema)),
   },
   { $id: "SessionExerciseInputSchema", description: "Input for a single exercise within a finished session" }

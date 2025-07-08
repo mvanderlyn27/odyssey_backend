@@ -13,6 +13,7 @@ import {
   _updateWorkoutPlanProgression,
   PlanProgressionResults,
   PlanWeightIncrease,
+  PlanRepIncrease,
 } from "./workout-sessions.progression";
 import { _awardXpAndLevel } from "./workout-sessions.xp";
 import { _updateActiveWorkoutPlanLastCompletedDay } from "./workout-sessions.activePlan";
@@ -46,7 +47,6 @@ export const finishWorkoutSession = async (
 
   try {
     // Step 1: Gather Data and Prepare Payloads
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 1: _gatherAndPrepareWorkoutData.");
     const {
       sessionInsertPayload: rawSessionInsertPayload,
       setInsertPayloads: rawSetInsertPayloads, // Payloads for workout_session_sets table
@@ -64,7 +64,6 @@ export const finishWorkoutSession = async (
 
     if (finishData.existing_session_id) {
       currentSessionIdToLogOnError = finishData.existing_session_id;
-      fastify.log.info(`[FINISH_SESSION_FLOW] Updating existing session ID: ${currentSessionIdToLogOnError}`);
       // Merge rawSessionInsertPayload with existing_session_id specific fields
       // status is already 'completed' in rawSessionInsertPayload
       const { data: updatedSession, error: updateError } = await supabase
@@ -86,7 +85,6 @@ export const finishWorkoutSession = async (
       }
       newlyCreatedOrFetchedSession = updatedSession;
     } else {
-      fastify.log.info("[FINISH_SESSION_FLOW] Inserting new session.");
       const { data: newSession, error: insertError } = await supabase
         .from("workout_sessions")
         .insert(rawSessionInsertPayload)
@@ -99,10 +97,8 @@ export const finishWorkoutSession = async (
       newlyCreatedOrFetchedSession = newSession;
       currentSessionIdToLogOnError = newSession.id;
     }
-    fastify.log.info(`[FINISH_SESSION_FLOW] Step 1b Complete. Session ID: ${newlyCreatedOrFetchedSession.id}.`);
 
     // Step 2: Persist Workout Session Sets
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 2: Persisting workout_session_sets.");
     const finalSetInsertPayloads = rawSetInsertPayloads.map((p) => ({
       ...p,
       workout_session_id: newlyCreatedOrFetchedSession.id,
@@ -127,13 +123,9 @@ export const finishWorkoutSession = async (
         ...s,
         exercise_name: (s.exercises as { name: string } | null)?.name ?? null,
       }));
-
-      fastify.log.info(`[FINISH_SESSION_FLOW] Successfully inserted ${persistedSessionSets.length} sets.`);
     }
 
     // Step 3 onwards: Parallelize operations
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 3+ : Starting parallel operations.");
-
     const [
       planProgressionResults,
       rankUpdateResults,
@@ -203,7 +195,6 @@ export const finishWorkoutSession = async (
       })(),
     ]);
 
-    fastify.log.info("[FINISH_SESSION_FLOW] Parallel operations complete.");
     if (previousSessionDataResult.error) {
       fastify.log.warn(
         { error: previousSessionDataResult.error, userId, planDayId: newlyCreatedOrFetchedSession.workout_plan_day_id },
@@ -215,8 +206,6 @@ export const finishWorkoutSession = async (
     // Step 4.5 (Update workout_sessions table with rank up counts) is REMOVED as per plan.
 
     // Step 8: Construct and return the detailed response
-    fastify.log.info("[FINISH_SESSION_FLOW] Step 8: Constructing detailed response.");
-
     // Extract worked muscle group IDs for filtering
     const workedMuscleGroupIds = new Set<string>();
     if (muscles_worked_summary && muscles_worked_summary.length > 0) {
@@ -226,20 +215,9 @@ export const finishWorkoutSession = async (
         }
       });
     }
-    fastify.log.info(
-      { workedMuscleGroupIds: Array.from(workedMuscleGroupIds) },
-      "Worked muscle group IDs for filtering progressions."
-    );
 
     const filteredMuscleGroupProgressions = (rankUpdateResults.muscle_group_progressions || []).filter((progression) =>
       workedMuscleGroupIds.has(progression.muscle_group_id)
-    );
-    fastify.log.info(
-      {
-        originalCount: rankUpdateResults.muscle_group_progressions?.length || 0,
-        filteredCount: filteredMuscleGroupProgressions.length,
-      },
-      "Muscle group progressions filtered."
     );
 
     const responsePayload: DetailedFinishSessionResponse = {
@@ -283,6 +261,7 @@ export const finishWorkoutSession = async (
           .reduce((acc, set) => {
             const exerciseName =
               set.exercise_name || (exerciseDetailsMap.get(set.exercise_id)?.name ?? "Unknown Exercise");
+            const exerciseDetail = exerciseDetailsMap.get(set.exercise_id);
             if (!acc.has(exerciseName)) {
               acc.set(exerciseName, {
                 exercise_name: exerciseName,
@@ -290,23 +269,34 @@ export const finishWorkoutSession = async (
               });
             }
             if (set.is_success === false) {
-              fastify.log.info("failed set", set.id);
               acc.get(exerciseName)!.failed_set_info.push({
                 set_number: set.set_order,
                 reps_achieved: set.actual_reps,
                 target_reps: set.planned_min_reps, // As per clarification
                 achieved_weight: set.actual_weight_kg,
+                exercise_type: exerciseDetail?.exercise_type,
               });
             }
             return acc;
           }, new Map<string, { exercise_name: string; failed_set_info: any[] }>())
           .values()
       ),
-      plan_progression: planProgressionResults.weightIncreases.map((pi) => ({
-        exercise_name: pi.exercise_name,
-        old_max_weight: pi.old_target_weight,
-        new_max_weight: pi.new_target_weight,
-      })),
+      plan_progression: [
+        ...planProgressionResults.weightIncreases.map((pi) => ({
+          exercise_name: pi.exercise_name,
+          exercise_type: pi.exercise_type,
+          old_max_weight: pi.old_target_weight,
+          new_max_weight: pi.new_target_weight,
+        })),
+        ...planProgressionResults.repIncreases.map((ri) => ({
+          exercise_name: ri.exercise_name,
+          exercise_type: ri.exercise_type,
+          old_min_reps: ri.old_min_reps,
+          new_min_reps: ri.new_min_reps,
+          old_max_reps: ri.old_max_reps,
+          new_max_reps: ri.new_max_reps,
+        })),
+      ],
     };
     fastify.log.info("[FINISH_SESSION_SUCCESS] Successfully processed finishWorkoutSession.", {
       sessionId: responsePayload.sessionId,
