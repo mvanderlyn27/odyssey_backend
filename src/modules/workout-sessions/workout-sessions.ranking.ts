@@ -205,7 +205,7 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
 
     // 1. Determine the 'effective weight' based on the exercise type.
     switch (exerciseInfo.exercise_type) {
-      case "weighted_bodyweight":
+      case "weighted_body_weight":
         // User adds weight to their body. Total load is bodyweight + added weight.
         effectiveWeight = userBodyweight + (set.actual_weight_kg ?? 0);
         break;
