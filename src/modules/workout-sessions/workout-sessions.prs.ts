@@ -18,7 +18,10 @@ export async function _updateUserExercisePRs(
   userId: string,
   userGender: Enums<"gender">,
   persistedSessionSets: Tables<"workout_session_sets">[],
-  existingUserExercisePRs: Map<string, Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "rank_id">>
+  existingUserExercisePRs: Map<
+    string,
+    Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "best_reps" | "rank_id">
+  >
 ): Promise<void> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
   fastify.log.info(`[USER_EXERCISE_PRS] Starting PR update process for user: ${userId}`);
@@ -28,27 +31,42 @@ export async function _updateUserExercisePRs(
     return;
   }
 
-  // Step 1: Find the best performing set for each exercise in this session
+  // Step 1: Fetch all exercises from cache
+  const allExercises = await fastify.appCache.get(
+    "allExercises",
+    async () => (await supabase.from("exercises").select("id, exercise_type")).data || []
+  );
+  const exerciseTypeMap = new Map(allExercises.map((e) => [e.id, e.exercise_type]));
+
+  // Step 2: Find the best performing set for each exercise in this session
   const bestSessionPerformances = new Map<string, Tables<"workout_session_sets">>();
 
   for (const set of persistedSessionSets) {
-    // We only care about sets with a calculated SWR, and ignore warmups
-    if (set.is_warmup || typeof set.calculated_swr !== "number") {
-      continue;
-    }
+    if (set.is_warmup) continue;
 
+    const exerciseType = exerciseTypeMap.get(set.exercise_id);
     const currentBest = bestSessionPerformances.get(set.exercise_id);
-    if (!currentBest || set.calculated_swr > (currentBest.calculated_swr ?? -1)) {
-      bestSessionPerformances.set(set.exercise_id, set);
+
+    if (exerciseType === "calisthenics") {
+      // For calisthenics, the best set is the one with the most reps.
+      if (!currentBest || (set.actual_reps ?? 0) > (currentBest.actual_reps ?? 0)) {
+        bestSessionPerformances.set(set.exercise_id, set);
+      }
+    } else {
+      // For all other types, use SWR.
+      if (typeof set.calculated_swr !== "number") continue;
+      if (!currentBest || set.calculated_swr > (currentBest.calculated_swr ?? -1)) {
+        bestSessionPerformances.set(set.exercise_id, set);
+      }
     }
   }
 
   if (bestSessionPerformances.size === 0) {
-    fastify.log.info("[USER_EXERCISE_PRS] No non-warmup sets with SWR found, skipping PR update.");
+    fastify.log.info("[USER_EXERCISE_PRS] No valid non-warmup sets found, skipping PR update.");
     return;
   }
 
-  // Step 2: Fetch all rank benchmarks from cache
+  // Step 3: Fetch all rank benchmarks from cache
   const allBenchmarks = await fastify.appCache.get(
     "allExerciseRankBenchmarks",
     async () =>
@@ -68,24 +86,40 @@ export async function _updateUserExercisePRs(
     }
   }
 
-  // Step 3: Compare session's best against existing PRs and prepare upserts
+  // Step 4: Compare session's best against existing PRs and prepare upserts
   const prUpsertPayloads: TablesInsert<"user_exercise_prs">[] = [];
-
   const K = 4000; // System Constant
 
   for (const [exerciseId, bestSet] of bestSessionPerformances.entries()) {
     const existingPR = existingUserExercisePRs.get(exerciseId);
-    const newBestSWR = bestSet.calculated_swr as number; // Already checked for null in step 1
+    const exerciseType = exerciseTypeMap.get(exerciseId);
 
-    // A new PR is achieved if there's no existing PR, or the new SWR is higher.
-    if (!existingPR || newBestSWR > (existingPR.best_swr ?? -1)) {
-      fastify.log.info(
-        `[USER_EXERCISE_PRS] New PR found for exercise ${exerciseId}. Old SWR: ${
-          existingPR?.best_swr ?? "N/A"
-        }, New SWR: ${newBestSWR}`
-      );
+    let isNewPR = false;
+    let logDetails = "";
 
-      // Find the rank for this new PR
+    if (exerciseType === "calisthenics") {
+      const newBestReps = bestSet.actual_reps ?? 0;
+      const oldBestReps = existingPR?.best_reps ?? -1;
+      if (newBestReps > 0 && (!existingPR || newBestReps > oldBestReps)) {
+        isNewPR = true;
+        logDetails = `New PR (reps): ${newBestReps} > ${oldBestReps === -1 ? "N/A" : oldBestReps}`;
+      }
+    } else {
+      const newBestSWR = bestSet.calculated_swr;
+      if (typeof newBestSWR === "number") {
+        const oldBestSWR = existingPR?.best_swr ?? -1;
+        if (!existingPR || newBestSWR > oldBestSWR) {
+          isNewPR = true;
+          logDetails = `New PR (SWR): ${newBestSWR} > ${oldBestSWR === -1 ? "N/A" : oldBestSWR}`;
+        }
+      }
+    }
+
+    if (isNewPR) {
+      fastify.log.info(`[USER_EXERCISE_PRS] New PR found for exercise ${exerciseId}. ${logDetails}`);
+
+      // Rank calculation remains based on SWR for all types for now
+      const newBestSWR = bestSet.calculated_swr ?? 0;
       const newBestSPS = Math.round(newBestSWR * K);
       const exerciseBenchmarks = benchmarksByExercise.get(exerciseId) || [];
       const newRankId = findExerciseRank(newBestSPS, userGender, exerciseBenchmarks);
@@ -94,6 +128,7 @@ export async function _updateUserExercisePRs(
         user_id: userId,
         exercise_id: exerciseId,
         best_swr: newBestSWR,
+        best_reps: bestSet.actual_reps,
         best_1rm: bestSet.calculated_1rm,
         source_set_id: bestSet.id,
         achieved_at: bestSet.performed_at || new Date().toISOString(),
@@ -102,7 +137,7 @@ export async function _updateUserExercisePRs(
     }
   }
 
-  // Step 3: Upsert the new PRs to the database
+  // Step 5: Upsert the new PRs to the database
   if (prUpsertPayloads.length > 0) {
     fastify.log.info(`[USER_EXERCISE_PRS] Upserting ${prUpsertPayloads.length} new user exercise PR(s).`);
     const { error: upsertError } = await supabase

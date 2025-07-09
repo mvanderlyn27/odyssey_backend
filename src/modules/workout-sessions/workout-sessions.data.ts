@@ -15,11 +15,16 @@ import { calculate_1RM, calculate_SWR } from "./workout-sessions.helpers";
 export type SetProgressionInput = {
   exercise_id: string;
   exercise_name?: string | null;
+  exercise_type: Enums<"exercise_type"> | null;
+  auto_progression_enabled: boolean;
   workout_plan_day_exercise_id?: string | null;
   workout_plan_day_exercise_sets_id?: string | null;
   set_order: number;
   planned_weight_kg?: number | null;
+  planned_min_reps?: number | null;
+  planned_max_reps?: number | null;
   planned_weight_increase_kg?: number | null;
+  target_rep_increase?: number | null;
   is_success?: boolean | null;
 };
 
@@ -36,7 +41,10 @@ export type PreparedWorkoutData = {
   setsProgressionInputData: SetProgressionInput[];
   userProfile: Tables<"user_profiles">;
   userBodyweight: number | null;
-  exerciseDetailsMap: Map<string, { id: string; name: string }>;
+  exerciseDetailsMap: Map<
+    string,
+    { id: string; name: string; exercise_type: Enums<"exercise_type"> | null; bodyweight_percentage: number | null }
+  >;
   exerciseMuscleMappings: (Tables<"exercise_muscles"> & {
     muscles:
       | (Pick<Tables<"muscles">, "id" | "name" | "muscle_group_id"> & {
@@ -44,7 +52,10 @@ export type PreparedWorkoutData = {
         })
       | null;
   })[];
-  existingUserExercisePRs: Map<string, Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "rank_id">>;
+  existingUserExercisePRs: Map<
+    string,
+    Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "best_reps" | "rank_id">
+  >;
   muscles_worked_summary: MuscleWorkedSummaryItem[]; // Changed from muscleGroupsWorkedSummary
 };
 
@@ -82,7 +93,10 @@ export async function _gatherAndPrepareWorkoutData(
         .limit(1)
         .maybeSingle(),
       sessionExerciseIds.length > 0
-        ? supabase.from("exercises").select("id, name").in("id", sessionExerciseIds)
+        ? supabase
+            .from("exercises")
+            .select("id, name, exercise_type, bodyweight_percentage")
+            .in("id", sessionExerciseIds)
         : Promise.resolve({ data: [], error: null }),
       sessionExerciseIds.length > 0
         ? supabase
@@ -93,7 +107,7 @@ export async function _gatherAndPrepareWorkoutData(
       sessionExerciseIds.length > 0
         ? supabase
             .from("user_exercise_prs")
-            .select("exercise_id, best_swr, rank_id") // Changed current_rank_label to rank_id
+            .select("exercise_id, best_swr, best_reps, rank_id") // Changed current_rank_label to rank_id
             .eq("user_id", userId)
             .in("exercise_id", sessionExerciseIds)
         : Promise.resolve({ data: [], error: null }),
@@ -119,12 +133,16 @@ export async function _gatherAndPrepareWorkoutData(
     );
   }
 
-  const exerciseDetailsMap = new Map<string, { id: string; name: string }>();
+  const exerciseDetailsMap = new Map<
+    string,
+    { id: string; name: string; exercise_type: Enums<"exercise_type"> | null; bodyweight_percentage: number | null }
+  >();
   if (exercisesDataResult.error) {
     fastify.log.error({ error: exercisesDataResult.error }, "[PREPARE_WORKOUT_DATA] Error fetching exercise names.");
   } else if (exercisesDataResult.data) {
-    exercisesDataResult.data.forEach((ex: Pick<Tables<"exercises">, "id" | "name">) =>
-      exerciseDetailsMap.set(ex.id, ex)
+    exercisesDataResult.data.forEach(
+      (ex: Pick<Tables<"exercises">, "id" | "name" | "exercise_type" | "bodyweight_percentage">) =>
+        exerciseDetailsMap.set(ex.id, ex)
     );
   }
 
@@ -146,7 +164,7 @@ export async function _gatherAndPrepareWorkoutData(
 
   const existingUserExercisePRs = new Map<
     string,
-    Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "rank_id">
+    Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "best_reps" | "rank_id">
   >();
   if (existingExercisePRsResult.error) {
     fastify.log.error(
@@ -187,7 +205,19 @@ export async function _gatherAndPrepareWorkoutData(
         const calculated_swr = calculate_SWR(calculated_1rm, userBodyweight);
 
         if (actual_weight_kg !== null && actual_reps !== null) {
-          calculatedTotalVolumeKg += actual_weight_kg * actual_reps;
+          // NEW VOLUME CALCULATION
+          const exerciseType = exerciseDetail?.exercise_type;
+          let setVolume = 0;
+          if (exerciseType === "calisthenics" && userBodyweight && exerciseDetail?.bodyweight_percentage) {
+            setVolume = userBodyweight * exerciseDetail.bodyweight_percentage * actual_reps;
+          } else if (exerciseType === "assisted_body_weight" && userBodyweight) {
+            setVolume = (userBodyweight - actual_weight_kg) * actual_reps;
+          } else if (exerciseType === "weighted_body_weight" && userBodyweight) {
+            setVolume = (userBodyweight + actual_weight_kg) * actual_reps;
+          } else {
+            setVolume = actual_weight_kg * actual_reps;
+          }
+          calculatedTotalVolumeKg += setVolume;
         }
 
         const setPayload: SetPayloadPreamble = {
@@ -211,11 +241,16 @@ export async function _gatherAndPrepareWorkoutData(
         setsProgressionInputArray.push({
           exercise_id: exercise.exercise_id,
           exercise_name: exerciseName,
+          exercise_type: exerciseDetail?.exercise_type ?? null,
+          auto_progression_enabled: exercise.auto_progression_enabled ?? false,
           workout_plan_day_exercise_id: exercise.workout_plan_day_exercise_id,
           workout_plan_day_exercise_sets_id: set.workout_plan_day_exercise_sets_id ?? null,
           set_order: set.order_index,
           planned_weight_kg: set.planned_weight_kg ?? null,
+          planned_min_reps: set.planned_min_reps ?? null,
+          planned_max_reps: set.planned_max_reps ?? null,
           planned_weight_increase_kg: set.planned_weight_increase_kg ?? null,
+          target_rep_increase: set.target_rep_increase ?? null,
           is_success: set.is_success ?? null,
         });
       });
