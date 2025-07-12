@@ -362,7 +362,7 @@ export const rerollUsername = async (
   const supabase = fastify.supabase;
 
   const { username, displayName } = await generateUniqueUsername(fastify);
-  const newAvatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/svg?seed=${username}`;
+  const newAvatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/png?seed=${username}`;
 
   const profileUpdatePayload: ProfileUpdate = {
     updated_at: new Date().toISOString(),
