@@ -21,23 +21,13 @@ export const ProfileSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
     username: Type.Union([Type.String(), Type.Null()]),
-    full_name: Type.Union([Type.String(), Type.Null()]),
+    display_name: Type.Union([Type.String(), Type.Null()]),
     avatar_url: Type.Union([Type.String({ format: "uri" }), Type.Null()]),
-    onboarding_complete: Type.Boolean(), // Assuming not nullable based on previous usage
+    bio: Type.Union([Type.String(), Type.Null()]),
     created_at: Type.String({ format: "date-time" }),
     updated_at: Type.String({ format: "date-time" }),
     experience_points: Type.Integer(),
-    level: Type.Integer(),
-    preferred_unit: Type.Union([UnitPreferenceEnum, Type.Null()]), // Allow null based on DB
-    height_cm: Type.Union([Type.Number(), Type.Null()]),
-    current_goal_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]),
-    subscription_status: Type.Union([SubscriptionStatusEnum, Type.Null()]), // Allow null based on DB
-    admin: Type.Boolean(), // Added based on DB schema
-    // Added based on backend changes log 2025-05-03
-    experience_level: Type.Union([Type.String(), Type.Null()]), // e.g., 'beginner', 'intermediate', 'advanced'
-    age: Type.Union([Type.Integer(), Type.Null()]),
-    gender: Type.Union([Type.String(), Type.Null()]),
-    funnel: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Added funnel field
+    current_level_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]),
   },
   { $id: "ProfileSchema", description: "User profile data" }
 );
@@ -48,13 +38,9 @@ export type Profile = Static<typeof ProfileSchema>;
 export const UpdateProfileBodySchema = Type.Partial(
   Type.Object({
     username: Type.String(),
-    full_name: Type.String(),
+    display_name: Type.String(),
     avatar_url: Type.String({ format: "uri" }),
-    preferred_unit: UnitPreferenceEnum,
-    height_cm: Type.Number(),
-    // onboarding_complete is usually set via the onboarding route
-    // current_goal_id is usually set via the goals route
-    // subscription_status is usually set via webhooks/backend processes
+    bio: Type.String(),
   }),
   {
     $id: "UpdateProfileBodySchema",

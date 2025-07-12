@@ -52,6 +52,7 @@ export const finishWorkoutSession = async (
       setInsertPayloads: rawSetInsertPayloads, // Payloads for workout_session_sets table
       setsProgressionInputData, // Data for _updateWorkoutPlanProgression
       userProfile,
+      userData,
       userBodyweight,
       exerciseDetailsMap, // Ensure this is destructured
       exerciseMuscleMappings, // Destructure renamed variable
@@ -144,8 +145,8 @@ export const finishWorkoutSession = async (
       // Step 4: Update User Exercise and Muscle Group Ranks
       (() => {
         // Assume 'male' for ranking if gender is not specified.
-        const genderForRanking = userProfile.gender || "male";
-        if (!userProfile.gender) {
+        const genderForRanking = (userData.gender || "male") as Enums<"gender">;
+        if (!userData.gender) {
           fastify.log.warn({ userId }, "User gender is not specified. Defaulting to 'male' for ranking calculations.");
         }
         return _updateUserExerciseAndMuscleGroupRanks(
@@ -175,7 +176,7 @@ export const finishWorkoutSession = async (
       ),
       // Step 8: Update User Exercise PRs
       (() => {
-        const genderForRanking = userProfile.gender || "male";
+        const genderForRanking = (userData.gender || "male") as Enums<"gender">;
         return _updateUserExercisePRs(fastify, userId, genderForRanking, persistedSessionSets, existingUserExercisePRs);
       })(),
       // Fetch Previous Session Data for Deltas

@@ -8,12 +8,14 @@ import { _updateUserExerciseAndMuscleGroupRanks } from "../workout-sessions/work
 import { _updateUserExercisePRs } from "../workout-sessions/workout-sessions.prs";
 import { calculate_1RM, calculate_SWR } from "../workout-sessions/workout-sessions.helpers";
 import { TablesInsert, TablesUpdate, Database, Tables, Enums } from "../../types/database";
+import { generateUniqueUsername } from "./onboard.helpers";
 
 export type OnboardingData = Static<typeof InitialRankBodySchema>;
 
-type ProfileUpdate = TablesUpdate<"user_profiles">;
+type ProfileUpdate = TablesUpdate<"profiles">;
+type UserUpdate = TablesUpdate<"users">;
 type MuscleRankInsert = TablesInsert<"muscle_ranks">;
-type UserBodyMeasurementInsert = TablesInsert<"user_body_measurements">;
+type BodyMeasurementInsert = TablesInsert<"body_measurements">;
 type WorkoutSessionInsert = TablesInsert<"workout_sessions">;
 type WorkoutSessionSetInsert = TablesInsert<"workout_session_sets">;
 type UserExercisePrInsert = TablesInsert<"user_exercise_prs">;
@@ -41,89 +43,102 @@ function mapUnitsToWeightPreference(
 export const handleOnboarding = async (
   fastify: FastifyInstance,
   userId: string,
-  data: OnboardingData,
-  derivedUsername: string | null
+  data: OnboardingData
 ): Promise<Profile> => {
-  fastify.log.info({ userId, data, derivedUsername }, "Handling comprehensive onboarding process for user");
+  fastify.log.info({ userId, data }, "Handling comprehensive onboarding process for user");
 
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
   const supabase = fastify.supabase;
 
+  // Use .maybeSingle() to prevent errors when rows don't exist yet.
   const { data: existingProfileData, error: profileFetchError } = await supabase
-    .from("user_profiles")
-    .select(
-      "id, onboard_complete, username, full_name, avatar_url, created_at, updated_at, experience_points, current_level_id, weight_preference, age, gender, funnel"
-    )
+    .from("profiles")
+    .select("*")
     .eq("id", userId)
-    .single();
+    .maybeSingle();
 
   if (profileFetchError) {
-    fastify.log.error({ error: profileFetchError, userId }, "Error fetching profile for onboarding");
+    fastify.log.error({ profileError: profileFetchError, userId }, "Error fetching profile for onboarding");
     throw new Error(`Failed to fetch profile: ${profileFetchError.message}`);
   }
-  if (!existingProfileData) {
-    throw new Error(`Profile not found for user ID: ${userId}`);
+
+  const { data: existingUserData, error: userFetchError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (userFetchError) {
+    fastify.log.error({ userError: userFetchError, userId }, "Error fetching user for onboarding");
+    throw new Error(`Failed to fetch user: ${userFetchError.message}`);
   }
-  if (existingProfileData.onboard_complete) {
+
+  // Use optional chaining `?.` as existingUserData might be null
+  if (existingUserData?.onboard_complete) {
     fastify.log.info(`User ${userId} is already onboarded. Skipping onboarding process.`);
+    if (!existingProfileData) {
+      // This case should be rare if data is consistent, but good to handle.
+      throw new Error(`User ${userId} is marked as onboarded, but profile data is missing.`);
+    }
     return {
       id: existingProfileData.id,
       username: existingProfileData.username,
-      full_name: existingProfileData.full_name,
+      display_name: existingProfileData.display_name,
       avatar_url: existingProfileData.avatar_url,
-      onboarding_complete: existingProfileData.onboard_complete,
+      bio: existingProfileData.bio,
       created_at: existingProfileData.created_at,
       updated_at: existingProfileData.updated_at,
       experience_points: existingProfileData.experience_points || 0,
-      level: 0,
-      preferred_unit: existingProfileData.weight_preference,
-      height_cm: null,
-      current_goal_id: null,
-      subscription_status: null,
-      admin: false,
-      age: existingProfileData.age,
-      gender: existingProfileData.gender,
-      funnel: data.funnel ?? null,
-      experience_level: null,
+      current_level_id: existingProfileData.current_level_id,
     };
   }
 
   try {
-    let usernameToSet = existingProfileData.username;
-    if (!usernameToSet && derivedUsername) {
-      usernameToSet = derivedUsername;
-    }
+    const { username, displayName } = await generateUniqueUsername(fastify);
+    const avatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/svg?seed=${username}`;
 
-    const profileUpdatePayload: ProfileUpdate = {
-      onboard_complete: true,
+    // Consolidate payloads for an upsert operation.
+    // This will create the rows if they don't exist, or update them if they do.
+    const profilePayload = {
+      id: userId,
       updated_at: new Date().toISOString(),
-      username: usernameToSet,
-      age: data.age ?? existingProfileData.age,
-      gender: data.gender ?? existingProfileData.gender,
-      weight_preference: mapUnitsToWeightPreference(data.units) ?? existingProfileData.weight_preference,
-      funnel: data.funnel ?? existingProfileData.funnel ?? null,
+      username: username,
+      display_name: displayName,
+      avatar_url: avatarUrl,
     };
-    const { error: updateProfileError } = await supabase
-      .from("user_profiles")
-      .update(profileUpdatePayload)
-      .eq("id", userId);
 
-    if (updateProfileError) {
-      fastify.log.error({ error: updateProfileError, userId }, "Error updating profile during onboarding");
-      throw new Error(`Failed to update profile: ${updateProfileError.message}`);
+    const userPayload = {
+      id: userId,
+      onboard_complete: true,
+      age: data.age ?? existingUserData?.age,
+      gender: data.gender ?? existingUserData?.gender,
+      weight_preference: mapUnitsToWeightPreference(data.units) ?? existingUserData?.weight_preference,
+      funnel: data.funnel ?? existingUserData?.funnel ?? null,
+      push_notification_token: data.push_notification_token ?? existingUserData?.push_notification_token,
+    };
+
+    const { error: upsertProfileError } = await supabase.from("profiles").upsert(profilePayload);
+    const { error: upsertUserError } = await supabase.from("users").upsert(userPayload);
+
+    if (upsertProfileError || upsertUserError) {
+      fastify.log.error(
+        { profileError: upsertProfileError, userError: upsertUserError, userId },
+        "Error upserting profile during onboarding"
+      );
+      throw new Error(`Failed to upsert profile: ${upsertProfileError?.message || upsertUserError?.message}`);
     }
-    fastify.log.info(`Profile updated for user ${userId}`);
+    fastify.log.info(`Profile upserted for user ${userId}`);
 
     if (data.weight !== undefined && data.weight !== null) {
-      const bodyMeasurementPayload: UserBodyMeasurementInsert = {
+      const bodyMeasurementPayload: BodyMeasurementInsert = {
         user_id: userId,
-        body_weight: data.weight,
+        measurement_type: "body_weight",
+        value: data.weight,
+        measured_at: new Date().toISOString(),
       };
-      const { error: bodyMeasurementError } = await supabase
-        .from("user_body_measurements")
-        .insert(bodyMeasurementPayload);
+      const { error: bodyMeasurementError } = await supabase.from("body_measurements").insert(bodyMeasurementPayload);
       if (bodyMeasurementError) {
         fastify.log.error({ error: bodyMeasurementError, userId }, "Error saving body measurement");
       } else {
@@ -169,7 +184,6 @@ export const handleOnboarding = async (
         workoutSessionId = sessionData.id;
         fastify.log.info(`Workout session created for onboarding rank, user ${userId}, session ID ${workoutSessionId}`);
 
-        // Calculate 1RM and SWR consistently
         const calculated_1rm = calculate_1RM(data.rank_exercise_weight_kg, data.rank_exercise_reps);
         const calculated_swr = calculate_SWR(calculated_1rm, data.weight ?? null);
 
@@ -198,7 +212,7 @@ export const handleOnboarding = async (
           createdSetId = setData.id;
           fastify.log.info(`Workout session set saved for session ${workoutSessionId}, set ID ${createdSetId}`);
 
-          const userGenderForRanking = data.gender ?? existingProfileData.gender;
+          const userGenderForRanking = data.gender ?? userPayload.gender;
           const userBodyweight = data.weight ?? null;
 
           if (
@@ -221,8 +235,8 @@ export const handleOnboarding = async (
               planned_max_reps: null,
               planned_weight_kg: null,
               notes: null,
-              calculated_swr: setPayload.calculated_swr, // Use the correctly calculated value
-              calculated_1rm: setPayload.calculated_1rm, // Use the correctly calculated value
+              calculated_swr: setPayload.calculated_swr,
+              calculated_1rm: setPayload.calculated_1rm,
               is_warmup: false,
               is_success: true,
               rest_seconds_taken: null,
@@ -242,9 +256,7 @@ export const handleOnboarding = async (
               fastify.log.error({ error: rankingError, userId }, "Error during peak contribution ranking calculation.");
             }
 
-            // Also update the PR for this first set
             try {
-              // For a new user, the existing PRs map is empty.
               const existingUserExercisePRs = new Map();
               await _updateUserExercisePRs(
                 fastify,
@@ -281,10 +293,8 @@ export const handleOnboarding = async (
     }
 
     const { data: finalProfileData, error: finalProfileError } = await supabase
-      .from("user_profiles")
-      .select(
-        "id, onboard_complete, username, full_name, avatar_url, created_at, updated_at, experience_points, current_level_id, weight_preference, age, gender, funnel"
-      )
+      .from("profiles")
+      .select("*")
       .eq("id", userId)
       .single();
 
@@ -328,25 +338,46 @@ export const handleOnboarding = async (
     return {
       id: finalProfileData.id,
       username: finalProfileData.username,
-      full_name: finalProfileData.full_name,
+      display_name: finalProfileData.display_name,
       avatar_url: finalProfileData.avatar_url,
-      onboarding_complete: finalProfileData.onboard_complete,
+      bio: finalProfileData.bio,
       created_at: finalProfileData.created_at,
       updated_at: finalProfileData.updated_at,
       experience_points: finalProfileData.experience_points || 0,
-      level: 0,
-      preferred_unit: finalProfileData.weight_preference,
-      height_cm: null,
-      current_goal_id: null,
-      subscription_status: null,
-      admin: false,
-      age: finalProfileData.age,
-      gender: finalProfileData.gender,
-      funnel: finalProfileData.funnel ?? null,
-      experience_level: null,
+      current_level_id: finalProfileData.current_level_id,
     };
   } catch (error: any) {
     fastify.log.error({ error, userId, data }, "Critical error during onboarding process");
     throw error;
   }
+};
+
+export const rerollUsername = async (
+  fastify: FastifyInstance,
+  userId: string
+): Promise<{ username: string; displayName: string }> => {
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+  const supabase = fastify.supabase;
+
+  const { username, displayName } = await generateUniqueUsername(fastify);
+  const newAvatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/svg?seed=${username}`;
+
+  const profileUpdatePayload: ProfileUpdate = {
+    updated_at: new Date().toISOString(),
+    username: username,
+    display_name: displayName,
+    avatar_url: newAvatarUrl,
+  };
+
+  const { error: updateProfileError } = await supabase.from("profiles").update(profileUpdatePayload).eq("id", userId);
+
+  if (updateProfileError) {
+    fastify.log.error({ profileError: updateProfileError, userId }, "Error rerolling username");
+    throw new Error(`Failed to reroll username: ${updateProfileError.message}`);
+  }
+
+  fastify.log.info(`Username rerolled for user ${userId} to ${username}`);
+  return { username, displayName };
 };

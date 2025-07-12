@@ -3,7 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Tables } from "../../types/database";
 
 // Define types used by XpService locally
-type UserProfile = Tables<"user_profiles">; // Using Tables helper type
+type UserProfile = Tables<"profiles">; // Using Tables helper type
 type LevelDefinition = Tables<"level_definitions">; // Using Tables helper type
 
 // Interface for XP update results
@@ -78,7 +78,7 @@ class XpService {
         );
         // Still update XP, but level remains null
         const { error: xpOnlyUpdateError } = await this.supabase
-          .from("user_profiles")
+          .from("profiles")
           .update({ experience_points: newExperiencePoints })
           .eq("id", userId);
         if (xpOnlyUpdateError) {
@@ -108,7 +108,7 @@ class XpService {
         "Could not determine new level. XP will be updated, level unchanged."
       );
       const { error: xpOnlyUpdateError } = await this.supabase
-        .from("user_profiles")
+        .from("profiles")
         .update({ experience_points: newExperiencePoints })
         .eq("id", userId);
       if (xpOnlyUpdateError) {
@@ -133,7 +133,7 @@ class XpService {
     const leveledUp = oldLevelId !== newLevelId;
 
     const { error: updateError } = await this.supabase
-      .from("user_profiles")
+      .from("profiles")
       .update({
         experience_points: newExperiencePoints,
         current_level_id: newLevelId,
@@ -163,7 +163,7 @@ class XpService {
     nextLevel: { id: string; number: number; title: string | null; xpRequiredToReach: number } | null;
   } | null> {
     const { data: userProfileData, error: profileError } = await this.supabase
-      .from("user_profiles")
+      .from("profiles")
       .select("id, experience_points, current_level_id")
       .eq("id", userId)
       .single();
@@ -222,7 +222,7 @@ const XP_PER_WORKOUT = 50;
  */
 export async function _awardXpAndLevel(
   fastify: FastifyInstance,
-  userProfile: Tables<"user_profiles">
+  userProfile: Tables<"profiles">
 ): Promise<XPUpdateResult & { awardedXp: number; remaining_xp_for_next_level: number | null }> {
   const userId = userProfile.id;
   fastify.log.info(`[XP_LEVEL] Starting XP and Level update for user: ${userId}`);

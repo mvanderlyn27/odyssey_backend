@@ -39,7 +39,8 @@ export type PreparedWorkoutData = {
   sessionInsertPayload: TablesInsert<"workout_sessions">;
   setInsertPayloads: SetPayloadPreamble[];
   setsProgressionInputData: SetProgressionInput[];
-  userProfile: Tables<"user_profiles">;
+  userProfile: Tables<"profiles">;
+  userData: Tables<"users">;
   userBodyweight: number | null;
   exerciseDetailsMap: Map<
     string,
@@ -81,43 +82,54 @@ export async function _gatherAndPrepareWorkoutData(
       : [];
 
   // 1. Fetch User Profile, Bodyweight, Exercise Details, EMG Mappings, and Existing PRs concurrently
-  const [profileResult, bodyWeightResult, exercisesDataResult, emgMappingsResult, existingExercisePRsResult] =
-    await Promise.all([
-      supabase.from("user_profiles").select("*").eq("id", userId).single(),
-      supabase
-        .from("user_body_measurements")
-        .select("body_weight")
-        .eq("user_id", userId)
-        .lte("created_at", finishData.ended_at)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      sessionExerciseIds.length > 0
-        ? supabase
-            .from("exercises")
-            .select("id, name, exercise_type, bodyweight_percentage")
-            .in("id", sessionExerciseIds)
-        : Promise.resolve({ data: [], error: null }),
-      sessionExerciseIds.length > 0
-        ? supabase
-            .from("exercise_muscles") // Changed table name
-            .select("*, muscles (id, name, muscle_group_id, muscle_groups (id, name))") // Updated select
-            .in("exercise_id", sessionExerciseIds)
-        : Promise.resolve({ data: [], error: null }),
-      sessionExerciseIds.length > 0
-        ? supabase
-            .from("user_exercise_prs")
-            .select("exercise_id, best_swr, best_reps, rank_id") // Changed current_rank_label to rank_id
-            .eq("user_id", userId)
-            .in("exercise_id", sessionExerciseIds)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
+  const [
+    profileResult,
+    userResult,
+    bodyWeightResult,
+    exercisesDataResult,
+    emgMappingsResult,
+    existingExercisePRsResult,
+  ] = await Promise.all([
+    supabase.from("profiles").select("*").eq("id", userId).single(),
+    supabase.from("users").select("*").eq("id", userId).single(),
+    supabase
+      .from("body_measurements")
+      .select("value")
+      .eq("user_id", userId)
+      .eq("measurement_type", "body_weight")
+      .lte("measured_at", finishData.ended_at)
+      .order("measured_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    sessionExerciseIds.length > 0
+      ? supabase.from("exercises").select("id, name, exercise_type, bodyweight_percentage").in("id", sessionExerciseIds)
+      : Promise.resolve({ data: [], error: null }),
+    sessionExerciseIds.length > 0
+      ? supabase
+          .from("exercise_muscles") // Changed table name
+          .select("*, muscles (id, name, muscle_group_id, muscle_groups (id, name))") // Updated select
+          .in("exercise_id", sessionExerciseIds)
+      : Promise.resolve({ data: [], error: null }),
+    sessionExerciseIds.length > 0
+      ? supabase
+          .from("user_exercise_prs")
+          .select("exercise_id, best_swr, best_reps, rank_id") // Changed current_rank_label to rank_id
+          .eq("user_id", userId)
+          .in("exercise_id", sessionExerciseIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
 
   if (profileResult.error || !profileResult.data) {
     fastify.log.error({ error: profileResult.error, userId }, "[PREPARE_WORKOUT_DATA] Failed to fetch user profile.");
     throw new Error(`Failed to fetch user profile: ${profileResult.error?.message || "No profile data"}`);
   }
+  if (userResult.error || !userResult.data) {
+    fastify.log.error({ error: userResult.error, userId }, "[PREPARE_WORKOUT_DATA] Failed to fetch user data.");
+    throw new Error(`Failed to fetch user data: ${userResult.error?.message || "No user data"}`);
+  }
+
   const userProfile = profileResult.data;
+  const userData = userResult.data;
 
   if (bodyWeightResult.error) {
     fastify.log.error(
@@ -125,7 +137,7 @@ export async function _gatherAndPrepareWorkoutData(
       "[PREPARE_WORKOUT_DATA] Error fetching user bodyweight. SWR calculations may be null."
     );
   }
-  const userBodyweight = bodyWeightResult.data?.body_weight ?? null;
+  const userBodyweight = bodyWeightResult.data?.value ?? null;
   if (userBodyweight === null) {
     fastify.log.warn(
       { userId, performedAt: finishData.ended_at },
@@ -314,6 +326,7 @@ export async function _gatherAndPrepareWorkoutData(
     started_at: finishData.started_at,
     completed_at: finishData.ended_at,
     status: "completed",
+    public: finishData.public ?? true,
     notes: finishData.notes,
     workout_plan_id: finishData.workout_plan_id,
     workout_plan_day_id: finishData.workout_plan_day_id,
@@ -337,6 +350,7 @@ export async function _gatherAndPrepareWorkoutData(
     setInsertPayloads,
     setsProgressionInputData: setsProgressionInputArray,
     userProfile,
+    userData,
     userBodyweight,
     exerciseDetailsMap,
     exerciseMuscleMappings,

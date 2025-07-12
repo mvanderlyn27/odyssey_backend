@@ -36,6 +36,7 @@ export const InitialRankBodySchema = Type.Object(
     rank_exercise_strength_score: Type.Optional(
       Type.Number({ description: "Strength score calculated for the onboarding ranking exercise" })
     ),
+    push_notification_token: Type.Optional(Type.String({ description: "The user's push notification token" })),
   },
   {
     $id: "InitialRankBodySchema",

@@ -240,6 +240,7 @@ export const NewFinishSessionBodySchema = Type.Object(
     started_at: Type.String({ format: "date-time" }), // Remains mandatory: needed for new session creation
     ended_at: Type.String({ format: "date-time" }),
     duration_seconds: Type.Integer({ minimum: 0 }),
+    public: Type.Optional(Type.Boolean()),
     notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     overall_feeling: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Allow any string or null, aligning with service/response
     exercises: Type.Array(Type.Ref(SessionExerciseInputSchema)),
