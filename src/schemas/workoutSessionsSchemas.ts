@@ -165,7 +165,7 @@ export const SessionExerciseSchema = Type.Object(
     id: Type.String({ format: "uuid" }),
     workout_session_id: Type.String({ format: "uuid" }),
     exercise_id: Type.String({ format: "uuid" }),
-    workout_plan_day_exercise_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]), // Renamed from workout_plan_day_exercise_id based on service
+    workout_plan_exercise_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]), // Renamed from workout_plan_exercise_id based on service
     set_order: Type.Integer(), // Added based on LogSetBody
     planned_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])), // Added to store planned weight
     planned_min_reps: Type.Optional(Type.Integer()), // Renamed from target_reps_min
@@ -216,7 +216,7 @@ export type SessionSetInput = Static<typeof SessionSetInputSchema>;
 export const SessionExerciseInputSchema = Type.Object(
   {
     exercise_id: Type.String({ format: "uuid" }),
-    workout_plan_day_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
+    workout_plan_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
     order_index: Type.Integer({ minimum: 0 }),
     user_notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     auto_progression_enabled: Type.Optional(Type.Boolean()),

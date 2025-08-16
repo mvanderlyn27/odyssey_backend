@@ -123,7 +123,7 @@ These routes are prefixed with `/api/workout-sessions` for the `/finish` route, 
     *   `overall_feeling` (optional, string): e.g., "GREAT", "GOOD", "OK", "TIRED"
     *   `exercises` (array of `SessionExerciseInputSchema`):
         *   `exercise_id` (string, uuid)
-        *   `workout_plan_day_exercise_id` (optional, string, uuid)
+        *   `workout_plan_exercise_id` (optional, string, uuid)
         *   `order_index` (integer, min: 0)
         *   `user_notes` (optional, string)
         *   `sets` (array of `SessionSetInputSchema`):

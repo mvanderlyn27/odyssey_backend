@@ -110,7 +110,7 @@ Okay, let's break down a backend plan for your fitness app using Supabase, Fasti
     *   `id` (UUID, PK, default: uuid_generate_v4())
     *   `workout_session_id` (UUID, FK to `workout_sessions`, not null)
     *   `exercise_id` (UUID, FK to `exercises`, not null)
-    *   `workout_plan_day_exercise_id` (UUID, FK to `workout_plan_day_exercises`, nullable) // Link back to the planned exercise
+    *   `workout_plan_exercise_id` (UUID, FK to `workout_plan_day_exercises`, nullable) // Link back to the planned exercise
     *   `set_order` (integer, not null)
     *   `logged_reps` (integer, not null)
     *   `logged_weight_kg` (numeric, not null)

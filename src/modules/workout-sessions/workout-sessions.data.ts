@@ -17,7 +17,7 @@ export type SetProgressionInput = {
   exercise_name?: string | null;
   exercise_type: Enums<"exercise_type"> | null;
   auto_progression_enabled: boolean;
-  workout_plan_day_exercise_id?: string | null;
+  workout_plan_exercise_id?: string | null;
   workout_plan_day_exercise_sets_id?: string | null;
   set_order: number;
   planned_weight_kg?: number | null;
@@ -255,7 +255,7 @@ export async function _gatherAndPrepareWorkoutData(
           exercise_name: exerciseName,
           exercise_type: exerciseDetail?.exercise_type ?? null,
           auto_progression_enabled: exercise.auto_progression_enabled ?? false,
-          workout_plan_day_exercise_id: exercise.workout_plan_day_exercise_id,
+          workout_plan_exercise_id: exercise.workout_plan_exercise_id,
           workout_plan_day_exercise_sets_id: set.workout_plan_day_exercise_sets_id ?? null,
           set_order: set.order_index,
           planned_weight_kg: set.planned_weight_kg ?? null,

@@ -71,7 +71,7 @@ export async function _updateWorkoutPlanProgression(
     const currentPlanExerciseName = firstSet.exercise_name ?? "Unknown Exercise";
     const exerciseType = firstSet.exercise_type;
     const autoProgressionEnabled = firstSet.auto_progression_enabled;
-    const planDayExerciseId = firstSet.workout_plan_day_exercise_id;
+    const planDayExerciseId = firstSet.workout_plan_exercise_id;
 
     let progressionAppliedForExercise = false;
 

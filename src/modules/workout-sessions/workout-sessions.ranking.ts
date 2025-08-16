@@ -191,6 +191,7 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
 
   // A set to track which muscles were actually updated in this session.
   const updatedMuscleIds = new Set<string>();
+  const trainedMuscleGroupIds = new Set<string>();
 
   for (const set of persistedSessionSets) {
     // --- Replacement logic inside the `for (const set of persistedSessionSets)` loop ---
@@ -254,6 +255,10 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
     if (!primaryMusclesForSet) continue;
 
     for (const muscle of primaryMusclesForSet) {
+      const muscleInfo = musclesMap.get(muscle.muscle_id);
+      if (muscleInfo?.muscle_group_id) {
+        trainedMuscleGroupIds.add(muscleInfo.muscle_group_id);
+      }
       const contributionScore = Math.round(sps * muscle.mcw);
       const currentBestScore = finalIndividualMuscleScores.get(muscle.muscle_id) || 0;
 
@@ -324,21 +329,30 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
     );
   };
 
-  // Always update the single overall rank
-  upsertPromises.push(
-    Promise.resolve(
-      supabase.from("user_ranks").upsert(
-        {
-          id: userId,
-          user_id: userId,
-          strength_score: finalOverallScore,
-          rank_id: findRank(finalOverallScore),
-        },
-        { onConflict: "user_id" }
-      )
-    )
-  );
+  // --- Step 4: Persist User Rank with Detailed Logging ---
+  const userRankPayload = {
+    user_id: userId,
+    strength_score: finalOverallScore,
+    rank_id: findRank(finalOverallScore),
+  };
 
+  fastify.log.info({ payload: userRankPayload }, `[RANK_SYSTEM_UNIFIED] Attempting to upsert user rank.`);
+
+  try {
+    const { error: userRankError } = await supabase
+      .from("user_ranks")
+      .upsert(userRankPayload, { onConflict: "user_id" });
+    if (userRankError) {
+      fastify.log.error({ error: userRankError, userId }, `[RANK_SYSTEM_UNIFIED] Error upserting user rank.`);
+      // Decide if you want to throw or just log. For now, we'll log and continue.
+    } else {
+      fastify.log.info(`[RANK_SYSTEM_UNIFIED] Successfully upserted user rank for user ${userId}.`);
+    }
+  } catch (e: any) {
+    fastify.log.error({ error: e, userId }, `[RANK_SYSTEM_UNIFIED] CRITICAL: Exception during user rank upsert.`);
+  }
+
+  // --- Step 5: Persist Muscle and Muscle Group Ranks ---
   // Find which groups were affected by the updated muscles
   const affectedGroupIds = new Set<string>();
   for (const muscleId of updatedMuscleIds) {
@@ -382,13 +396,14 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
     }
   }
 
+  // Batch the remaining upserts for efficiency
   const settledPromises = await Promise.allSettled(upsertPromises);
 
   settledPromises.forEach((result, index) => {
     if (result.status === "rejected") {
       fastify.log.error(
         { error: result.reason, promiseIndex: index },
-        `[RANK_SYSTEM_UNIFIED] Upsert promise at index ${index} was rejected.`
+        `[RANK_SYSTEM_UNIFIED] Muscle/Group upsert promise at index ${index} was rejected.`
       );
     }
   });
@@ -407,7 +422,7 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
       rankThresholdsSortedAsc,
       ranksMap
     ),
-    muscle_group_progressions: Array.from(affectedGroupIds).map((groupId) => ({
+    muscle_group_progressions: Array.from(trainedMuscleGroupIds).map((groupId) => ({
       muscle_group_id: groupId,
       muscle_group_name: muscleGroupsMap.get(groupId)?.name || "Unknown Group",
       progression_details: buildRankProgression(

@@ -7,7 +7,7 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)"
@@ -17,28 +17,28 @@ export type Database = {
       active_workout_plans: {
         Row: {
           active_workout_plan_id: string | null
+          cur_cycle_start_date: string | null
           deleted: boolean
           id: string
-          last_completed_day_id: string | null
-          started_at: string | null
+          prev_cycle_start_date: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
           active_workout_plan_id?: string | null
+          cur_cycle_start_date?: string | null
           deleted?: boolean
           id?: string
-          last_completed_day_id?: string | null
-          started_at?: string | null
+          prev_cycle_start_date?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
           active_workout_plan_id?: string | null
+          cur_cycle_start_date?: string | null
           deleted?: boolean
           id?: string
-          last_completed_day_id?: string | null
-          started_at?: string | null
+          prev_cycle_start_date?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -51,16 +51,9 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "active_workout_plans_last_completed_day_id_fkey"
-            columns: ["last_completed_day_id"]
-            isOneToOne: false
-            referencedRelation: "workout_plan_days"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "active_workout_plans_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
@@ -148,6 +141,7 @@ export type Database = {
           id: string
           image_url: string | null
           name: string
+          type: Database["public"]["Enums"]["equipment_type"] | null
           updated_at: string
         }
         Insert: {
@@ -157,6 +151,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           name: string
+          type?: Database["public"]["Enums"]["equipment_type"] | null
           updated_at?: string
         }
         Update: {
@@ -166,9 +161,36 @@ export type Database = {
           id?: string
           image_url?: string | null
           name?: string
+          type?: Database["public"]["Enums"]["equipment_type"] | null
           updated_at?: string
         }
         Relationships: []
+      }
+      exercise_alternate_names: {
+        Row: {
+          exercise_id: string
+          id: string
+          name: string
+        }
+        Insert: {
+          exercise_id: string
+          id?: string
+          name: string
+        }
+        Update: {
+          exercise_id?: string
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_alternate_names_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       exercise_equipment_requirements: {
         Row: {
@@ -177,6 +199,7 @@ export type Database = {
           equipment_id: string | null
           exercise_id: string
           id: string
+          priority: number
           updated_at: string
         }
         Insert: {
@@ -185,6 +208,7 @@ export type Database = {
           equipment_id?: string | null
           exercise_id: string
           id?: string
+          priority?: number
           updated_at?: string
         }
         Update: {
@@ -193,6 +217,7 @@ export type Database = {
           equipment_id?: string | null
           exercise_id?: string
           id?: string
+          priority?: number
           updated_at?: string
         }
         Relationships: [
@@ -313,6 +338,7 @@ export type Database = {
           is_bilateral: boolean | null
           is_public: boolean | null
           name: string
+          popularity: number
           updated_at: string
           video_url: string | null
         }
@@ -329,6 +355,7 @@ export type Database = {
           is_bilateral?: boolean | null
           is_public?: boolean | null
           name: string
+          popularity?: number
           updated_at?: string
           video_url?: string | null
         }
@@ -345,6 +372,7 @@ export type Database = {
           is_bilateral?: boolean | null
           is_public?: boolean | null
           name?: string
+          popularity?: number
           updated_at?: string
           video_url?: string | null
         }
@@ -529,14 +557,7 @@ export type Database = {
             foreignKeyName: "muscle_group_rank_history_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "global_leaderboard"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "muscle_group_rank_history_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -702,14 +723,7 @@ export type Database = {
             foreignKeyName: "muscle_rank_history_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "global_leaderboard"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "muscle_rank_history_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -814,29 +828,44 @@ export type Database = {
       notifications: {
         Row: {
           created_at: string
+          error_message: string | null
           id: string
           is_read: boolean
           is_silent: boolean
+          message: string | null
           metadata: Json | null
           recipient_user_id: string
+          sent_at: string | null
+          status: Database["public"]["Enums"]["notification_status"]
+          title: string | null
           type: Database["public"]["Enums"]["notification_type"]
         }
         Insert: {
           created_at?: string
+          error_message?: string | null
           id?: string
           is_read?: boolean
           is_silent?: boolean
+          message?: string | null
           metadata?: Json | null
           recipient_user_id: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["notification_status"]
+          title?: string | null
           type: Database["public"]["Enums"]["notification_type"]
         }
         Update: {
           created_at?: string
+          error_message?: string | null
           id?: string
           is_read?: boolean
           is_silent?: boolean
+          message?: string | null
           metadata?: Json | null
           recipient_user_id?: string
+          sent_at?: string | null
+          status?: Database["public"]["Enums"]["notification_status"]
+          title?: string | null
           type?: Database["public"]["Enums"]["notification_type"]
         }
         Relationships: [
@@ -976,35 +1005,6 @@ export type Database = {
         }
         Relationships: []
       }
-      user_body_measurements: {
-        Row: {
-          body_weight: number | null
-          created_at: string
-          id: string
-          user_id: string
-        }
-        Insert: {
-          body_weight?: number | null
-          created_at?: string
-          id?: string
-          user_id: string
-        }
-        Update: {
-          body_weight?: number | null
-          created_at?: string
-          id?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_body_measurements_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       user_dismissed_banners: {
         Row: {
           banner_id: string
@@ -1071,14 +1071,7 @@ export type Database = {
             foreignKeyName: "user_exercise_pr_history_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "global_leaderboard"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "user_exercise_pr_history_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1150,6 +1143,32 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_favorite_exercises: {
+        Row: {
+          created_at: string | null
+          exercise_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          exercise_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          exercise_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_favorite_exercises_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
             referencedColumns: ["id"]
           },
         ]
@@ -1261,14 +1280,7 @@ export type Database = {
             foreignKeyName: "user_rank_history_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "global_leaderboard"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "user_rank_history_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1381,6 +1393,7 @@ export type Database = {
           funnel: string | null
           gender: string | null
           id: string
+          notification_enabled: boolean | null
           onboard_complete: boolean
           profile_visibility: Database["public"]["Enums"]["visibility_level"]
           push_notification_token: string | null
@@ -1389,7 +1402,7 @@ export type Database = {
           stats_visibility: Database["public"]["Enums"]["visibility_level"]
           theme_preference: string | null
           updated_at: string
-          weight_preference: string
+          weight_preference: Database["public"]["Enums"]["unit_type"] | null
           workout_session_privacy: Database["public"]["Enums"]["visibility_level"]
         }
         Insert: {
@@ -1401,6 +1414,7 @@ export type Database = {
           funnel?: string | null
           gender?: string | null
           id: string
+          notification_enabled?: boolean | null
           onboard_complete?: boolean
           profile_visibility?: Database["public"]["Enums"]["visibility_level"]
           push_notification_token?: string | null
@@ -1409,7 +1423,7 @@ export type Database = {
           stats_visibility?: Database["public"]["Enums"]["visibility_level"]
           theme_preference?: string | null
           updated_at?: string
-          weight_preference?: string
+          weight_preference?: Database["public"]["Enums"]["unit_type"] | null
           workout_session_privacy?: Database["public"]["Enums"]["visibility_level"]
         }
         Update: {
@@ -1421,6 +1435,7 @@ export type Database = {
           funnel?: string | null
           gender?: string | null
           id?: string
+          notification_enabled?: boolean | null
           onboard_complete?: boolean
           profile_visibility?: Database["public"]["Enums"]["visibility_level"]
           push_notification_token?: string | null
@@ -1429,7 +1444,7 @@ export type Database = {
           stats_visibility?: Database["public"]["Enums"]["visibility_level"]
           theme_preference?: string | null
           updated_at?: string
-          weight_preference?: string
+          weight_preference?: Database["public"]["Enums"]["unit_type"] | null
           workout_session_privacy?: Database["public"]["Enums"]["visibility_level"]
         }
         Relationships: []
@@ -1856,25 +1871,81 @@ export type Database = {
         Row: {
           avatar_url: string | null
           position: number | null
+          rank_id: number | null
           strength_score: number | null
           user_id: string | null
           username: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "user_ranks_rank_id_fkey"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Functions: {
       activate_workout_plan: {
-        Args: { user_id_input: string; plan_id_input: string }
+        Args: { plan_id_input: string; user_id_input: string }
         Returns: undefined
       }
       check_and_break_streaks: {
         Args: Record<PropertyKey, never>
         Returns: undefined
       }
-      clone_user_workout_plan: {
-        Args: { template_plan_id_input: string; target_user_id_input: string }
-        Returns: string
+      check_cycle_completion: {
+        Args: { p_plan_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      clone_workout_plan_full: {
+        Args: { p_user_id: string; template_plan_id: string }
+        Returns: {
+          j: Json
+        }[]
+      }
+      create_workout_plan: {
+        Args: { p_plan: Json }
+        Returns: Json
+      }
+      filter_exercises: {
+        Args: {
+          equipment_ids_param: string[]
+          exercise_types_param: string[]
+          muscle_ids_param: string[]
+          name_param: string
+        }
+        Returns: {
+          exercise_data: Json
+        }[]
+      }
+      get_user_strength_rank: {
+        Args: { p_user_id: string }
+        Returns: {
+          rank: number
+        }[]
+      }
+      gtrgm_compress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_decompress: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_in: {
+        Args: { "": unknown }
+        Returns: unknown
+      }
+      gtrgm_options: {
+        Args: { "": unknown }
+        Returns: undefined
+      }
+      gtrgm_out: {
+        Args: { "": unknown }
+        Returns: unknown
       }
       initialize_user_muscle_groups: {
         Args: { new_user_id: string }
@@ -1900,6 +1971,26 @@ export type Database = {
         Args: { target_user_id: string }
         Returns: undefined
       }
+      safe_refresh_leaderboard: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      save_workout_plan_changes: {
+        Args: { p_changes: Json }
+        Returns: Json
+      }
+      set_limit: {
+        Args: { "": number }
+        Returns: number
+      }
+      show_limit: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      show_trgm: {
+        Args: { "": string }
+        Returns: string[]
+      }
     }
     Enums: {
       body_measurement_type:
@@ -1916,6 +2007,17 @@ export type Database = {
         | "calf_left"
         | "calf_right"
       enum_body_side: "left" | "right" | "center" | "front" | "back"
+      equipment_type:
+        | "FreeWeights"
+        | "Machines"
+        | "BenchesAndRacks"
+        | "BarsAndAttachments"
+        | "BandsAndTubes"
+        | "BodyweightAssistTools"
+        | "Cardio"
+        | "RehabAndMobility"
+        | "SpecialtyStrength"
+        | "Other"
       exercise_type:
         | "cardio"
         | "N/A"
@@ -2124,6 +2226,7 @@ export type Database = {
         | "FrontLeftTrapezius"
         | "FrontLeftNeck"
         | "FrontLeftHead"
+      notification_status: "pending" | "sent" | "failed"
       notification_type:
         | "friend_request_received"
         | "friend_request_accepted"
@@ -2284,6 +2387,18 @@ export const Constants = {
         "calf_right",
       ],
       enum_body_side: ["left", "right", "center", "front", "back"],
+      equipment_type: [
+        "FreeWeights",
+        "Machines",
+        "BenchesAndRacks",
+        "BarsAndAttachments",
+        "BandsAndTubes",
+        "BodyweightAssistTools",
+        "Cardio",
+        "RehabAndMobility",
+        "SpecialtyStrength",
+        "Other",
+      ],
       exercise_type: [
         "cardio",
         "N/A",
@@ -2496,6 +2611,7 @@ export const Constants = {
         "FrontLeftNeck",
         "FrontLeftHead",
       ],
+      notification_status: ["pending", "sent", "failed"],
       notification_type: [
         "friend_request_received",
         "friend_request_accepted",

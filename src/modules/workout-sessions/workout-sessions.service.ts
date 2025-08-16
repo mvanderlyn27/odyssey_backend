@@ -16,7 +16,7 @@ import {
   PlanRepIncrease,
 } from "./workout-sessions.progression";
 import { _awardXpAndLevel } from "./workout-sessions.xp";
-import { _updateActiveWorkoutPlanLastCompletedDay } from "./workout-sessions.activePlan";
+import { _handleWorkoutPlanCycleCompletion } from "./workout-sessions.cycle";
 import { _updateUserMuscleLastWorked } from "./workout-sessions.lastWorked";
 import { _updateUserExercisePRs } from "./workout-sessions.prs";
 
@@ -167,13 +167,8 @@ export const finishWorkoutSession = async (
         persistedSessionSets,
         newlyCreatedOrFetchedSession.completed_at!
       ),
-      // Step 7: Update Active Workout Plan Last Completed Day
-      _updateActiveWorkoutPlanLastCompletedDay(
-        fastify,
-        userId,
-        newlyCreatedOrFetchedSession.workout_plan_id,
-        newlyCreatedOrFetchedSession.workout_plan_day_id
-      ),
+      // Step 7: Handle Workout Plan Cycle Completion
+      _handleWorkoutPlanCycleCompletion(fastify, userId, newlyCreatedOrFetchedSession.workout_plan_id),
       // Step 8: Update User Exercise PRs
       (() => {
         const genderForRanking = (userData.gender || "male") as Enums<"gender">;
@@ -207,20 +202,6 @@ export const finishWorkoutSession = async (
     // Step 4.5 (Update workout_sessions table with rank up counts) is REMOVED as per plan.
 
     // Step 8: Construct and return the detailed response
-    // Extract worked muscle group IDs for filtering
-    const workedMuscleGroupIds = new Set<string>();
-    if (muscles_worked_summary && muscles_worked_summary.length > 0) {
-      muscles_worked_summary.forEach((summaryItem) => {
-        if (summaryItem.muscle_group_id) {
-          workedMuscleGroupIds.add(summaryItem.muscle_group_id);
-        }
-      });
-    }
-
-    const filteredMuscleGroupProgressions = (rankUpdateResults.muscle_group_progressions || []).filter((progression) =>
-      workedMuscleGroupIds.has(progression.muscle_group_id)
-    );
-
     const responsePayload: DetailedFinishSessionResponse = {
       // Core Session Info & XP
       sessionId: newlyCreatedOrFetchedSession.id,
@@ -254,7 +235,7 @@ export const finishWorkoutSession = async (
       // Page 2: Muscle Groups & Rank Progression
       muscles_worked_summary: muscles_worked_summary, // Changed from muscle_groups_worked and uses the new destructured variable
       overall_user_rank_progression: rankUpdateResults.overall_user_rank_progression,
-      muscle_group_progressions: filteredMuscleGroupProgressions,
+      muscle_group_progressions: rankUpdateResults.muscle_group_progressions || [],
 
       // Page 3: Logged Set Overview & Plan Progression
       logged_set_overview: Array.from(
