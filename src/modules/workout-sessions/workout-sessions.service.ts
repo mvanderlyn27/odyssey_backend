@@ -19,6 +19,7 @@ import { _awardXpAndLevel } from "./workout-sessions.xp";
 import { _handleWorkoutPlanCycleCompletion } from "./workout-sessions.cycle";
 import { _updateUserMuscleLastWorked } from "./workout-sessions.lastWorked";
 import { _updateUserExercisePRs } from "./workout-sessions.prs";
+import { _handleWorkoutCompletionNotifications } from "./workout-sessions.notifications";
 
 // Comments for types/constants moved or no longer used have been removed.
 
@@ -133,7 +134,7 @@ export const finishWorkoutSession = async (
       xpLevelResult,
       _muscleLastWorkedResult, // Result not directly used in response, but we await completion
       _activePlanUpdateResult, // Result not directly used in response, but we await completion
-      _prsUpdateResult, // Result not directly used in response, but we await completion
+      newPrs, // Result not directly used in response, but we await completion
       previousSessionDataResult,
     ] = await Promise.all([
       // Step 3: Update Workout Plan Progression
@@ -190,6 +191,9 @@ export const finishWorkoutSession = async (
         return Promise.resolve({ data: null, error: null });
       })(),
     ]);
+
+    // Handle notifications non-blockingly
+    _handleWorkoutCompletionNotifications(fastify, userId, newlyCreatedOrFetchedSession.id, newPrs, rankUpdateResults);
 
     if (previousSessionDataResult.error) {
       fastify.log.warn(

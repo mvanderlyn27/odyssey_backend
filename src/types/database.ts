@@ -619,7 +619,14 @@ export type Database = {
             foreignKeyName: "muscle_group_ranks_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "global_leaderboard"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -785,7 +792,14 @@ export type Database = {
             foreignKeyName: "muscle_ranks_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "global_leaderboard"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -832,9 +846,11 @@ export type Database = {
           id: string
           is_read: boolean
           is_silent: boolean
+          link: string | null
           message: string | null
           metadata: Json | null
           recipient_user_id: string
+          sender_avatar_url: string | null
           sent_at: string | null
           status: Database["public"]["Enums"]["notification_status"]
           title: string | null
@@ -846,9 +862,11 @@ export type Database = {
           id?: string
           is_read?: boolean
           is_silent?: boolean
+          link?: string | null
           message?: string | null
           metadata?: Json | null
           recipient_user_id: string
+          sender_avatar_url?: string | null
           sent_at?: string | null
           status?: Database["public"]["Enums"]["notification_status"]
           title?: string | null
@@ -860,9 +878,11 @@ export type Database = {
           id?: string
           is_read?: boolean
           is_silent?: boolean
+          link?: string | null
           message?: string | null
           metadata?: Json | null
           recipient_user_id?: string
+          sender_avatar_url?: string | null
           sent_at?: string | null
           status?: Database["public"]["Enums"]["notification_status"]
           title?: string | null
@@ -1142,7 +1162,14 @@ export type Database = {
             foreignKeyName: "user_exercise_prs_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "global_leaderboard"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_exercise_prs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1325,7 +1352,14 @@ export type Database = {
             foreignKeyName: "user_ranks_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
-            referencedRelation: "users"
+            referencedRelation: "global_leaderboard"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "user_ranks_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -1391,10 +1425,13 @@ export type Database = {
           body_weight_privacy: Database["public"]["Enums"]["visibility_level"]
           deleted: boolean
           funnel: string | null
-          gender: string | null
+          gender: Database["public"]["Enums"]["gender"] | null
           id: string
+          is_premium: boolean | null
           notification_enabled: boolean | null
           onboard_complete: boolean
+          plan_type: string | null
+          premium_expires_at: string | null
           profile_visibility: Database["public"]["Enums"]["visibility_level"]
           push_notification_token: string | null
           rank_privacy: Database["public"]["Enums"]["visibility_level"]
@@ -1412,10 +1449,13 @@ export type Database = {
           body_weight_privacy?: Database["public"]["Enums"]["visibility_level"]
           deleted?: boolean
           funnel?: string | null
-          gender?: string | null
+          gender?: Database["public"]["Enums"]["gender"] | null
           id: string
+          is_premium?: boolean | null
           notification_enabled?: boolean | null
           onboard_complete?: boolean
+          plan_type?: string | null
+          premium_expires_at?: string | null
           profile_visibility?: Database["public"]["Enums"]["visibility_level"]
           push_notification_token?: string | null
           rank_privacy?: Database["public"]["Enums"]["visibility_level"]
@@ -1433,10 +1473,13 @@ export type Database = {
           body_weight_privacy?: Database["public"]["Enums"]["visibility_level"]
           deleted?: boolean
           funnel?: string | null
-          gender?: string | null
+          gender?: Database["public"]["Enums"]["gender"] | null
           id?: string
+          is_premium?: boolean | null
           notification_enabled?: boolean | null
           onboard_complete?: boolean
+          plan_type?: string | null
+          premium_expires_at?: string | null
           profile_visibility?: Database["public"]["Enums"]["visibility_level"]
           push_notification_token?: string | null
           rank_privacy?: Database["public"]["Enums"]["visibility_level"]
@@ -1870,7 +1913,8 @@ export type Database = {
       global_leaderboard: {
         Row: {
           avatar_url: string | null
-          position: number | null
+          display_name: string | null
+          rank: number | null
           rank_id: number | null
           strength_score: number | null
           user_id: string | null
@@ -1969,10 +2013,6 @@ export type Database = {
       }
       recalculate_all_muscle_stats: {
         Args: { target_user_id: string }
-        Returns: undefined
-      }
-      safe_refresh_leaderboard: {
-        Args: Record<PropertyKey, never>
         Returns: undefined
       }
       save_workout_plan_changes: {
@@ -2231,6 +2271,7 @@ export type Database = {
         | "friend_request_received"
         | "friend_request_accepted"
         | "friendship_removed"
+        | "new_workout_session"
       primary_group_enum: "arms" | "legs" | "back" | "chest" | "abs"
       rank_label: "F" | "E" | "D" | "C" | "B" | "A" | "S" | "Elite"
       session_status:
@@ -2616,6 +2657,7 @@ export const Constants = {
         "friend_request_received",
         "friend_request_accepted",
         "friendship_removed",
+        "new_workout_session",
       ],
       primary_group_enum: ["arms", "legs", "back", "chest", "abs"],
       rank_label: ["F", "E", "D", "C", "B", "A", "S", "Elite"],

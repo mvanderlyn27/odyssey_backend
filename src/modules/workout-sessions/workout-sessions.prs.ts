@@ -22,13 +22,13 @@ export async function _updateUserExercisePRs(
     string,
     Pick<Tables<"user_exercise_prs">, "exercise_id" | "best_swr" | "best_reps" | "rank_id">
   >
-): Promise<void> {
+): Promise<TablesInsert<"user_exercise_prs">[]> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
   fastify.log.info(`[USER_EXERCISE_PRS] Starting PR update process for user: ${userId}`);
 
   if (!persistedSessionSets || persistedSessionSets.length === 0) {
     fastify.log.info("[USER_EXERCISE_PRS] No sets provided, skipping PR update.");
-    return;
+    return [];
   }
 
   // Step 1: Fetch all exercises from cache
@@ -63,7 +63,7 @@ export async function _updateUserExercisePRs(
 
   if (bestSessionPerformances.size === 0) {
     fastify.log.info("[USER_EXERCISE_PRS] No valid non-warmup sets found, skipping PR update.");
-    return;
+    return [];
   }
 
   // Step 3: Fetch all rank benchmarks from cache
@@ -153,4 +153,5 @@ export async function _updateUserExercisePRs(
   } else {
     fastify.log.info("[USER_EXERCISE_PRS] No new PRs to update.");
   }
+  return prUpsertPayloads;
 }
