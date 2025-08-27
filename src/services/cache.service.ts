@@ -82,8 +82,15 @@ export class CacheService {
         if (error) throw error;
         return data || [];
       }),
+      this.get("allCustomExerciseMuscles", async () => {
+        const { data, error } = await supabase
+          .from("custom_exercise_muscles")
+          .select("custom_exercise_id, muscle_id, muscle_intensity");
+        if (error) throw error;
+        return data || [];
+      }),
       this.get("allExercises", async () => {
-        const { data, error } = await supabase.from("exercises").select("id, exercise_type");
+        const { data, error } = await supabase.from("v_full_exercises").select("id, exercise_type, source_type");
         if (error) throw error;
         return data || [];
       }),

@@ -50,15 +50,28 @@ export const finishWorkoutSession = async (
     // Step 1: Gather Data and Prepare Payloads
     const {
       sessionInsertPayload: rawSessionInsertPayload,
-      setInsertPayloads: rawSetInsertPayloads, // Payloads for workout_session_sets table
-      setsProgressionInputData, // Data for _updateWorkoutPlanProgression
+      setInsertPayloads: rawSetInsertPayloads,
+      setsProgressionInputData,
       userProfile,
       userData,
       userBodyweight,
-      exerciseDetailsMap, // Ensure this is destructured
-      exerciseMuscleMappings, // Destructure renamed variable
+      exerciseDetailsMap,
+      exerciseMuscleMappings,
       existingUserExercisePRs,
-      muscles_worked_summary, // Changed from muscleGroupsWorkedSummary
+      muscles_worked_summary,
+      exercises,
+      mcw,
+      allMuscles,
+      allMuscleGroups,
+      allRanks,
+      allRankThresholds,
+      allLevelDefinitions,
+      initialUserRank,
+      initialMuscleGroupRanks,
+      initialMuscleRanks,
+      activeWorkoutPlans,
+      exerciseRankBenchmarks,
+      friends,
     } = await _gatherAndPrepareWorkoutData(fastify, userId, finishData);
 
     // Handle existing_session_id: If provided, this is an update (finalize), otherwise new insert.
@@ -66,16 +79,14 @@ export const finishWorkoutSession = async (
 
     if (finishData.existing_session_id) {
       currentSessionIdToLogOnError = finishData.existing_session_id;
-      // Merge rawSessionInsertPayload with existing_session_id specific fields
-      // status is already 'completed' in rawSessionInsertPayload
       const { data: updatedSession, error: updateError } = await supabase
         .from("workout_sessions")
         .update({
-          ...rawSessionInsertPayload, // Contains all aggregates, completed_at, notes etc.
-          user_id: userId, // ensure user_id is part of update payload for RLS
+          ...rawSessionInsertPayload,
+          user_id: userId,
         })
         .eq("id", finishData.existing_session_id)
-        .eq("user_id", userId) // RLS
+        .eq("user_id", userId)
         .select()
         .single();
       if (updateError || !updatedSession) {
@@ -105,26 +116,32 @@ export const finishWorkoutSession = async (
       ...p,
       workout_session_id: newlyCreatedOrFetchedSession.id,
     }));
-    let persistedSessionSets: (Tables<"workout_session_sets"> & { exercise_name?: string | null })[] = [];
+    let persistedSessionSets: (Tables<"workout_session_sets"> & {
+      exercise_name?: string | null;
+      source_type?: "standard" | "custom" | null;
+    })[] = [];
     if (finalSetInsertPayloads.length > 0) {
       const { data: insertedSetsRaw, error: setsInsertError } = await supabase
         .from("workout_session_sets")
-        .insert(finalSetInsertPayloads.map(({ exercise_name, ...rest }) => rest)) // remove temp exercise_name
-        .select("*, exercises (name)"); // Fetch exercise name with the set
+        .insert(finalSetInsertPayloads.map(({ exercise_name, ...rest }) => rest))
+        .select("*");
 
       if (setsInsertError || !insertedSetsRaw) {
         fastify.log.error(
           { error: setsInsertError, sessionId: newlyCreatedOrFetchedSession.id },
           "Failed to insert workout_session_sets."
         );
-        // Potentially roll back session insert or mark as error? For now, throw.
         throw new Error(`Failed to insert workout_session_sets: ${setsInsertError?.message || "No data returned"}`);
       }
-      // Reconstruct with exercise_name for subsequent functions
-      persistedSessionSets = insertedSetsRaw.map((s) => ({
-        ...s,
-        exercise_name: (s.exercises as { name: string } | null)?.name ?? null,
-      }));
+      persistedSessionSets = insertedSetsRaw.map((s) => {
+        const exerciseId = s.exercise_id || s.custom_exercise_id;
+        const exerciseDetail = exerciseId ? exerciseDetailsMap.get(exerciseId) : undefined;
+        return {
+          ...s,
+          exercise_name: exerciseDetail?.name ?? "Unknown Exercise",
+          source_type: exerciseDetail?.source_type ?? null,
+        };
+      });
     }
 
     // Step 3 onwards: Parallelize operations
@@ -132,20 +149,17 @@ export const finishWorkoutSession = async (
       planProgressionResults,
       rankUpdateResults,
       xpLevelResult,
-      _muscleLastWorkedResult, // Result not directly used in response, but we await completion
-      _activePlanUpdateResult, // Result not directly used in response, but we await completion
-      newPrs, // Result not directly used in response, but we await completion
+      _muscleLastWorkedResult,
+      _activePlanUpdateResult,
+      newPrs,
       previousSessionDataResult,
     ] = await Promise.all([
-      // Step 3: Update Workout Plan Progression
       _updateWorkoutPlanProgression(
         fastify,
         newlyCreatedOrFetchedSession.workout_plan_day_id,
         setsProgressionInputData
       ),
-      // Step 4: Update User Exercise and Muscle Group Ranks
       (() => {
-        // Assume 'male' for ranking if gender is not specified.
         const genderForRanking = (userData.gender || "male") as Enums<"gender">;
         if (!userData.gender) {
           fastify.log.warn({ userId }, "User gender is not specified. Defaulting to 'male' for ranking calculations.");
@@ -155,27 +169,45 @@ export const finishWorkoutSession = async (
           userId,
           genderForRanking,
           userBodyweight,
-          persistedSessionSets
+          persistedSessionSets,
+          exercises,
+          mcw,
+          allMuscles,
+          allMuscleGroups,
+          allRanks,
+          allRankThresholds,
+          initialUserRank,
+          initialMuscleGroupRanks,
+          initialMuscleRanks
         );
       })(),
-      // Step 6: Award XP
-      _awardXpAndLevel(fastify, userProfile),
-      // Step 5: Update User Muscle Last Worked
+      _awardXpAndLevel(fastify, userProfile, allLevelDefinitions),
       _updateUserMuscleLastWorked(
         fastify,
         userId,
         newlyCreatedOrFetchedSession.id,
         persistedSessionSets,
-        newlyCreatedOrFetchedSession.completed_at!
+        newlyCreatedOrFetchedSession.completed_at!,
+        exerciseMuscleMappings
       ),
-      // Step 7: Handle Workout Plan Cycle Completion
-      _handleWorkoutPlanCycleCompletion(fastify, userId, newlyCreatedOrFetchedSession.workout_plan_id),
-      // Step 8: Update User Exercise PRs
+      _handleWorkoutPlanCycleCompletion(
+        fastify,
+        userId,
+        newlyCreatedOrFetchedSession.workout_plan_id,
+        activeWorkoutPlans
+      ),
       (() => {
         const genderForRanking = (userData.gender || "male") as Enums<"gender">;
-        return _updateUserExercisePRs(fastify, userId, genderForRanking, persistedSessionSets, existingUserExercisePRs);
+        return _updateUserExercisePRs(
+          fastify,
+          userId,
+          genderForRanking,
+          persistedSessionSets,
+          existingUserExercisePRs,
+          exerciseDetailsMap,
+          exerciseRankBenchmarks
+        );
       })(),
-      // Fetch Previous Session Data for Deltas
       (() => {
         if (newlyCreatedOrFetchedSession.workout_plan_day_id) {
           return supabase
@@ -192,8 +224,16 @@ export const finishWorkoutSession = async (
       })(),
     ]);
 
-    // Handle notifications non-blockingly
-    _handleWorkoutCompletionNotifications(fastify, userId, newlyCreatedOrFetchedSession.id, newPrs, rankUpdateResults);
+    _handleWorkoutCompletionNotifications(
+      fastify,
+      userId,
+      newlyCreatedOrFetchedSession.id,
+      newPrs,
+      rankUpdateResults,
+      userData,
+      userProfile,
+      friends
+    );
 
     if (previousSessionDataResult.error) {
       fastify.log.warn(
@@ -203,11 +243,7 @@ export const finishWorkoutSession = async (
     }
     const previousSessionData = previousSessionDataResult.data;
 
-    // Step 4.5 (Update workout_sessions table with rank up counts) is REMOVED as per plan.
-
-    // Step 8: Construct and return the detailed response
     const responsePayload: DetailedFinishSessionResponse = {
-      // Core Session Info & XP
       sessionId: newlyCreatedOrFetchedSession.id,
       completedAt: newlyCreatedOrFetchedSession.completed_at!,
       exercisesPerformed: newlyCreatedOrFetchedSession.exercises_performed_summary || "",
@@ -217,8 +253,6 @@ export const finishWorkoutSession = async (
       newLevelNumber: xpLevelResult.newLevelNumber,
       remaining_xp_for_next_level:
         xpLevelResult.remaining_xp_for_next_level === null ? undefined : xpLevelResult.remaining_xp_for_next_level,
-
-      // Page 1: Overview Stats
       total_volume: newlyCreatedOrFetchedSession.total_volume_kg || 0,
       volume_delta: previousSessionData
         ? (newlyCreatedOrFetchedSession.total_volume_kg || 0) - (previousSessionData.total_volume_kg || 0)
@@ -235,19 +269,15 @@ export const finishWorkoutSession = async (
       set_delta: previousSessionData
         ? (newlyCreatedOrFetchedSession.total_sets || 0) - (previousSessionData.total_sets || 0)
         : newlyCreatedOrFetchedSession.total_sets || 0,
-
-      // Page 2: Muscle Groups & Rank Progression
-      muscles_worked_summary: muscles_worked_summary, // Changed from muscle_groups_worked and uses the new destructured variable
+      muscles_worked_summary: muscles_worked_summary,
       overall_user_rank_progression: rankUpdateResults.overall_user_rank_progression,
       muscle_group_progressions: rankUpdateResults.muscle_group_progressions || [],
-
-      // Page 3: Logged Set Overview & Plan Progression
       logged_set_overview: Array.from(
         persistedSessionSets
           .reduce((acc, set) => {
-            const exerciseName =
-              set.exercise_name || (exerciseDetailsMap.get(set.exercise_id)?.name ?? "Unknown Exercise");
-            const exerciseDetail = exerciseDetailsMap.get(set.exercise_id);
+            const exerciseId = set.exercise_id || set.custom_exercise_id;
+            const exerciseName = set.exercise_name || "Unknown Exercise";
+            const exerciseDetail = exerciseId ? exerciseDetailsMap.get(exerciseId) : undefined;
             if (!acc.has(exerciseName)) {
               acc.set(exerciseName, {
                 exercise_name: exerciseName,
@@ -258,7 +288,7 @@ export const finishWorkoutSession = async (
               acc.get(exerciseName)!.failed_set_info.push({
                 set_number: set.set_order,
                 reps_achieved: set.actual_reps,
-                target_reps: set.planned_min_reps, // As per clarification
+                target_reps: set.planned_min_reps,
                 achieved_weight: set.actual_weight_kg,
                 exercise_type: exerciseDetail?.exercise_type,
               });

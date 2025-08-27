@@ -47,6 +47,13 @@ export type Database = {
             foreignKeyName: "active_workout_plans_active_workout_plan_id_fkey"
             columns: ["active_workout_plan_id"]
             isOneToOne: false
+            referencedRelation: "v_workout_plan_full"
+            referencedColumns: ["plan_id"]
+          },
+          {
+            foreignKeyName: "active_workout_plans_active_workout_plan_id_fkey"
+            columns: ["active_workout_plan_id"]
+            isOneToOne: false
             referencedRelation: "workout_plans"
             referencedColumns: ["id"]
           },
@@ -85,9 +92,16 @@ export type Database = {
           {
             foreignKeyName: "active_workout_sessions_user_id_fkey"
             columns: ["user_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "users"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "active_workout_sessions_workout_session_id_fkey"
+            columns: ["workout_session_id"]
+            isOneToOne: false
+            referencedRelation: "v_workout_session_full"
+            referencedColumns: ["workout_session_id"]
           },
           {
             foreignKeyName: "active_workout_sessions_workout_session_id_fkey"
@@ -129,6 +143,169 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_exercise_equipment_requirements: {
+        Row: {
+          created_at: string
+          custom_exercise_id: string
+          equipment_id: string
+          id: string
+          priority: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          custom_exercise_id: string
+          equipment_id: string
+          id?: string
+          priority?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          custom_exercise_id?: string
+          equipment_id?: string
+          id?: string
+          priority?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_exercise_equipment_requirements_custom_exercise_id_fkey"
+            columns: ["custom_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "custom_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_exercise_equipment_requirements_equipment_id_fkey"
+            columns: ["equipment_id"]
+            isOneToOne: false
+            referencedRelation: "equipment"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_exercise_muscles: {
+        Row: {
+          created_at: string | null
+          custom_exercise_id: string
+          exercise_muscle_weight: number | null
+          id: string
+          muscle_id: string
+          muscle_intensity: Database["public"]["Enums"]["muscle_intensity"]
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          custom_exercise_id: string
+          exercise_muscle_weight?: number | null
+          id?: string
+          muscle_id: string
+          muscle_intensity: Database["public"]["Enums"]["muscle_intensity"]
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          custom_exercise_id?: string
+          exercise_muscle_weight?: number | null
+          id?: string
+          muscle_id?: string
+          muscle_intensity?: Database["public"]["Enums"]["muscle_intensity"]
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_exercise_muscles_custom_exercise_id_fkey"
+            columns: ["custom_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "custom_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_exercise_muscles_muscle_id_fkey"
+            columns: ["muscle_id"]
+            isOneToOne: false
+            referencedRelation: "muscles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_exercises: {
+        Row: {
+          bodyweight_percentage: number | null
+          created_at: string
+          deleted: boolean
+          description: string | null
+          difficulty: string | null
+          exercise_type: Database["public"]["Enums"]["exercise_type"] | null
+          id: string
+          instructions: string | null
+          is_bilateral: boolean | null
+          name: string
+          popularity: number
+          source_custom_exercise_id: string | null
+          updated_at: string
+          user_id: string
+          video_url: string | null
+        }
+        Insert: {
+          bodyweight_percentage?: number | null
+          created_at?: string
+          deleted?: boolean
+          description?: string | null
+          difficulty?: string | null
+          exercise_type?: Database["public"]["Enums"]["exercise_type"] | null
+          id?: string
+          instructions?: string | null
+          is_bilateral?: boolean | null
+          name: string
+          popularity?: number
+          source_custom_exercise_id?: string | null
+          updated_at?: string
+          user_id: string
+          video_url?: string | null
+        }
+        Update: {
+          bodyweight_percentage?: number | null
+          created_at?: string
+          deleted?: boolean
+          description?: string | null
+          difficulty?: string | null
+          exercise_type?: Database["public"]["Enums"]["exercise_type"] | null
+          id?: string
+          instructions?: string | null
+          is_bilateral?: boolean | null
+          name?: string
+          popularity?: number
+          source_custom_exercise_id?: string | null
+          updated_at?: string
+          user_id?: string
+          video_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_exercises_source_custom_exercise_id_fkey"
+            columns: ["source_custom_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "custom_exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_exercises_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "global_leaderboard"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "custom_exercises_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -328,7 +505,6 @@ export type Database = {
         Row: {
           bodyweight_percentage: number | null
           created_at: string
-          created_by_user_id: string | null
           deleted: boolean
           description: string | null
           difficulty: string | null
@@ -336,7 +512,6 @@ export type Database = {
           id: string
           instructions: string | null
           is_bilateral: boolean | null
-          is_public: boolean | null
           name: string
           popularity: number
           updated_at: string
@@ -345,7 +520,6 @@ export type Database = {
         Insert: {
           bodyweight_percentage?: number | null
           created_at?: string
-          created_by_user_id?: string | null
           deleted?: boolean
           description?: string | null
           difficulty?: string | null
@@ -353,7 +527,6 @@ export type Database = {
           id?: string
           instructions?: string | null
           is_bilateral?: boolean | null
-          is_public?: boolean | null
           name: string
           popularity?: number
           updated_at?: string
@@ -362,7 +535,6 @@ export type Database = {
         Update: {
           bodyweight_percentage?: number | null
           created_at?: string
-          created_by_user_id?: string | null
           deleted?: boolean
           description?: string | null
           difficulty?: string | null
@@ -370,7 +542,6 @@ export type Database = {
           id?: string
           instructions?: string | null
           is_bilateral?: boolean | null
-          is_public?: boolean | null
           name?: string
           popularity?: number
           updated_at?: string
@@ -1066,7 +1237,9 @@ export type Database = {
           achieved_at: string
           best_1rm: number | null
           best_swr: number | null
-          exercise_id: string
+          custom_exercise_id: string | null
+          exercise_id: string | null
+          exercise_key: string
           id: string
           user_id: string
         }
@@ -1074,7 +1247,9 @@ export type Database = {
           achieved_at: string
           best_1rm?: number | null
           best_swr?: number | null
-          exercise_id: string
+          custom_exercise_id?: string | null
+          exercise_id?: string | null
+          exercise_key: string
           id?: string
           user_id: string
         }
@@ -1082,11 +1257,20 @@ export type Database = {
           achieved_at?: string
           best_1rm?: number | null
           best_swr?: number | null
-          exercise_id?: string
+          custom_exercise_id?: string | null
+          exercise_id?: string | null
+          exercise_key?: string
           id?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_exercise_pr_history_custom_exercise_id_fkey"
+            columns: ["custom_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "custom_exercises"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_exercise_pr_history_user_id_fkey"
             columns: ["user_id"]
@@ -1103,7 +1287,9 @@ export type Database = {
           best_reps: number | null
           best_swr: number | null
           created_at: string | null
-          exercise_id: string
+          custom_exercise_id: string | null
+          exercise_id: string | null
+          exercise_key: string
           id: string
           rank_id: number | null
           source_set_id: string | null
@@ -1116,7 +1302,9 @@ export type Database = {
           best_reps?: number | null
           best_swr?: number | null
           created_at?: string | null
-          exercise_id: string
+          custom_exercise_id?: string | null
+          exercise_id?: string | null
+          exercise_key: string
           id?: string
           rank_id?: number | null
           source_set_id?: string | null
@@ -1129,7 +1317,9 @@ export type Database = {
           best_reps?: number | null
           best_swr?: number | null
           created_at?: string | null
-          exercise_id?: string
+          custom_exercise_id?: string | null
+          exercise_id?: string | null
+          exercise_key?: string
           id?: string
           rank_id?: number | null
           source_set_id?: string | null
@@ -1142,6 +1332,13 @@ export type Database = {
             columns: ["rank_id"]
             isOneToOne: false
             referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_prs_custom_exercise_id_fkey"
+            columns: ["custom_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "custom_exercises"
             referencedColumns: ["id"]
           },
           {
@@ -1177,20 +1374,33 @@ export type Database = {
       user_favorite_exercises: {
         Row: {
           created_at: string | null
-          exercise_id: string
+          custom_exercise_id: string | null
+          exercise_id: string | null
+          id: string
           user_id: string
         }
         Insert: {
           created_at?: string | null
-          exercise_id: string
+          custom_exercise_id?: string | null
+          exercise_id?: string | null
+          id?: string
           user_id: string
         }
         Update: {
           created_at?: string | null
-          exercise_id?: string
+          custom_exercise_id?: string | null
+          exercise_id?: string | null
+          id?: string
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_favorite_exercises_custom_exercise_id_fkey"
+            columns: ["custom_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "custom_exercises"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_favorite_exercises_exercise_id_fkey"
             columns: ["exercise_id"]
@@ -1270,6 +1480,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "muscles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_muscle_last_worked_workout_session_id_fkey"
+            columns: ["workout_session_id"]
+            isOneToOne: false
+            referencedRelation: "v_workout_session_full"
+            referencedColumns: ["workout_session_id"]
           },
           {
             foreignKeyName: "user_muscle_last_worked_workout_session_id_fkey"
@@ -1552,9 +1769,10 @@ export type Database = {
         Row: {
           auto_progression_enabled: boolean | null
           created_at: string
+          custom_exercise_id: string | null
           deleted: boolean
           edit_sets_individually: boolean | null
-          exercise_id: string
+          exercise_id: string | null
           exercise_order: number
           id: string
           notes: string | null
@@ -1568,9 +1786,10 @@ export type Database = {
         Insert: {
           auto_progression_enabled?: boolean | null
           created_at?: string
+          custom_exercise_id?: string | null
           deleted?: boolean
           edit_sets_individually?: boolean | null
-          exercise_id: string
+          exercise_id?: string | null
           exercise_order: number
           id?: string
           notes?: string | null
@@ -1584,9 +1803,10 @@ export type Database = {
         Update: {
           auto_progression_enabled?: boolean | null
           created_at?: string
+          custom_exercise_id?: string | null
           deleted?: boolean
           edit_sets_individually?: boolean | null
-          exercise_id?: string
+          exercise_id?: string | null
           exercise_order?: number
           id?: string
           notes?: string | null
@@ -1598,6 +1818,13 @@ export type Database = {
           workout_plan_day_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "workout_plan_day_exercises_custom_exercise_id_fkey"
+            columns: ["custom_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "custom_exercises"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "workout_plan_day_exercises_exercise_id_fkey"
             columns: ["exercise_id"]
@@ -1650,6 +1877,13 @@ export type Database = {
             foreignKeyName: "workout_plan_days_workout_plan_id_fkey"
             columns: ["workout_plan_id"]
             isOneToOne: false
+            referencedRelation: "v_workout_plan_full"
+            referencedColumns: ["plan_id"]
+          },
+          {
+            foreignKeyName: "workout_plan_days_workout_plan_id_fkey"
+            columns: ["workout_plan_id"]
+            isOneToOne: false
             referencedRelation: "workout_plans"
             referencedColumns: ["id"]
           },
@@ -1668,6 +1902,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           name: string
+          parent_plan_id: string | null
           plan_type: string | null
           public: boolean
           recommended_week_duration: number | null
@@ -1688,6 +1923,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name: string
+          parent_plan_id?: string | null
           plan_type?: string | null
           public?: boolean
           recommended_week_duration?: number | null
@@ -1708,6 +1944,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           name?: string
+          parent_plan_id?: string | null
           plan_type?: string | null
           public?: boolean
           recommended_week_duration?: number | null
@@ -1717,6 +1954,20 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "workout_plans_parent_plan_id_fkey"
+            columns: ["parent_plan_id"]
+            isOneToOne: false
+            referencedRelation: "v_workout_plan_full"
+            referencedColumns: ["plan_id"]
+          },
+          {
+            foreignKeyName: "workout_plans_parent_plan_id_fkey"
+            columns: ["parent_plan_id"]
+            isOneToOne: false
+            referencedRelation: "workout_plans"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "workout_plans_user_id_fkey"
             columns: ["user_id"]
@@ -1732,8 +1983,9 @@ export type Database = {
           actual_weight_kg: number | null
           calculated_1rm: number | null
           calculated_swr: number | null
+          custom_exercise_id: string | null
           deleted: boolean
-          exercise_id: string
+          exercise_id: string | null
           id: string
           is_success: boolean | null
           is_warmup: boolean | null
@@ -1753,8 +2005,9 @@ export type Database = {
           actual_weight_kg?: number | null
           calculated_1rm?: number | null
           calculated_swr?: number | null
+          custom_exercise_id?: string | null
           deleted?: boolean
-          exercise_id: string
+          exercise_id?: string | null
           id?: string
           is_success?: boolean | null
           is_warmup?: boolean | null
@@ -1774,8 +2027,9 @@ export type Database = {
           actual_weight_kg?: number | null
           calculated_1rm?: number | null
           calculated_swr?: number | null
+          custom_exercise_id?: string | null
           deleted?: boolean
-          exercise_id?: string
+          exercise_id?: string | null
           id?: string
           is_success?: boolean | null
           is_warmup?: boolean | null
@@ -1792,6 +2046,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "workout_session_sets_custom_exercise_id_fkey"
+            columns: ["custom_exercise_id"]
+            isOneToOne: false
+            referencedRelation: "custom_exercises"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "workout_session_sets_exercise_id_fkey"
             columns: ["exercise_id"]
             isOneToOne: false
@@ -1804,6 +2065,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "workout_plan_day_exercise_sets"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_session_sets_workout_session_id_fkey"
+            columns: ["workout_session_id"]
+            isOneToOne: false
+            referencedRelation: "v_workout_session_full"
+            referencedColumns: ["workout_session_id"]
           },
           {
             foreignKeyName: "workout_session_sets_workout_session_id_fkey"
@@ -1903,6 +2171,13 @@ export type Database = {
             foreignKeyName: "workout_sessions_workout_plan_id_fkey"
             columns: ["workout_plan_id"]
             isOneToOne: false
+            referencedRelation: "v_workout_plan_full"
+            referencedColumns: ["plan_id"]
+          },
+          {
+            foreignKeyName: "workout_sessions_workout_plan_id_fkey"
+            columns: ["workout_plan_id"]
+            isOneToOne: false
             referencedRelation: "workout_plans"
             referencedColumns: ["id"]
           },
@@ -1930,11 +2205,139 @@ export type Database = {
           },
         ]
       }
+      v_full_exercises: {
+        Row: {
+          alternate_names: string[] | null
+          bodyweight_percentage: number | null
+          created_at: string | null
+          deleted: boolean | null
+          description: string | null
+          difficulty: string | null
+          exercise_equipment_requirements: Json | null
+          exercise_muscles: Json | null
+          exercise_type: Database["public"]["Enums"]["exercise_type"] | null
+          id: string | null
+          instructions: string | null
+          is_bilateral: boolean | null
+          name: string | null
+          popularity: number | null
+          source_type: string | null
+          updated_at: string | null
+          user_id: string | null
+          video_url: string | null
+        }
+        Relationships: []
+      }
+      v_workout_plan_full: {
+        Row: {
+          admin_plan: boolean | null
+          days: Json | null
+          parent_plan_id: string | null
+          plan_approximate_workout_minutes: number | null
+          plan_created_at: string | null
+          plan_created_by: string | null
+          plan_days_per_week: number | null
+          plan_deleted: boolean | null
+          plan_description: string | null
+          plan_goal: string | null
+          plan_id: string | null
+          plan_is_active: boolean | null
+          plan_name: string | null
+          plan_public: boolean | null
+          plan_recommended_week_duration: number | null
+          plan_source_description: string | null
+          plan_start_date: string | null
+          plan_type: string | null
+          plan_updated_at: string | null
+          user_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_plans_parent_plan_id_fkey"
+            columns: ["parent_plan_id"]
+            isOneToOne: false
+            referencedRelation: "v_workout_plan_full"
+            referencedColumns: ["plan_id"]
+          },
+          {
+            foreignKeyName: "workout_plans_parent_plan_id_fkey"
+            columns: ["parent_plan_id"]
+            isOneToOne: false
+            referencedRelation: "workout_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_plans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_workout_session_full: {
+        Row: {
+          completed_at: string | null
+          created_at: string | null
+          deleted: boolean | null
+          duration_seconds: number | null
+          exercises_performed_summary: string | null
+          muscle_group_rank_ups_count: number | null
+          muscle_rank_ups_count: number | null
+          notes: string | null
+          overall_rank_up_count: number | null
+          public: boolean | null
+          session_name: string | null
+          sets: Json | null
+          started_at: string | null
+          status: string | null
+          total_reps: number | null
+          total_sets: number | null
+          total_volume_kg: number | null
+          updated_at: string | null
+          user_id: string | null
+          workout_plan_day_id: string | null
+          workout_plan_id: string | null
+          workout_session_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workout_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_sessions_workout_plan_day_id_fkey"
+            columns: ["workout_plan_day_id"]
+            isOneToOne: false
+            referencedRelation: "workout_plan_days"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "workout_sessions_workout_plan_id_fkey"
+            columns: ["workout_plan_id"]
+            isOneToOne: false
+            referencedRelation: "v_workout_plan_full"
+            referencedColumns: ["plan_id"]
+          },
+          {
+            foreignKeyName: "workout_sessions_workout_plan_id_fkey"
+            columns: ["workout_plan_id"]
+            isOneToOne: false
+            referencedRelation: "workout_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       activate_workout_plan: {
-        Args: { plan_id_input: string; user_id_input: string }
-        Returns: undefined
+        Args: { p_plan_id: string; p_user_id: string }
+        Returns: {
+          j: Json
+        }[]
       }
       check_and_break_streaks: {
         Args: Record<PropertyKey, never>
@@ -1944,14 +2347,30 @@ export type Database = {
         Args: { p_plan_id: string; p_user_id: string }
         Returns: boolean
       }
-      clone_workout_plan_full: {
-        Args: { p_user_id: string; template_plan_id: string }
+      clone_custom_exercise: {
+        Args: { source_exercise_id: string; target_user_id: string }
+        Returns: undefined
+      }
+      clone_custom_exercises_from_plan: {
+        Args: { p_user_id: string; source_plan_id: string }
+        Returns: undefined
+      }
+      clone_user_workout_plan: {
+        Args: { target_user_id_input: string; template_plan_id_input: string }
+        Returns: string
+      }
+      clone_workout_plan: {
+        Args: { p_source_plan_id: string; p_user_id: string }
         Returns: {
           j: Json
         }[]
       }
+      create_custom_exercise: {
+        Args: { exercise_data: Json }
+        Returns: Json
+      }
       create_workout_plan: {
-        Args: { p_plan: Json }
+        Args: Record<PropertyKey, never>
         Returns: Json
       }
       filter_exercises: {
@@ -1960,9 +2379,27 @@ export type Database = {
           exercise_types_param: string[]
           muscle_ids_param: string[]
           name_param: string
+          user_id_param: string
         }
         Returns: {
-          exercise_data: Json
+          alternate_names: string[]
+          bodyweight_percentage: number
+          created_at: string
+          deleted: boolean
+          description: string
+          difficulty: string
+          exercise_equipment_requirements: Json
+          exercise_muscles: Json
+          exercise_type: Database["public"]["Enums"]["exercise_type"]
+          id: string
+          instructions: string
+          is_bilateral: boolean
+          name: string
+          popularity: number
+          source_type: string
+          updated_at: string
+          user_id: string
+          video_url: string
         }[]
       }
       get_user_strength_rank: {

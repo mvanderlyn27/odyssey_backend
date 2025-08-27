@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Database, TablesInsert } from "../../types/database";
+import { Database, Tables, TablesInsert } from "../../types/database";
 import { RankUpdateResults } from "./workout-sessions.ranking";
 
 /**
@@ -17,29 +17,15 @@ export async function _handleWorkoutCompletionNotifications(
   userId: string,
   workoutSessionId: string,
   newPrs: TablesInsert<"user_exercise_prs">[],
-  rankUpResults: RankUpdateResults
+  rankUpResults: RankUpdateResults,
+  userData: Tables<"users">,
+  userProfile: Tables<"profiles">,
+  friends: Tables<"friendships">[]
 ): Promise<void> {
   fastify.log.info(`[NOTIFICATIONS] Starting notification handling for user: ${userId}, session: ${workoutSessionId}`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   try {
-    // 1. Fetch user data, profile, and friends in parallel
-    const [userResult, profileResult, friendsResult] = await Promise.all([
-      supabase.from("users").select("activity_visibility").eq("id", userId).single(),
-      supabase.from("profiles").select("display_name, avatar_url").eq("id", userId).single(),
-      supabase
-        .from("friendships")
-        .select("requester_id, addressee_id")
-        .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
-        .eq("status", "accepted"),
-    ]);
-
-    const { data: userData, error: userError } = userResult;
-    if (userError || !userData) {
-      fastify.log.error({ error: userError, userId }, `[NOTIFICATIONS] Could not fetch user data.`);
-      return;
-    }
-
     if (userData.activity_visibility === "private") {
       fastify.log.info(
         `[NOTIFICATIONS] User ${userId} has private activity visibility. No notifications will be sent.`
@@ -47,20 +33,8 @@ export async function _handleWorkoutCompletionNotifications(
       return;
     }
 
-    const { data: profileData, error: profileError } = profileResult;
-    if (profileError || !profileData) {
-      fastify.log.error({ error: profileError, userId }, `[NOTIFICATIONS] Could not fetch user profile.`);
-      // Continue without a name, but log the error.
-    }
-
-    const { data: friendsData, error: friendsError } = friendsResult;
-    if (friendsError) {
-      fastify.log.error({ error: friendsError, userId }, `[NOTIFICATIONS] Error fetching friends for user.`);
-      return;
-    }
-
     const friendIds =
-      friendsData?.map((friend) => (friend.requester_id === userId ? friend.addressee_id : friend.requester_id)) || [];
+      friends?.map((friend) => (friend.requester_id === userId ? friend.addressee_id : friend.requester_id)) || [];
 
     if (friendIds.length === 0) {
       fastify.log.info(`[NOTIFICATIONS] User ${userId} has no friends. No notifications to send.`);
@@ -68,8 +42,8 @@ export async function _handleWorkoutCompletionNotifications(
     }
 
     // 2. Determine the most important event to notify about
-    const senderName = profileData?.display_name || "Your Friend";
-    const senderAvatarUrl = profileData?.avatar_url;
+    const senderName = userProfile?.display_name || "Your Friend";
+    const senderAvatarUrl = userProfile?.avatar_url;
     let title = "New Workout!";
     let message = `${senderName} just completed a workout.`;
 

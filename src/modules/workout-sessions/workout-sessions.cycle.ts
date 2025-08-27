@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Database } from "../../types/database";
+import { Database, Tables } from "../../types/database";
 
 /**
  * Checks if a workout plan's cycle is complete and updates the cycle start dates if it is.
@@ -11,7 +11,8 @@ import { Database } from "../../types/database";
 export async function _handleWorkoutPlanCycleCompletion(
   fastify: FastifyInstance,
   userId: string,
-  sessionPlanId: string | null | undefined
+  sessionPlanId: string | null | undefined,
+  activeWorkoutPlans: Tables<"active_workout_plans">[]
 ): Promise<void> {
   fastify.log.info(`[CYCLE_COMPLETION] Starting cycle completion check for user: ${userId}, plan: ${sessionPlanId}`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
@@ -43,16 +44,11 @@ export async function _handleWorkoutPlanCycleCompletion(
       );
 
       // Get the current cycle start date to move it to the previous date
-      const { data: activePlan, error: activePlanError } = await supabase
-        .from("active_workout_plans")
-        .select("cur_cycle_start_date")
-        .eq("user_id", userId)
-        .eq("active_workout_plan_id", sessionPlanId)
-        .single();
+      const activePlan = activeWorkoutPlans.find((p) => p.active_workout_plan_id === sessionPlanId);
 
-      if (activePlanError || !activePlan) {
+      if (!activePlan) {
         fastify.log.error(
-          { error: activePlanError, userId, sessionPlanId },
+          { userId, sessionPlanId },
           `[CYCLE_COMPLETION] Could not find active plan to update cycle dates.`
         );
         return; // Can't proceed if we can't find the plan to update

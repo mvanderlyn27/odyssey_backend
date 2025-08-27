@@ -43,3 +43,5 @@ export const InitialRankBodySchema = Type.Object(
     description: "Data for initial user onboarding, including rank, profile info, and exercise performance.",
   }
 );
+
+export type OnboardBody = Static<typeof InitialRankBodySchema>;

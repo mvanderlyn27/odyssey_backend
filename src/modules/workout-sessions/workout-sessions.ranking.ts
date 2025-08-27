@@ -109,7 +109,17 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   userId: string,
   userGender: Database["public"]["Enums"]["gender"],
   userBodyweight: number | null,
-  persistedSessionSets: (Tables<"workout_session_sets"> & { exercise_name?: string | null })[]
+  persistedSessionSets: (Tables<"workout_session_sets"> & { exercise_name?: string | null })[],
+  // Data passed down from _gatherAndPrepareWorkoutData
+  exercises: Tables<"exercises">[],
+  mcw: Tables<"exercise_muscles">[],
+  allMuscles: Tables<"muscles">[],
+  allMuscleGroups: Tables<"muscle_groups">[],
+  allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[],
+  allRankThresholds: Pick<Tables<"ranks">, "id" | "min_score">[],
+  initialUserRank: { strength_score: number | null } | null,
+  initialMuscleGroupRanks: Pick<Tables<"muscle_group_ranks">, "muscle_group_id" | "strength_score">[],
+  initialMuscleRanks: Pick<Tables<"muscle_ranks">, "muscle_id" | "strength_score">[]
 ): Promise<RankUpdateResults> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
   const K = 4000; // System Constant
@@ -121,57 +131,15 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
     return { exerciseRankUps: [], muscleRankChanges: [], muscle_group_progressions: [] };
   }
 
-  // --- Step 1: Initial Data Fetching ---
-  const uniqueExerciseIds = [...new Set(persistedSessionSets.map((s) => s.exercise_id).filter(Boolean) as string[])];
+  // Filter out custom exercises before processing
+  const standardExerciseSets = persistedSessionSets.filter((s) => s.exercise_id);
 
-  const [
-    exercises,
-    mcw,
-    allMuscles,
-    allMuscleGroups,
-    allRanks,
-    allRankThresholds,
-    initialUserRank,
-    initialMuscleGroupRanks,
-    initialMuscleRanks,
-  ] = await Promise.all([
-    fastify.appCache.get(
-      "allExercises",
-      async () =>
-        (await supabase.from("exercises").select("id, exercise_type, is_bilateral, bodyweight_percentage")).data || []
-    ),
-    fastify.appCache.get(
-      "allExerciseMuscles",
-      async () =>
-        (
-          await supabase
-            .from("exercise_muscles")
-            .select("exercise_id, muscle_id, exercise_muscle_weight")
-            .eq("muscle_intensity", "primary")
-        ).data || []
-    ),
-    fastify.appCache.get(
-      "allMuscles",
-      async () => (await supabase.from("muscles").select("id, name, muscle_group_id, muscle_group_weight")).data || []
-    ),
-    fastify.appCache.get(
-      "allMuscleGroups",
-      async () => (await supabase.from("muscle_groups").select("id, name, overall_weight")).data || []
-    ),
-    fastify.appCache.get(
-      "allRanks",
-      async () => (await supabase.from("ranks").select("id, rank_name").neq("id", 0)).data || []
-    ),
-    fastify.appCache.get(
-      "allRankThresholds",
-      async () =>
-        (await supabase.from("ranks").select("id, min_score").order("min_score", { ascending: false })).data || []
-    ),
-    supabase.from("user_ranks").select("strength_score").eq("user_id", userId).maybeSingle(),
-    supabase.from("muscle_group_ranks").select("muscle_group_id, strength_score").eq("user_id", userId),
-    supabase.from("muscle_ranks").select("muscle_id, strength_score").eq("user_id", userId),
-  ]);
+  if (standardExerciseSets.length === 0) {
+    fastify.log.info(`[RANK_SYSTEM_UNIFIED] No standard exercises in the session. Skipping rank updates.`);
+    return { exerciseRankUps: [], muscleRankChanges: [], muscle_group_progressions: [] };
+  }
 
+  // --- Step 1: Use pre-fetched data ---
   // Create maps for efficient lookups
   const exercisesMap = new Map(exercises.map((e) => [e.id, e]));
   const mcwMap = new Map<string, { muscle_id: string; mcw: number }[]>();
@@ -186,14 +154,14 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
   // --- Step 2: Calculate New Potential Peak Scores ---
   // Start with all the user's existing muscle scores.
   const finalIndividualMuscleScores = new Map<string, number>(
-    initialMuscleRanks.data?.map((r) => [r.muscle_id, r.strength_score || 0]) || []
+    initialMuscleRanks.map((r) => [r.muscle_id, r.strength_score || 0]) || []
   );
 
   // A set to track which muscles were actually updated in this session.
   const updatedMuscleIds = new Set<string>();
   const trainedMuscleGroupIds = new Set<string>();
 
-  for (const set of persistedSessionSets) {
+  for (const set of standardExerciseSets) {
     // --- Replacement logic inside the `for (const set of persistedSessionSets)` loop ---
 
     if (set.actual_reps === null || !set.exercise_id) continue;
@@ -408,9 +376,9 @@ export async function _updateUserExerciseAndMuscleGroupRanks(
     }
   });
 
-  const initialOverallScore = initialUserRank.data?.strength_score || 0;
+  const initialOverallScore = initialUserRank?.strength_score || 0;
   const initialGroupScores = new Map(
-    initialMuscleGroupRanks.data?.map((r) => [r.muscle_group_id, r.strength_score || 0]) || []
+    initialMuscleGroupRanks.map((r) => [r.muscle_group_id, r.strength_score || 0]) || []
   );
 
   const results: RankUpdateResults = {

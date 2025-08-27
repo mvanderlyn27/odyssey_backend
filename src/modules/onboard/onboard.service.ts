@@ -9,6 +9,7 @@ import { _updateUserExercisePRs } from "../workout-sessions/workout-sessions.prs
 import { calculate_1RM, calculate_SWR } from "../workout-sessions/workout-sessions.helpers";
 import { TablesInsert, TablesUpdate, Database, Tables, Enums } from "../../types/database";
 import { generateUniqueUsername } from "./onboard.helpers";
+import { _gatherAndPrepareOnboardingData } from "./onboard.data";
 
 export type OnboardingData = Static<typeof InitialRankBodySchema>;
 
@@ -52,34 +53,12 @@ export const handleOnboarding = async (
   }
   const supabase = fastify.supabase;
 
-  // Use .maybeSingle() to prevent errors when rows don't exist yet.
-  const { data: existingProfileData, error: profileFetchError } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .maybeSingle();
+  const preparedData = await _gatherAndPrepareOnboardingData(fastify, userId, data);
+  const { userProfile: existingProfileData, userData: existingUserData } = preparedData;
 
-  if (profileFetchError) {
-    fastify.log.error({ profileError: profileFetchError, userId }, "Error fetching profile for onboarding");
-    throw new Error(`Failed to fetch profile: ${profileFetchError.message}`);
-  }
-
-  const { data: existingUserData, error: userFetchError } = await supabase
-    .from("users")
-    .select("*")
-    .eq("id", userId)
-    .maybeSingle();
-
-  if (userFetchError) {
-    fastify.log.error({ userError: userFetchError, userId }, "Error fetching user for onboarding");
-    throw new Error(`Failed to fetch user: ${userFetchError.message}`);
-  }
-
-  // Use optional chaining `?.` as existingUserData might be null
   if (existingUserData?.onboard_complete) {
     fastify.log.info(`User ${userId} is already onboarded. Skipping onboarding process.`);
     if (!existingProfileData) {
-      // This case should be rare if data is consistent, but good to handle.
       throw new Error(`User ${userId} is marked as onboarded, but profile data is missing.`);
     }
     return {
@@ -187,9 +166,11 @@ export const handleOnboarding = async (
         const calculated_1rm = calculate_1RM(data.rank_exercise_weight_kg, data.rank_exercise_reps);
         const calculated_swr = calculate_SWR(calculated_1rm, data.weight ?? null);
 
+        const isCustomExercise = preparedData.rankingExercise.source_type === "custom";
         const setPayload: WorkoutSessionSetInsert = {
           workout_session_id: workoutSessionId as string,
-          exercise_id: data.selected_exercise_id as string,
+          exercise_id: isCustomExercise ? null : preparedData.rankingExercise.id,
+          custom_exercise_id: isCustomExercise ? preparedData.rankingExercise.id : null,
           set_order: 1,
           actual_reps: data.rank_exercise_reps,
           actual_weight_kg: data.rank_exercise_weight_kg,
@@ -225,7 +206,8 @@ export const handleOnboarding = async (
             const setForRanking = {
               id: createdSetId as string,
               workout_session_id: workoutSessionId as string,
-              exercise_id: data.selected_exercise_id,
+              exercise_id: isCustomExercise ? null : preparedData.rankingExercise.id,
+              custom_exercise_id: isCustomExercise ? preparedData.rankingExercise.id : null,
               set_order: 1,
               actual_reps: data.rank_exercise_reps,
               actual_weight_kg: data.rank_exercise_weight_kg,
@@ -249,7 +231,16 @@ export const handleOnboarding = async (
                 userId,
                 userGenderForRanking as Enums<"gender">,
                 userBodyweight,
-                persistedSessionSets
+                persistedSessionSets,
+                preparedData.exercises,
+                preparedData.mcw,
+                preparedData.allMuscles,
+                preparedData.allMuscleGroups,
+                preparedData.allRanks,
+                preparedData.allRankThresholds,
+                preparedData.initialUserRank,
+                preparedData.initialMuscleGroupRanks,
+                preparedData.initialMuscleRanks
               );
               fastify.log.info(`Peak contribution rank calculation completed for user ${userId}`);
             } catch (rankingError: any) {
@@ -263,7 +254,9 @@ export const handleOnboarding = async (
                 userId,
                 userGenderForRanking as Enums<"gender">,
                 persistedSessionSets,
-                existingUserExercisePRs
+                existingUserExercisePRs,
+                preparedData.rankingExerciseMap,
+                preparedData.exerciseRankBenchmarks
               );
               fastify.log.info(`Initial exercise PR calculation completed for user ${userId}`);
             } catch (prError: any) {

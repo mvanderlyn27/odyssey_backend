@@ -21,41 +21,32 @@ export interface XPUpdateResult {
 class XpService {
   private supabase: SupabaseClient<Database>;
   private fastify: FastifyInstance;
+  private allLevels: LevelDefinition[];
 
-  constructor(supabaseClient: SupabaseClient<Database>, fastifyInstance: FastifyInstance) {
+  constructor(
+    supabaseClient: SupabaseClient<Database>,
+    fastifyInstance: FastifyInstance,
+    allLevels: LevelDefinition[]
+  ) {
     this.supabase = supabaseClient;
     this.fastify = fastifyInstance;
+    this.allLevels = allLevels;
   }
 
-  private async getAllLevels(): Promise<LevelDefinition[]> {
-    // Assuming appCache is decorated onto fastify instance
-    return this.fastify.appCache.get("allLevelDefinitions", async () => {
-      const { data, error } = await this.supabase.from("level_definitions").select("*");
-      if (error) {
-        this.fastify.log.error({ error }, "Failed to fetch level definitions for cache.");
-        return [];
-      }
-      return data || [];
-    });
+  private getLevelByNumber(levelNumber: number): LevelDefinition | null {
+    return this.allLevels.find((l) => l.level_number === levelNumber) || null;
   }
 
-  private async getLevelByNumber(levelNumber: number): Promise<LevelDefinition | null> {
-    const allLevels = await this.getAllLevels();
-    return allLevels.find((l) => l.level_number === levelNumber) || null;
+  private getLevelById(levelId: string): LevelDefinition | null {
+    return this.allLevels.find((l) => l.id === levelId) || null;
   }
 
-  private async getLevelById(levelId: string): Promise<LevelDefinition | null> {
-    const allLevels = await this.getAllLevels();
-    return allLevels.find((l) => l.id === levelId) || null;
-  }
-
-  private async getHighestAchievableLevel(xp: number): Promise<LevelDefinition | null> {
-    const allLevels = await this.getAllLevels();
-    const achievableLevels = allLevels.filter((l) => l.xp_required <= xp);
+  private getHighestAchievableLevel(xp: number): LevelDefinition | null {
+    const achievableLevels = this.allLevels.filter((l) => l.xp_required <= xp);
     if (achievableLevels.length === 0) {
       // If no level is achievable (e.g., XP is less than first level's requirement, though L1 is usually 0 XP)
       // Fallback to level 1 if it exists and requires 0 XP, otherwise handle as appropriate
-      const levelOne = allLevels.find((l) => l.level_number === 1 && l.xp_required === 0);
+      const levelOne = this.allLevels.find((l) => l.level_number === 1 && l.xp_required === 0);
       return levelOne || null;
     }
     return achievableLevels.sort((a, b) => b.level_number - a.level_number)[0];
@@ -68,7 +59,7 @@ class XpService {
     let currentLevelId = userProfile.current_level_id;
 
     if (!currentLevelId) {
-      const levelOne = await this.getLevelByNumber(1);
+      const levelOne = this.getLevelByNumber(1);
       if (levelOne) {
         currentLevelId = levelOne.id;
       } else {
@@ -100,7 +91,7 @@ class XpService {
     }
 
     const oldLevelId = currentLevelId;
-    const newAchievedLevel = await this.getHighestAchievableLevel(newExperiencePoints);
+    const newAchievedLevel = this.getHighestAchievableLevel(newExperiencePoints);
 
     if (!newAchievedLevel) {
       this.fastify.log.warn(
@@ -117,7 +108,7 @@ class XpService {
           "Error updating only XP when new level not determined."
         );
       }
-      const oldLevel = await this.getLevelById(oldLevelId);
+      const oldLevel = this.getLevelById(oldLevelId);
       return {
         userId,
         oldExperiencePoints,
@@ -155,64 +146,6 @@ class XpService {
       newLevelNumber: newAchievedLevel.level_number,
     };
   }
-
-  async getUserLevelDetails(userId: string): Promise<{
-    userId: string;
-    totalXp: number | null;
-    currentLevel: { id: string; number: number; title: string | null; xpRequiredToReach: number } | null;
-    nextLevel: { id: string; number: number; title: string | null; xpRequiredToReach: number } | null;
-  } | null> {
-    const { data: userProfileData, error: profileError } = await this.supabase
-      .from("profiles")
-      .select("id, experience_points, current_level_id")
-      .eq("id", userId)
-      .single();
-
-    if (profileError || !userProfileData) {
-      this.fastify.log.error({ error: profileError, userId }, "Error fetching profile for level details.");
-      return null;
-    }
-
-    let currentLevelData: LevelDefinition | null = null;
-    if (userProfileData.current_level_id) {
-      currentLevelData = await this.getLevelById(userProfileData.current_level_id);
-    } else {
-      // If no current_level_id, attempt to assign Level 1 if XP allows
-      const levelOne = await this.getLevelByNumber(1);
-      if (levelOne && (userProfileData.experience_points ?? 0) >= levelOne.xp_required) {
-        currentLevelData = levelOne;
-      }
-    }
-
-    let nextLevelData: LevelDefinition | null = null;
-    if (currentLevelData && currentLevelData.level_number) {
-      nextLevelData = await this.getLevelByNumber(currentLevelData.level_number + 1);
-    } else {
-      // If no current level or level 0, next is level 1
-      nextLevelData = await this.getLevelByNumber(1);
-    }
-
-    return {
-      userId: userProfileData.id,
-      totalXp: userProfileData.experience_points,
-      currentLevel: currentLevelData
-        ? {
-            id: currentLevelData.id,
-            number: currentLevelData.level_number,
-            title: currentLevelData.title,
-            xpRequiredToReach: currentLevelData.xp_required,
-          }
-        : null,
-      nextLevel: nextLevelData
-        ? {
-            id: nextLevelData.id,
-            number: nextLevelData.level_number,
-            title: nextLevelData.title,
-            xpRequiredToReach: nextLevelData.xp_required,
-          }
-        : null,
-    };
-  }
 }
 
 const XP_PER_WORKOUT = 50;
@@ -222,12 +155,13 @@ const XP_PER_WORKOUT = 50;
  */
 export async function _awardXpAndLevel(
   fastify: FastifyInstance,
-  userProfile: Tables<"profiles">
+  userProfile: Tables<"profiles">,
+  allLevelDefinitions: LevelDefinition[]
 ): Promise<XPUpdateResult & { awardedXp: number; remaining_xp_for_next_level: number | null }> {
   const userId = userProfile.id;
   fastify.log.info(`[XP_LEVEL] Starting XP and Level update for user: ${userId}`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
-  const xpService = new XpService(supabase, fastify); // XpService is now defined in this file
+  const xpService = new XpService(supabase, fastify, allLevelDefinitions);
   const awardedXp = XP_PER_WORKOUT;
 
   const xpResult = await xpService.addXPAndUpdateLevel(userProfile, awardedXp);
@@ -249,22 +183,13 @@ export async function _awardXpAndLevel(
   }
 
   let remaining_xp_for_next_level: number | null = null;
-  try {
-    const levelDetails = await xpService.getUserLevelDetails(userId);
-    if (
-      levelDetails &&
-      levelDetails.nextLevel &&
-      typeof levelDetails.nextLevel.xpRequiredToReach === "number" &&
-      typeof xpResult.newExperiencePoints === "number"
-    ) {
-      remaining_xp_for_next_level = levelDetails.nextLevel.xpRequiredToReach - xpResult.newExperiencePoints;
+  const currentLevel = allLevelDefinitions.find((l) => l.id === xpResult.newLevelId);
+  if (currentLevel) {
+    const nextLevel = allLevelDefinitions.find((l) => l.level_number === currentLevel.level_number + 1);
+    if (nextLevel) {
+      remaining_xp_for_next_level = nextLevel.xp_required - xpResult.newExperiencePoints;
       if (remaining_xp_for_next_level < 0) remaining_xp_for_next_level = 0;
     }
-  } catch (levelDetailsError) {
-    fastify.log.error(
-      { userId, error: levelDetailsError },
-      "[XP_LEVEL] Error fetching user level details for remaining XP calculation."
-    );
   }
 
   if (xpResult.leveledUp) {
