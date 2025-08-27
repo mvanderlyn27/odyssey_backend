@@ -1,13 +1,13 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Database, Tables } from "../../types/database";
+import { Database } from "../../types/database";
 import { RankEntryType } from "./rank-calculator.routes";
-import { findRank as findRankHelper } from "../workout-sessions/workout-sessions.helpers";
 import {
   _updateUserExerciseAndMuscleGroupRanks,
   RankUpdateResults,
 } from "../workout-sessions/workout-sessions.ranking";
 import { _updateUserExercisePRs } from "../workout-sessions/workout-sessions.prs";
+import { getRankCalculationData } from "./rank-calculator.data";
 
 export async function calculateRankForEntry(
   fastify: FastifyInstance,
@@ -16,26 +16,23 @@ export async function calculateRankForEntry(
 ): Promise<RankUpdateResults> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
-  // 1. Get user's gender and bodyweight
-  const { data: userData, error: userError } = await supabase.from("users").select("gender").eq("id", userId).single();
-
-  const { data: bodyweightData, error: bodyweightError } = await supabase
-    .from("body_measurements")
-    .select("value")
-    .eq("user_id", userId)
-    .eq("measurement_type", "body_weight")
-    .order("measured_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (userError || !userData) {
-    throw new Error("User not found.");
-  }
-  if (bodyweightError || !bodyweightData || !bodyweightData.value) {
-    throw new Error("User bodyweight not found.");
-  }
-  const userGender = userData.gender as Database["public"]["Enums"]["gender"];
-  const userBodyweight = bodyweightData.value;
+  // 1. Fetch all necessary data in parallel
+  const {
+    userGender,
+    userBodyweight,
+    exerciseDetails,
+    existingPr,
+    exerciseRankBenchmarks,
+    exercises,
+    mcw,
+    allMuscles,
+    allMuscleGroups,
+    allRanks,
+    allRankThresholds,
+    initialUserRank,
+    initialMuscleGroupRanks,
+    initialMuscleRanks,
+  } = await getRankCalculationData(fastify, userId, entry.exercise_id);
 
   // 2. Create and persist a synthetic session and set
   const { data: syntheticSession, error: sessionError } = await supabase
@@ -73,6 +70,12 @@ export async function calculateRankForEntry(
     throw new Error("Failed to persist synthetic set.");
   }
 
+  // Adjust the persisted set based on the exercise source type
+  if (exerciseDetails.source_type === "custom") {
+    persistedSet.custom_exercise_id = exerciseDetails.id;
+    persistedSet.exercise_id = null;
+  }
+
   try {
     // 3. Call the existing ranking logic with the persisted set
     const rankUpdateResults = await _updateUserExerciseAndMuscleGroupRanks(
@@ -80,24 +83,35 @@ export async function calculateRankForEntry(
       userId,
       userGender,
       userBodyweight,
-      [persistedSet]
+      [persistedSet],
+      exercises,
+      mcw,
+      allMuscles,
+      allMuscleGroups,
+      allRanks,
+      allRankThresholds,
+      initialUserRank,
+      initialMuscleGroupRanks,
+      initialMuscleRanks
     );
 
-    // 4. Fetch existing PR to pass to the update function
-    const { data: existingPr } = await supabase
-      .from("user_exercise_prs")
-      .select("exercise_id, best_swr, best_reps, rank_id")
-      .eq("user_id", userId)
-      .eq("exercise_id", entry.exercise_id)
-      .maybeSingle();
-
+    // 4. Prepare data for PR update
     const existingPrMap = new Map();
     if (existingPr) {
       existingPrMap.set(entry.exercise_id, existingPr);
     }
+    const exerciseDetailsMap = new Map([[exerciseDetails.id as string, exerciseDetails as any]]);
 
     // 5. Update the user's PR for this exercise
-    await _updateUserExercisePRs(fastify, userId, userGender, [persistedSet], existingPrMap);
+    await _updateUserExercisePRs(
+      fastify,
+      userId,
+      userGender,
+      [persistedSet],
+      existingPrMap,
+      exerciseDetailsMap,
+      exerciseRankBenchmarks
+    );
 
     return rankUpdateResults;
   } finally {

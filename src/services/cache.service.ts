@@ -1,6 +1,24 @@
 import { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 
+export enum CACHE_KEYS {
+  ALL_RANKS = "allRanks",
+  ALL_MUSCLES = "allMuscles",
+  ALL_EXERCISE_MUSCLES = "allExerciseMuscles",
+  ALL_MUSCLE_GROUPS = "allMuscleGroups",
+  ALL_CUSTOM_EXERCISE_MUSCLES = "allCustomExerciseMuscles",
+  ALL_EXERCISES = "allExercises",
+  ALL_LEVEL_DEFINITIONS = "allLevelDefinitions",
+  MUSCLE_RANK_BENCHMARKS_MALE = "muscle_rank_benchmarks_male",
+  MUSCLE_RANK_BENCHMARKS_FEMALE = "muscle_rank_benchmarks_female",
+  MUSCLE_GROUP_RANK_BENCHMARKS_MALE = "muscle_group_rank_benchmarks_male",
+  MUSCLE_GROUP_RANK_BENCHMARKS_FEMALE = "muscle_group_rank_benchmarks_female",
+  OVERALL_RANK_BENCHMARKS_MALE = "overall_rank_benchmarks_male",
+  OVERALL_RANK_BENCHMARKS_FEMALE = "overall_rank_benchmarks_female",
+  EXERCISE_BENCHMARKS_MALE = "exercise_benchmarks_male",
+  EXERCISE_BENCHMARKS_FEMALE = "exercise_benchmarks_female",
+}
+
 // A simple in-memory cache store
 const cache = new Map<string, { data: any; expiresAt: number }>();
 
@@ -60,82 +78,81 @@ export class CacheService {
     }
 
     const cacheJobs = [
-      this.get("allRanks", async () => {
+      this.get(CACHE_KEYS.ALL_RANKS, async () => {
         const { data, error } = await supabase.from("ranks").select("id, rank_name, min_score").neq("id", 0);
         if (error) throw error;
         return data || [];
       }),
-      this.get("allMuscles", async () => {
+      this.get(CACHE_KEYS.ALL_MUSCLES, async () => {
         const { data, error } = await supabase.from("muscles").select("id, name, muscle_group_id, muscle_group_weight");
         if (error) throw error;
         return data || [];
       }),
-      this.get("allExerciseMuscles", async () => {
+      this.get(CACHE_KEYS.ALL_EXERCISE_MUSCLES, async () => {
         const { data, error } = await supabase
           .from("exercise_muscles")
           .select("exercise_id, muscle_id, muscle_intensity, exercise_muscle_weight");
         if (error) throw error;
         return data || [];
       }),
-      this.get("allMuscleGroups", async () => {
+      this.get(CACHE_KEYS.ALL_MUSCLE_GROUPS, async () => {
         const { data, error } = await supabase.from("muscle_groups").select("id, name, overall_weight");
         if (error) throw error;
         return data || [];
       }),
-      this.get("allCustomExerciseMuscles", async () => {
+      this.get(CACHE_KEYS.ALL_CUSTOM_EXERCISE_MUSCLES, async () => {
         const { data, error } = await supabase
           .from("custom_exercise_muscles")
           .select("custom_exercise_id, muscle_id, muscle_intensity");
         if (error) throw error;
         return data || [];
       }),
-      this.get("allExercises", async () => {
+      this.get(CACHE_KEYS.ALL_EXERCISES, async () => {
         const { data, error } = await supabase.from("v_full_exercises").select("id, exercise_type, source_type");
         if (error) throw error;
         return data || [];
       }),
-      this.get("allLevelDefinitions", async () => {
+      this.get(CACHE_KEYS.ALL_LEVEL_DEFINITIONS, async () => {
         const { data, error } = await supabase.from("level_definitions").select("*");
         if (error) throw error;
         return data || [];
       }),
-      // It's better to cache benchmarks by gender to avoid mixing them up
-      this.get("muscle_rank_benchmarks_male", async () => {
+      this.get(CACHE_KEYS.MUSCLE_RANK_BENCHMARKS_MALE, async () => {
         const { data, error } = await supabase.from("muscle_rank_benchmarks").select("*").eq("gender", "male");
         if (error) throw error;
         return data || [];
       }),
-      this.get("muscle_rank_benchmarks_female", async () => {
+      this.get(CACHE_KEYS.MUSCLE_RANK_BENCHMARKS_FEMALE, async () => {
         const { data, error } = await supabase.from("muscle_rank_benchmarks").select("*").eq("gender", "female");
         if (error) throw error;
         return data || [];
       }),
-      this.get("muscle_group_rank_benchmarks_male", async () => {
+      this.get(CACHE_KEYS.MUSCLE_GROUP_RANK_BENCHMARKS_MALE, async () => {
         const { data, error } = await supabase.from("muscle_group_rank_benchmarks").select("*").eq("gender", "male");
         if (error) throw error;
         return data || [];
       }),
-      this.get("muscle_group_rank_benchmarks_female", async () => {
+      this.get(CACHE_KEYS.MUSCLE_GROUP_RANK_BENCHMARKS_FEMALE, async () => {
         const { data, error } = await supabase.from("muscle_group_rank_benchmarks").select("*").eq("gender", "female");
         if (error) throw error;
         return data || [];
       }),
-      this.get("overall_rank_benchmarks_male", async () => {
+      this.get(CACHE_KEYS.OVERALL_RANK_BENCHMARKS_MALE, async () => {
         const { data, error } = await supabase.from("overall_rank_benchmarks").select("*").eq("gender", "male");
         if (error) throw error;
         return data || [];
       }),
-      this.get("overall_rank_benchmarks_female", async () => {
+      this.get(CACHE_KEYS.OVERALL_RANK_BENCHMARKS_FEMALE, async () => {
         const { data, error } = await supabase.from("overall_rank_benchmarks").select("*").eq("gender", "female");
         if (error) throw error;
         return data || [];
       }),
-      this.get("exercise_benchmarks_male", async () => {
+      this.get(CACHE_KEYS.EXERCISE_BENCHMARKS_MALE, async () => {
         const { data, error } = await supabase.from("exercise_rank_benchmarks").select("*").eq("gender", "male");
         if (error) throw error;
         return data || [];
       }),
-      this.get("exercise_benchmarks_female", async () => {
+      this.get(CACHE_KEYS.EXERCISE_BENCHMARKS_FEMALE, async () => {
         const { data, error } = await supabase.from("exercise_rank_benchmarks").select("*").eq("gender", "female");
         if (error) throw error;
         return data || [];
