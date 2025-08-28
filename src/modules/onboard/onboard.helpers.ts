@@ -1,56 +1,67 @@
 import { FastifyInstance } from "fastify";
 
-// Word lists remain the same as the previous version.
+// Expanded + tuned word lists
 const wordLists = {
   adjectives: [
     "Aesthetic",
     "Anabolic",
-    "Asymmetric",
-    "Barely",
+    "Alpha",
+    "Beta",
+    "Sigma",
     "Bulking",
-    "Caffeinated",
-    "Certified",
-    "Chronic",
-    "Clueless",
     "Cutting",
-    "Dehydrated",
-    "Delusional",
-    "Eccentric",
-    "Elite",
-    "Giga",
-    "GuestPass",
-    "HighCarb",
-    "Isometric",
-    "Legendary",
-    "LowCarb",
-    "Maximal",
-    "Peak",
-    "Professional",
-    "Questionable",
-    "Renegade",
-    "Shredded",
-    "Sore",
-    "Subpar",
+    "Caffeinated",
+    "Decaf",
+    "DryScooped",
+    "Sleeveless",
+    "Mirin",
+    "Overtrained",
+    "Pumped",
     "Sweaty",
-    "Unilateral",
-    "Unmotivated",
+    "Juicy",
+    "Juiced",
+    "DirtyBulk",
+    "Natty",
+    "NotNatty",
+    "Shredded",
+    "Plateaued",
+    "PRless",
+    "Underslept",
+    "Overcooked",
+    "Chalky",
+    "WheyPowered",
+    "Delusional",
+    "FakeNatty",
+    "Elite",
   ],
   personNouns: [
     "Beast",
+    "Bro",
+    "Coach",
     "Connoisseur",
     "Enthusiast",
     "Fiend",
     "Goblin",
     "Gremlin",
+    "GymBro",
+    "GymRat",
     "Intern",
     "Journeyman",
     "Lifter",
+    "Meathead",
     "Menace",
     "NPC",
-    "Rizzlord",
+    "Powerbuilder",
+    "Rizzler",
+    "Spotter",
+    "Chad",
+    "Sigma",
+    "GymDaddy",
+    "OHPEnjoyer",
   ],
   objectNouns: [
     "Barbell",
+    "Bench",
     "Bicep",
     "Cable",
     "Calf",
@@ -63,24 +74,36 @@ const wordLists = {
     "LastRep",
     "Lat",
     "LegPress",
+    "OHP",
     "Plate",
     "PreWorkout",
     "Pump",
     "Quad",
     "Shaker",
+    "SmithMachine",
+    "Straps",
+    "TankTop",
     "Tricep",
+    "FoamRoller",
+    "Chalk",
+    "ResistanceBand",
+    "InclineBench",
+    "EZBar",
   ],
   personSuffixes: [
     "Advocate",
     "Champion",
+    "Collector",
     "Defender",
     "Enjoyer",
     "Enthusiast",
+    "Goblin",
     "Hater",
     "King",
     "Lord",
-    "Skipper",
+    "Merchant",
     "Specialist",
+    "Whisperer",
   ],
   gymVerbs: [
     "Arching",
@@ -91,102 +114,170 @@ const wordLists = {
     "Dropping",
     "DryScooping",
     "EgoLifting",
+    "Failing",
     "Filming",
+    "Flexing",
     "Forgetting",
+    "Grinding",
     "Ignoring",
     "Losing",
+    "Mirin",
+    "Overtraining",
     "Posing",
     "Racking",
     "Reracking",
     "Repping",
     "Skipping",
+    "Snapping",
     "Spotting",
     "Staring",
     "Training",
     "Unracking",
   ],
-  ironicTitles: ["CEO of", "Chief of", "Founder of", "King of", "Lord of", "Master of", "President of", "The Final"],
+  ironicTitles: [
+    "CEO of",
+    "Chief of",
+    "Founder of",
+    "King of",
+    "Lord of",
+    "Master of",
+    "President of",
+    "Prophet of",
+    "Uncle of",
+    "Minister of",
+    "The Final",
+  ],
   problemNouns: [
     "Bad Form",
     "Bad Spotters",
     "Calf Cramps",
     "Cardio",
+    "Chicken Legs",
     "DOMS",
     "Ego Lifting",
+    "Elbow Tendonitis",
+    "Empty Bar",
     "Full Racks",
+    "Gym Anxiety",
     "The Gym Crush",
     "Leg Day",
-    "The Stairs",
+    "Preworkout Crash",
+    "The Smith Machine",
+    "Stairs",
+    "T-Rex Arms",
+    "Sweaty Bench",
+    "Lost Gains",
+    "Skipped Warmup",
+    "Broken Cable",
   ],
-  statefulTropes: ["is Crying", "is Leaking", "is Missing", "Needs a Spot"],
+  statefulTropes: [
+    "is Crying",
+    "is Leaking",
+    "is Missing",
+    "Forgot Leg Day",
+    "Needs a Spot",
+    "Can’t Bench",
+    "Needs Chalk",
+    "Is Natty",
+    "Isn’t Natty",
+  ],
   possessivePrefixes: ["My", "Your", "The"],
   adverbialPrefixes: ["Always", "Chronic", "Endless", "Eternal", "Forever", "Just", "Perpetual"],
 };
 
-// Helper function to make code cleaner and avoid repetition
+// Random picker
 function getRandomItem<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-// isUsernameTaken function remains the same. It checks the lowercase, no-space username.
+// Username uniqueness check
 async function isUsernameTaken(fastify: FastifyInstance, username: string): Promise<boolean> {
-  // ... your existing isUsernameTaken function remains the same ...
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
   const { data, error } = await fastify.supabase.from("profiles").select("username").eq("username", username).single();
 
   if (error && error.code !== "PGRST116") {
-    // PGRST116 = 'not found'
     fastify.log.error({ error }, `Error checking if username '${username}' is taken.`);
     throw error;
   }
   return !!data;
 }
 
-// The final, updated generator function
+// Template system for funny gym names
+const templates = [
+  // Classic Enjoyer / Enthusiast
+  () => `${getRandomItem(wordLists.objectNouns)} Enjoyer`,
+  () => `${getRandomItem(wordLists.objectNouns)} Enthusiast`,
+  () => `${getRandomItem(wordLists.personNouns)} Enjoyer`,
+
+  // Adjective combos
+  () => `${getRandomItem(wordLists.adjectives)} ${getRandomItem(wordLists.personNouns)}`,
+  () => `${getRandomItem(wordLists.adjectives)} ${getRandomItem(wordLists.objectNouns)}`,
+
+  // Verb actions
+  () => `${getRandomItem(wordLists.gymVerbs)} ${getRandomItem(wordLists.objectNouns)}`,
+
+  // Meme adjectives
+  () => `${getRandomItem(["Alpha", "Beta", "Sigma"])} ${getRandomItem(wordLists.personNouns)}`,
+  () => `${getRandomItem(["Alpha", "Beta"])} ${getRandomItem(wordLists.objectNouns)}`,
+  () => `${getRandomItem(["Caffeinated", "Decaf"])} ${getRandomItem(wordLists.personNouns)}`,
+  () => `${getRandomItem(["Caffeinated", "Decaf"])} ${getRandomItem(wordLists.objectNouns)}`,
+
+  // Problem enjoyer/hater
+  () => `${getRandomItem(wordLists.problemNouns)} ${getRandomItem(["Enjoyer", "Hater", "Advocate"])}`,
+
+  // Ironic titles
+  () => `${getRandomItem(wordLists.ironicTitles)} ${getRandomItem(wordLists.problemNouns)}`,
+  () => `${getRandomItem(wordLists.ironicTitles)} ${getRandomItem(wordLists.objectNouns)}`,
+
+  // Dual nouns
+  () => `${getRandomItem(wordLists.personNouns)} of ${getRandomItem(wordLists.objectNouns)}`,
+  () => `${getRandomItem(wordLists.personNouns)} of ${getRandomItem(wordLists.problemNouns)}`,
+
+  // Absurd mashups
+  () => `${getRandomItem(wordLists.objectNouns)} ${getRandomItem(wordLists.personSuffixes)}`,
+  () => `${getRandomItem(wordLists.personNouns)} ${getRandomItem(wordLists.personSuffixes)}`,
+
+  // // NEW: "Certified" / "Uncertified"
+  // () =>
+  //   `${getRandomItem(["Certified", "Uncertified"])} ${getRandomItem(wordLists.objectNouns)} ${getRandomItem([
+  //     "Enjoyer",
+  //     "Specialist",
+  //     "Freak",
+  //   ])}`,
+
+  // // NEW: "Local" meme
+  // () => `Local ${getRandomItem(wordLists.objectNouns)} ${getRandomItem(["Enjoyer", "Goblin", "Hater"])}`,
+
+  // // NEW: "Father of X"
+  // () => `Father of ${getRandomItem(wordLists.problemNouns)}`,
+
+  // // NEW: "King of Skipping X"
+  // () => `King of Skipping ${getRandomItem(["Leg Day", "Warmup", "Cardio"])}`,
+];
+
+// Final generator
 export async function generateUniqueUsername(
   fastify: FastifyInstance
 ): Promise<{ username: string; displayName: string }> {
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
-  // Formulas now generate human-readable strings WITH SPACES.
-  const formulas = [
-    () => `${getRandomItem(wordLists.adjectives)} ${getRandomItem(wordLists.personNouns)}`,
-    () =>
-      `${getRandomItem(wordLists.adjectives)} ${getRandomItem(wordLists.objectNouns)} ${getRandomItem(
-        wordLists.personSuffixes
-      )}`,
-    () => `${getRandomItem(wordLists.ironicTitles)} ${getRandomItem(wordLists.problemNouns)}`,
-    () =>
-      `${getRandomItem(wordLists.possessivePrefixes)} ${getRandomItem(wordLists.objectNouns)} ${getRandomItem(
-        wordLists.statefulTropes
-      )}`,
-    () =>
-      `${getRandomItem(wordLists.adverbialPrefixes)} ${getRandomItem(wordLists.gymVerbs)} ${getRandomItem(
-        wordLists.problemNouns
-      )}`,
-    () => `${getRandomItem(wordLists.gymVerbs)} ${getRandomItem(wordLists.objectNouns)}`,
-  ];
 
   while (true) {
-    const selectedFormula = getRandomItem(formulas);
+    const selectedFormula = getRandomItem(templates);
 
-    // 1. Generate the human-readable Display Name first.
     const baseDisplayName = selectedFormula();
-
-    // 2. Derive the system-friendly Username from it.
     const baseUsername = baseDisplayName.replace(/ /g, "").toLowerCase();
 
-    // 3. PERFORMANCE: Create a batch of potential USERNAMES to check.
+    // Batch check to reduce DB roundtrips
     const batchSize = 5;
     const usernameBatch = [baseUsername];
     for (let i = 2; i <= batchSize; i++) {
       usernameBatch.push(`${baseUsername}${i}`);
     }
 
-    // 4. Single database query to find all taken usernames within our batch.
     const { data: takenProfiles, error } = await fastify.supabase
       .from("profiles")
       .select("username")
@@ -199,24 +290,15 @@ export async function generateUniqueUsername(
 
     const takenUsernames = new Set(takenProfiles.map((p) => p.username));
 
-    // 5. Find the first available name in our batch and construct the final pair.
     for (const finalUsername of usernameBatch) {
       if (!takenUsernames.has(finalUsername)) {
-        // We found a unique username. Now, create the matching display name.
         let finalDisplayName = baseDisplayName;
-
-        // If a number was added to the username, add it to the display name too.
         if (finalUsername !== baseUsername) {
-          const numberSuffix = finalUsername.substring(baseUsername.length); // Extracts "2", "3", etc.
+          const numberSuffix = finalUsername.substring(baseUsername.length);
           finalDisplayName = `${baseDisplayName} ${numberSuffix}`;
         }
-
-        // Return the final object.
         return { username: finalUsername, displayName: finalDisplayName };
       }
     }
-
-    // If the entire batch was somehow taken, the `while(true)` loop will simply try again
-    // with a completely new random base name.
   }
 }
