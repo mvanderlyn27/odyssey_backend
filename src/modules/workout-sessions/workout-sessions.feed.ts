@@ -76,6 +76,7 @@ export async function createWorkoutFeedItem(fastify: FastifyInstance, inputData:
     workout_plan_name: inputData.workoutContext.plan_name || "Quick Workout",
     workout_day_name: inputData.workoutContext.day_name || "Quick Workout",
     total_volume_kg: inputData.workoutSession.total_volume_kg || 0,
+    total_duration: inputData.workoutSession.duration_seconds || 0,
     muscles_worked: inputData.summaryStats.muscles_worked.map((m) => ({ muscle_id: m.id, muscle_name: m.name })),
     best_set: inputData.summaryStats.best_set || { exercise_name: "N/A", reps: 0, weight_kg: 0 },
   };

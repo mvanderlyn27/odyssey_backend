@@ -13,6 +13,7 @@ export type WorkoutFeedMetadata = {
   workout_plan_name: string;
   workout_day_name: string;
   total_volume_kg: number;
+  total_duration: number;
   muscles_worked: { muscle_id: string; muscle_name: string }[];
   best_set: {
     exercise_name: string;
