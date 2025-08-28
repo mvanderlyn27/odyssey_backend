@@ -10,7 +10,7 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
     userData,
     bodyweightData,
     exerciseDetails,
-    existingPr,
+    existingPrs,
     exerciseRankBenchmarksMale,
     exerciseRankBenchmarksFemale,
     exercises,
@@ -39,10 +39,9 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
       .single(),
     supabase
       .from("user_exercise_prs")
-      .select("exercise_id, custom_exercise_id, best_swr, best_reps, rank_id")
+      .select("exercise_id, custom_exercise_id, pr_type, estimated_1rm, reps, swr, rank_id")
       .eq("user_id", userId)
-      .eq("exercise_key", exerciseId)
-      .maybeSingle(),
+      .eq("exercise_key", exerciseId),
     fastify.appCache.get<Tables<"exercise_rank_benchmarks">[]>(CACHE_KEYS.EXERCISE_BENCHMARKS_MALE, async () => []),
     fastify.appCache.get<Tables<"exercise_rank_benchmarks">[]>(CACHE_KEYS.EXERCISE_BENCHMARKS_FEMALE, async () => []),
     fastify.appCache.get<Tables<"exercises">[]>(CACHE_KEYS.ALL_EXERCISES, async () => []),
@@ -59,7 +58,7 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
   if (userData.error || !userData.data) throw new Error("User not found.");
   if (bodyweightData.error || !bodyweightData.data?.value) throw new Error("User bodyweight not found.");
   if (exerciseDetails.error || !exerciseDetails.data) throw new Error(`Exercise with ID ${exerciseId} not found.`);
-  if (existingPr.error) throw existingPr.error;
+  if (existingPrs.error) throw existingPrs.error;
   if (initialUserRank.error) throw initialUserRank.error;
   if (initialMuscleGroupRanks.error) throw initialMuscleGroupRanks.error;
   if (initialMuscleRanks.error) throw initialMuscleRanks.error;
@@ -71,7 +70,7 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
     userGender,
     userBodyweight: bodyweightData.data.value,
     exerciseDetails: exerciseDetails.data,
-    existingPr: existingPr.data,
+    existingPrs: existingPrs.data,
     exerciseRankBenchmarks,
     exercises,
     mcw,

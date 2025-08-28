@@ -56,59 +56,29 @@ class XpService {
     const userId = userProfile.id;
     const oldExperiencePoints = userProfile.experience_points ?? 0;
     const newExperiencePoints = oldExperiencePoints + xpToAdd;
-    let currentLevelId = userProfile.current_level_id;
+    const oldLevelId = userProfile.current_level_id; // This can be null
 
-    if (!currentLevelId) {
-      const levelOne = this.getLevelByNumber(1);
-      if (levelOne) {
-        currentLevelId = levelOne.id;
-      } else {
-        this.fastify.log.error(
-          { userId },
-          "Could not find Level 1 definition. Aborting XP update for level assignment."
-        );
-        // Still update XP, but level remains null
-        const { error: xpOnlyUpdateError } = await this.supabase
-          .from("profiles")
-          .update({ experience_points: newExperiencePoints })
-          .eq("id", userId);
-        if (xpOnlyUpdateError) {
-          this.fastify.log.error(
-            { error: xpOnlyUpdateError, userId },
-            "Error updating only XP when Level 1 not found."
-          );
-        }
-        return {
-          userId,
-          oldExperiencePoints,
-          newExperiencePoints,
-          oldLevelId: null,
-          newLevelId: null,
-          leveledUp: false,
-          newLevelNumber: undefined,
-        };
-      }
-    }
-
-    const oldLevelId = currentLevelId;
     const newAchievedLevel = this.getHighestAchievableLevel(newExperiencePoints);
 
     if (!newAchievedLevel) {
       this.fastify.log.warn(
         { userId, newExperiencePoints },
-        "Could not determine new level. XP will be updated, level unchanged."
+        "Could not determine new level. XP will be updated, but level will remain unchanged."
       );
+      // Still update XP, but level remains as it was (null or an old ID)
       const { error: xpOnlyUpdateError } = await this.supabase
         .from("profiles")
         .update({ experience_points: newExperiencePoints })
         .eq("id", userId);
+
       if (xpOnlyUpdateError) {
         this.fastify.log.error(
           { error: xpOnlyUpdateError, userId },
           "Error updating only XP when new level not determined."
         );
       }
-      const oldLevel = this.getLevelById(oldLevelId);
+
+      const oldLevel = oldLevelId ? this.getLevelById(oldLevelId) : null;
       return {
         userId,
         oldExperiencePoints,

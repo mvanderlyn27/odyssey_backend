@@ -102,6 +102,17 @@ export const MuscleGroupProgressionSchema = Type.Object(
 );
 export type MuscleGroupProgression = Static<typeof MuscleGroupProgressionSchema>;
 
+export const RankChangeSchema = Type.Object(
+  {
+    type: Type.String(),
+    old_rank_name: Type.String(),
+    new_rank_name: Type.String(),
+    muscle_group_name: Type.Optional(Type.String()),
+  },
+  { $id: "RankChangeSchema", description: "Details of a rank change event." }
+);
+export type RankChange = Static<typeof RankChangeSchema>;
+
 // --- Schemas for Page 3 of Detailed Finish Session Response ---
 
 export const FailedSetInfoSchema = Type.Object(

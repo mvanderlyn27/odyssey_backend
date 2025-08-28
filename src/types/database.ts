@@ -549,6 +549,60 @@ export type Database = {
         }
         Relationships: []
       }
+      feed_items: {
+        Row: {
+          comments_count: number
+          created_at: string
+          id: string
+          is_public: boolean
+          likes_count: number
+          metadata: Json
+          post_type: Database["public"]["Enums"]["feed_post_type"]
+          status: Database["public"]["Enums"]["processing_status"]
+          user_id: string
+          workout_session_id: string | null
+        }
+        Insert: {
+          comments_count?: number
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          likes_count?: number
+          metadata?: Json
+          post_type: Database["public"]["Enums"]["feed_post_type"]
+          status?: Database["public"]["Enums"]["processing_status"]
+          user_id: string
+          workout_session_id?: string | null
+        }
+        Update: {
+          comments_count?: number
+          created_at?: string
+          id?: string
+          is_public?: boolean
+          likes_count?: number
+          metadata?: Json
+          post_type?: Database["public"]["Enums"]["feed_post_type"]
+          status?: Database["public"]["Enums"]["processing_status"]
+          user_id?: string
+          workout_session_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feed_items_workout_session_id_fkey"
+            columns: ["workout_session_id"]
+            isOneToOne: false
+            referencedRelation: "v_workout_session_full"
+            referencedColumns: ["workout_session_id"]
+          },
+          {
+            foreignKeyName: "feed_items_workout_session_id_fkey"
+            columns: ["workout_session_id"]
+            isOneToOne: false
+            referencedRelation: "workout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       friendships: {
         Row: {
           addressee_id: string
@@ -1113,6 +1167,7 @@ export type Database = {
           display_name: string | null
           experience_points: number
           id: string
+          is_premium: boolean | null
           updated_at: string
           username: string | null
         }
@@ -1124,6 +1179,7 @@ export type Database = {
           display_name?: string | null
           experience_points?: number
           id: string
+          is_premium?: boolean | null
           updated_at?: string
           username?: string | null
         }
@@ -1135,6 +1191,7 @@ export type Database = {
           display_name?: string | null
           experience_points?: number
           id?: string
+          is_premium?: boolean | null
           updated_at?: string
           username?: string | null
         }
@@ -1235,33 +1292,48 @@ export type Database = {
       user_exercise_pr_history: {
         Row: {
           achieved_at: string
-          best_1rm: number | null
-          best_swr: number | null
+          bodyweight_kg: number | null
           custom_exercise_id: string | null
+          estimated_1rm: number | null
           exercise_id: string | null
           exercise_key: string
           id: string
+          pr_type: Database["public"]["Enums"]["pr_type"] | null
+          reps: number | null
+          source_set_id: string | null
+          swr: number | null
           user_id: string
+          weight_kg: number | null
         }
         Insert: {
           achieved_at: string
-          best_1rm?: number | null
-          best_swr?: number | null
+          bodyweight_kg?: number | null
           custom_exercise_id?: string | null
+          estimated_1rm?: number | null
           exercise_id?: string | null
           exercise_key: string
           id?: string
+          pr_type?: Database["public"]["Enums"]["pr_type"] | null
+          reps?: number | null
+          source_set_id?: string | null
+          swr?: number | null
           user_id: string
+          weight_kg?: number | null
         }
         Update: {
           achieved_at?: string
-          best_1rm?: number | null
-          best_swr?: number | null
+          bodyweight_kg?: number | null
           custom_exercise_id?: string | null
+          estimated_1rm?: number | null
           exercise_id?: string | null
           exercise_key?: string
           id?: string
+          pr_type?: Database["public"]["Enums"]["pr_type"] | null
+          reps?: number | null
+          source_set_id?: string | null
+          swr?: number | null
           user_id?: string
+          weight_kg?: number | null
         }
         Relationships: [
           {
@@ -1283,90 +1355,92 @@ export type Database = {
       user_exercise_prs: {
         Row: {
           achieved_at: string | null
-          best_1rm: number | null
-          best_reps: number | null
-          best_swr: number | null
+          bodyweight_kg: number | null
           created_at: string | null
           custom_exercise_id: string | null
+          estimated_1rm: number | null
           exercise_id: string | null
           exercise_key: string
           id: string
+          pr_type: Database["public"]["Enums"]["pr_type"]
           rank_id: number | null
+          reps: number | null
           source_set_id: string | null
+          swr: number | null
           updated_at: string | null
           user_id: string
+          weight_kg: number | null
         }
         Insert: {
           achieved_at?: string | null
-          best_1rm?: number | null
-          best_reps?: number | null
-          best_swr?: number | null
+          bodyweight_kg?: number | null
           created_at?: string | null
           custom_exercise_id?: string | null
+          estimated_1rm?: number | null
           exercise_id?: string | null
           exercise_key: string
           id?: string
+          pr_type: Database["public"]["Enums"]["pr_type"]
           rank_id?: number | null
+          reps?: number | null
           source_set_id?: string | null
+          swr?: number | null
           updated_at?: string | null
           user_id: string
+          weight_kg?: number | null
         }
         Update: {
           achieved_at?: string | null
-          best_1rm?: number | null
-          best_reps?: number | null
-          best_swr?: number | null
+          bodyweight_kg?: number | null
           created_at?: string | null
           custom_exercise_id?: string | null
+          estimated_1rm?: number | null
           exercise_id?: string | null
           exercise_key?: string
           id?: string
+          pr_type?: Database["public"]["Enums"]["pr_type"]
           rank_id?: number | null
+          reps?: number | null
           source_set_id?: string | null
+          swr?: number | null
           updated_at?: string | null
           user_id?: string
+          weight_kg?: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "fk_rank_id"
-            columns: ["rank_id"]
-            isOneToOne: false
-            referencedRelation: "ranks"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_exercise_prs_custom_exercise_id_fkey"
+            foreignKeyName: "user_exercise_prs_new_custom_exercise_id_fkey"
             columns: ["custom_exercise_id"]
             isOneToOne: false
             referencedRelation: "custom_exercises"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_exercise_prs_exercise_id_fkey"
+            foreignKeyName: "user_exercise_prs_new_exercise_id_fkey"
             columns: ["exercise_id"]
             isOneToOne: false
             referencedRelation: "exercises"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_exercise_prs_source_set_id_fkey"
+            foreignKeyName: "user_exercise_prs_new_rank_id_fkey"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_prs_new_source_set_id_fkey"
             columns: ["source_set_id"]
             isOneToOne: false
             referencedRelation: "workout_session_sets"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_exercise_prs_user_id_fkey"
+            foreignKeyName: "user_exercise_prs_new_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: "global_leaderboard"
-            referencedColumns: ["user_id"]
-          },
-          {
-            foreignKeyName: "user_exercise_prs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1441,6 +1515,32 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_feeds: {
+        Row: {
+          created_at: string
+          feed_item_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          feed_item_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          feed_item_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_feeds_feed_item_id_fkey"
+            columns: ["feed_item_id"]
+            isOneToOne: false
+            referencedRelation: "feed_items"
             referencedColumns: ["id"]
           },
         ]
@@ -2505,6 +2605,7 @@ export type Database = {
         | "machine"
         | "assisted_body_weight"
         | "weighted_body_weight"
+      feed_post_type: "workout" | "workout_with_pr" | "workout_with_rankup"
       friendship_status: "pending" | "accepted" | "blocked"
       gender: "male" | "female"
       meal_type: "breakfast" | "lunch" | "dinner" | "snack"
@@ -2709,7 +2810,9 @@ export type Database = {
         | "friend_request_accepted"
         | "friendship_removed"
         | "new_workout_session"
+      pr_type: "one_rep_max" | "max_reps" | "max_swr"
       primary_group_enum: "arms" | "legs" | "back" | "chest" | "abs"
+      processing_status: "processing" | "success" | "failed"
       rank_label: "F" | "E" | "D" | "C" | "B" | "A" | "S" | "Elite"
       session_status:
         | "active"
@@ -2888,6 +2991,7 @@ export const Constants = {
         "assisted_body_weight",
         "weighted_body_weight",
       ],
+      feed_post_type: ["workout", "workout_with_pr", "workout_with_rankup"],
       friendship_status: ["pending", "accepted", "blocked"],
       gender: ["male", "female"],
       meal_type: ["breakfast", "lunch", "dinner", "snack"],
@@ -3096,7 +3200,9 @@ export const Constants = {
         "friendship_removed",
         "new_workout_session",
       ],
+      pr_type: ["one_rep_max", "max_reps", "max_swr"],
       primary_group_enum: ["arms", "legs", "back", "chest", "abs"],
+      processing_status: ["processing", "success", "failed"],
       rank_label: ["F", "E", "D", "C", "B", "A", "S", "Elite"],
       session_status: [
         "active",

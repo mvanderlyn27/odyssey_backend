@@ -2,6 +2,11 @@ import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Enums, Tables, TablesInsert } from "../../types/database";
 import { findExerciseRank } from "./workout-sessions.helpers";
+import { UserPRExerciseMap } from "./workout-sessions.data";
+
+export type NewPr = TablesInsert<"user_exercise_prs"> & {
+  exercise_name: string;
+};
 
 /**
  * Analyzes the sets from a completed workout session to identify and update user personal records (PRs) for each exercise.
@@ -18,10 +23,7 @@ export async function _updateUserExercisePRs(
   userId: string,
   userGender: Enums<"gender">,
   persistedSessionSets: Tables<"workout_session_sets">[],
-  existingUserExercisePRs: Map<
-    string,
-    Pick<Tables<"user_exercise_prs">, "exercise_id" | "custom_exercise_id" | "best_swr" | "best_reps" | "rank_id">
-  >,
+  existingUserExercisePRs: UserPRExerciseMap,
   exerciseDetailsMap: Map<
     string,
     {
@@ -33,7 +35,7 @@ export async function _updateUserExercisePRs(
     }
   >,
   exerciseRankBenchmarks: Tables<"exercise_rank_benchmarks">[]
-): Promise<TablesInsert<"user_exercise_prs">[]> {
+): Promise<NewPr[]> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
   fastify.log.info(`[USER_EXERCISE_PRS] Starting PR update process for user: ${userId}`);
 
@@ -42,127 +44,103 @@ export async function _updateUserExercisePRs(
     return [];
   }
 
-  // Step 2: Find the best performing set for each exercise in this session
-  const bestSessionPerformances = new Map<string, Tables<"workout_session_sets">>();
-
+  // Group sets by exercise
+  const setsByExercise = new Map<string, Tables<"workout_session_sets">[]>();
   for (const set of persistedSessionSets) {
     if (set.is_warmup) continue;
-
     const exerciseId = set.exercise_id || set.custom_exercise_id;
     if (!exerciseId) continue;
 
+    if (!setsByExercise.has(exerciseId)) {
+      setsByExercise.set(exerciseId, []);
+    }
+    setsByExercise.get(exerciseId)!.push(set);
+  }
+
+  const newPrsToInsert: TablesInsert<"user_exercise_prs">[] = [];
+  const newPrsForFeed: NewPr[] = [];
+
+  for (const [exerciseId, sets] of setsByExercise.entries()) {
+    const existingPRs = existingUserExercisePRs.get(exerciseId);
     const exerciseInfo = exerciseDetailsMap.get(exerciseId);
-    const currentBest = bestSessionPerformances.get(exerciseId);
+    if (!exerciseInfo) continue;
 
-    if (exerciseInfo?.exercise_type === "calisthenics") {
-      // For calisthenics, the best set is the one with the most reps.
-      if (!currentBest || (set.actual_reps ?? 0) > (currentBest.actual_reps ?? 0)) {
-        bestSessionPerformances.set(exerciseId, set);
+    // Find best performance in session for each PR type
+    let sessionBest1RMSet: Tables<"workout_session_sets"> | null = null;
+    let sessionBestRepsSet: Tables<"workout_session_sets"> | null = null;
+    let sessionBestSWRSet: Tables<"workout_session_sets"> | null = null;
+
+    for (const set of sets) {
+      if ((set.calculated_1rm ?? -1) > (sessionBest1RMSet?.calculated_1rm ?? -1)) {
+        sessionBest1RMSet = set;
       }
-    } else {
-      // For all other types, use SWR.
-      if (typeof set.calculated_swr !== "number") continue;
-      if (!currentBest || set.calculated_swr > (currentBest.calculated_swr ?? -1)) {
-        bestSessionPerformances.set(exerciseId, set);
+      if ((set.actual_reps ?? -1) > (sessionBestRepsSet?.actual_reps ?? -1)) {
+        sessionBestRepsSet = set;
       }
-    }
-  }
-
-  if (bestSessionPerformances.size === 0) {
-    fastify.log.info("[USER_EXERCISE_PRS] No valid non-warmup sets found, skipping PR update.");
-    return [];
-  }
-
-  // Step 3: Fetch all rank benchmarks from cache
-  const exerciseIds = new Set(Array.from(bestSessionPerformances.keys()));
-  const benchmarksByExercise = new Map<string, any[]>();
-  if (exerciseRankBenchmarks) {
-    for (const benchmark of exerciseRankBenchmarks) {
-      if (benchmark.exercise_id && exerciseIds.has(benchmark.exercise_id)) {
-        if (!benchmarksByExercise.has(benchmark.exercise_id)) {
-          benchmarksByExercise.set(benchmark.exercise_id, []);
-        }
-        benchmarksByExercise.get(benchmark.exercise_id)!.push(benchmark);
-      }
-    }
-  }
-
-  // Step 4: Compare session's best against existing PRs and prepare upserts
-  const prUpserts: TablesInsert<"user_exercise_prs">[] = [];
-  const K = 4000; // System Constant
-
-  for (const [exerciseId, bestSet] of bestSessionPerformances.entries()) {
-    const existingPR = existingUserExercisePRs.get(exerciseId);
-    const exerciseInfo = exerciseDetailsMap.get(exerciseId);
-    const isCustom = exerciseInfo?.source_type === "custom";
-
-    let isNewPR = false;
-    let logDetails = "";
-
-    if (exerciseInfo?.exercise_type === "calisthenics") {
-      const newBestReps = bestSet.actual_reps ?? 0;
-      const oldBestReps = existingPR?.best_reps ?? -1;
-      if (newBestReps > 0 && (!existingPR || newBestReps > oldBestReps)) {
-        isNewPR = true;
-        logDetails = `New PR (reps): ${newBestReps} > ${oldBestReps === -1 ? "N/A" : oldBestReps}`;
-      }
-    } else {
-      const newBestSWR = bestSet.calculated_swr;
-      if (typeof newBestSWR === "number") {
-        const oldBestSWR = existingPR?.best_swr ?? -1;
-        if (!existingPR || newBestSWR > oldBestSWR) {
-          isNewPR = true;
-          logDetails = `New PR (SWR): ${newBestSWR} > ${oldBestSWR === -1 ? "N/A" : oldBestSWR}`;
-        }
+      if ((set.calculated_swr ?? -1) > (sessionBestSWRSet?.calculated_swr ?? -1)) {
+        sessionBestSWRSet = set;
       }
     }
 
-    if (isNewPR) {
-      fastify.log.info(`[USER_EXERCISE_PRS] New PR found for exercise ${exerciseId}. ${logDetails}`);
-
-      const newBestSWR = bestSet.calculated_swr ?? 0;
-      let newRankId: number | null = null;
-
-      if (!isCustom) {
-        const newBestSPS = Math.round(newBestSWR * K);
-        const exerciseBenchmarks = benchmarksByExercise.get(exerciseId) || [];
-        newRankId = findExerciseRank(newBestSPS, userGender, exerciseBenchmarks);
-      }
-
-      const payload: TablesInsert<"user_exercise_prs"> = {
+    const createPrPayload = (
+      set: Tables<"workout_session_sets">,
+      pr_type: Enums<"pr_type">
+    ): TablesInsert<"user_exercise_prs"> => {
+      const isCustom = exerciseInfo.source_type === "custom";
+      return {
         user_id: userId,
         exercise_key: exerciseId,
         exercise_id: isCustom ? null : exerciseId,
         custom_exercise_id: isCustom ? exerciseId : null,
-        best_swr: newBestSWR,
-        best_reps: bestSet.actual_reps,
-        best_1rm: bestSet.calculated_1rm,
-        source_set_id: bestSet.id,
-        achieved_at: bestSet.performed_at || new Date().toISOString(),
-        rank_id: newRankId,
+        pr_type,
+        estimated_1rm: set.calculated_1rm,
+        reps: set.actual_reps,
+        swr: set.calculated_swr,
+        weight_kg: set.actual_weight_kg,
+        source_set_id: set.id,
+        achieved_at: set.performed_at || new Date().toISOString(),
       };
+    };
 
-      prUpserts.push(payload);
+    // Compare session bests to existing PRs
+    const isBodyweightExercise =
+      exerciseInfo.exercise_type === "calisthenics" || exerciseInfo.exercise_type === "body_weight";
+
+    if (
+      !isBodyweightExercise &&
+      sessionBest1RMSet &&
+      (sessionBest1RMSet.calculated_1rm ?? -1) > (existingPRs?.one_rep_max?.estimated_1rm ?? -1)
+    ) {
+      const payload = createPrPayload(sessionBest1RMSet, "one_rep_max");
+      newPrsToInsert.push(payload);
+      newPrsForFeed.push({ ...payload, exercise_name: exerciseInfo.name });
+    }
+    if (sessionBestRepsSet && (sessionBestRepsSet.actual_reps ?? -1) > (existingPRs?.max_reps?.reps ?? -1)) {
+      const payload = createPrPayload(sessionBestRepsSet, "max_reps");
+      newPrsToInsert.push(payload);
+      newPrsForFeed.push({ ...payload, exercise_name: exerciseInfo.name });
+    }
+    if (
+      !isBodyweightExercise &&
+      sessionBestSWRSet &&
+      (sessionBestSWRSet.calculated_swr ?? -1) > (existingPRs?.max_swr?.swr ?? -1)
+    ) {
+      const payload = createPrPayload(sessionBestSWRSet, "max_swr");
+      newPrsToInsert.push(payload);
+      newPrsForFeed.push({ ...payload, exercise_name: exerciseInfo.name });
     }
   }
 
-  // Step 5: Upsert the new PRs to the database
-  const allUpserts = [];
-  if (prUpserts.length > 0) {
-    fastify.log.info(`[USER_EXERCISE_PRS] Upserting ${prUpserts.length} new PR(s).`);
-    const { error } = await supabase
-      .from("user_exercise_prs")
-      .upsert(prUpserts, { onConflict: "user_id,exercise_key" });
+  if (newPrsToInsert.length > 0) {
+    fastify.log.info(`[USER_EXERCISE_PRS] Inserting ${newPrsToInsert.length} new PR(s).`);
+    const { error } = await supabase.from("user_exercise_prs").insert(newPrsToInsert);
     if (error) {
-      fastify.log.error({ error }, "[USER_EXERCISE_PRS] Failed to upsert exercise PRs.");
-    } else {
-      allUpserts.push(...prUpserts);
+      fastify.log.error({ error }, "[USER_EXERCISE_PRS] Failed to insert exercise PRs.");
+      return []; // Return empty on failure
     }
-  }
-
-  if (allUpserts.length === 0) {
+  } else {
     fastify.log.info("[USER_EXERCISE_PRS] No new PRs to update.");
   }
 
-  return allUpserts;
+  return newPrsForFeed;
 }

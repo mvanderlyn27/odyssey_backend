@@ -20,6 +20,7 @@ import { _handleWorkoutPlanCycleCompletion } from "./workout-sessions.cycle";
 import { _updateUserMuscleLastWorked } from "./workout-sessions.lastWorked";
 import { _updateUserExercisePRs } from "./workout-sessions.prs";
 import { _handleWorkoutCompletionNotifications } from "./workout-sessions.notifications";
+import { createWorkoutFeedItem } from "./workout-sessions.feed";
 
 // Comments for types/constants moved or no longer used have been removed.
 
@@ -72,6 +73,8 @@ export const finishWorkoutSession = async (
       activeWorkoutPlans,
       exerciseRankBenchmarks,
       friends,
+      workoutContext,
+      bestSet,
     } = await _gatherAndPrepareWorkoutData(fastify, userId, finishData);
 
     // Handle existing_session_id: If provided, this is an update (finalize), otherwise new insert.
@@ -223,6 +226,23 @@ export const finishWorkoutSession = async (
         return Promise.resolve({ data: null, error: null });
       })(),
     ]);
+
+    // ASYNCHRONOUSLY create a feed item. Do not block the response for this.
+    if (userProfile && newlyCreatedOrFetchedSession) {
+      createWorkoutFeedItem(fastify, {
+        userProfile,
+        workoutSession: newlyCreatedOrFetchedSession,
+        workoutContext,
+        summaryStats: {
+          muscles_worked: muscles_worked_summary,
+          best_set: bestSet,
+        },
+        personalRecords: newPrs,
+        rankUpdateResults: rankUpdateResults,
+      }).catch((err) => {
+        fastify.log.error(err, `[FEED] Failed to create feed item for session ${newlyCreatedOrFetchedSession.id}`);
+      });
+    }
 
     _handleWorkoutCompletionNotifications(
       fastify,

@@ -30,6 +30,15 @@ export type SetPayloadPreamble = Omit<TablesInsert<"workout_session_sets">, "wor
   exercise_name?: string;
 };
 
+export type UserPRExerciseMap = Map<
+  string,
+  {
+    one_rep_max?: Tables<"user_exercise_prs">;
+    max_reps?: Tables<"user_exercise_prs">;
+    max_swr?: Tables<"user_exercise_prs">;
+  }
+>;
+
 export type PreparedWorkoutData = {
   sessionInsertPayload: TablesInsert<"workout_sessions">;
   setInsertPayloads: SetPayloadPreamble[];
@@ -37,6 +46,15 @@ export type PreparedWorkoutData = {
   userProfile: Tables<"profiles">;
   userData: Tables<"users">;
   userBodyweight: number | null;
+  workoutContext: {
+    plan_name: string;
+    day_name: string;
+  };
+  bestSet: {
+    exercise_name: string;
+    reps: number;
+    weight_kg: number;
+  } | null;
   exerciseDetailsMap: Map<
     string,
     {
@@ -54,10 +72,7 @@ export type PreparedWorkoutData = {
         })
       | null;
   })[];
-  existingUserExercisePRs: Map<
-    string,
-    Pick<Tables<"user_exercise_prs">, "exercise_id" | "custom_exercise_id" | "best_swr" | "best_reps" | "rank_id">
-  >;
+  existingUserExercisePRs: UserPRExerciseMap;
   muscles_worked_summary: MuscleWorkedSummaryItem[];
   exercises: Tables<"exercises">[];
   mcw: Tables<"exercise_muscles">[];
@@ -94,8 +109,7 @@ export async function _gatherAndPrepareWorkoutData(
     exercisesDataResult,
     emgMappingsResult,
     customEmgMappingsResult,
-    existingExercisePRsResult,
-    existingCustomExercisePRsResult,
+    existingPRsResult,
     allExercises,
     allMcw,
     allMuscles,
@@ -140,18 +154,7 @@ export async function _gatherAndPrepareWorkoutData(
           .in("custom_exercise_id", sessionExerciseIds)
       : Promise.resolve({ data: [], error: null }),
     sessionExerciseIds.length > 0
-      ? supabase
-          .from("user_exercise_prs")
-          .select("exercise_id, best_swr, best_reps, rank_id")
-          .eq("user_id", userId)
-          .in("exercise_id", sessionExerciseIds)
-      : Promise.resolve({ data: [], error: null }),
-    sessionExerciseIds.length > 0
-      ? supabase
-          .from("user_exercise_prs")
-          .select("custom_exercise_id, best_swr, best_reps, rank_id")
-          .eq("user_id", userId)
-          .in("custom_exercise_id", sessionExerciseIds)
+      ? supabase.from("user_exercise_prs").select("*").eq("user_id", userId).in("exercise_key", sessionExerciseIds)
       : Promise.resolve({ data: [], error: null }),
     fastify.appCache.get("exercises", async () => {
       const { data, error } = await supabase.from("exercises").select("*");
@@ -285,34 +288,40 @@ export async function _gatherAndPrepareWorkoutData(
     exerciseMuscleMappings = exerciseMuscleMappings.concat(customMappings as any);
   }
 
-  const existingUserExercisePRs = new Map<
-    string,
-    Pick<Tables<"user_exercise_prs">, "exercise_id" | "custom_exercise_id" | "best_swr" | "best_reps" | "rank_id">
-  >();
-  if (existingExercisePRsResult.error) {
-    fastify.log.error(
-      { error: existingExercisePRsResult.error },
-      "[PREPARE_WORKOUT_DATA] Error fetching existing exercise PRs."
-    );
-  } else if (existingExercisePRsResult.data) {
-    existingExercisePRsResult.data.forEach((pr) => {
-      if (pr.exercise_id) {
-        existingUserExercisePRs.set(pr.exercise_id, { ...pr, custom_exercise_id: null });
+  const existingUserExercisePRs: UserPRExerciseMap = new Map();
+  if (existingPRsResult.error) {
+    fastify.log.error({ error: existingPRsResult.error }, "[PREPARE_WORKOUT_DATA] Error fetching existing PRs.");
+  } else if (existingPRsResult.data) {
+    for (const pr of existingPRsResult.data) {
+      const exerciseKey = pr.exercise_key;
+      if (!existingUserExercisePRs.has(exerciseKey)) {
+        existingUserExercisePRs.set(exerciseKey, {});
       }
-    });
-  }
+      const prs = existingUserExercisePRs.get(exerciseKey)!;
 
-  if (existingCustomExercisePRsResult.error) {
-    fastify.log.error(
-      { error: existingCustomExercisePRsResult.error },
-      "[PREPARE_WORKOUT_DATA] Error fetching existing custom exercise PRs."
-    );
-  } else if (existingCustomExercisePRsResult.data) {
-    existingCustomExercisePRsResult.data.forEach((pr) => {
-      if (pr.custom_exercise_id) {
-        existingUserExercisePRs.set(pr.custom_exercise_id, { ...pr, exercise_id: null });
+      const updatePR = (
+        existingPr: Tables<"user_exercise_prs"> | undefined,
+        newPr: Tables<"user_exercise_prs">,
+        valueKey: "estimated_1rm" | "reps" | "swr"
+      ) => {
+        if (!existingPr || (newPr[valueKey] ?? -1) > (existingPr[valueKey] ?? -1)) {
+          return newPr;
+        }
+        return existingPr;
+      };
+
+      switch (pr.pr_type) {
+        case "one_rep_max":
+          prs.one_rep_max = updatePR(prs.one_rep_max, pr, "estimated_1rm");
+          break;
+        case "max_reps":
+          prs.max_reps = updatePR(prs.max_reps, pr, "reps");
+          break;
+        case "max_swr":
+          prs.max_swr = updatePR(prs.max_swr, pr, "swr");
+          break;
       }
-    });
+    }
   }
 
   const setInsertPayloads: SetPayloadPreamble[] = [];
@@ -322,6 +331,12 @@ export async function _gatherAndPrepareWorkoutData(
   let calculatedTotalSets = 0;
   let calculatedTotalReps = 0;
   let calculatedTotalVolumeKg = 0;
+  let bestSet: {
+    exercise_name: string;
+    reps: number;
+    weight_kg: number;
+    score: number;
+  } | null = null;
   const performedExerciseNamesForSummary = new Set<string>();
 
   if (finishData.exercises) {
@@ -339,6 +354,26 @@ export async function _gatherAndPrepareWorkoutData(
 
         const calculated_1rm = calculate_1RM(actual_weight_kg, actual_reps);
         const calculated_swr = calculate_SWR(calculated_1rm, userBodyweight);
+
+        if (set.is_warmup !== true) {
+          const exerciseType = exerciseDetail?.exercise_type;
+          let currentSetScore = 0;
+
+          if (exerciseType === "calisthenics") {
+            currentSetScore = actual_reps ?? 0;
+          } else {
+            currentSetScore = calculated_swr ?? 0;
+          }
+
+          if (bestSet === null || currentSetScore > bestSet.score) {
+            bestSet = {
+              exercise_name: exerciseName,
+              reps: actual_reps ?? 0,
+              weight_kg: actual_weight_kg ?? 0,
+              score: currentSetScore,
+            };
+          }
+        }
 
         if (actual_weight_kg !== null && actual_reps !== null) {
           const exerciseType = exerciseDetail?.exercise_type;
@@ -419,6 +454,20 @@ export async function _gatherAndPrepareWorkoutData(
   const muscles_worked_summary: MuscleWorkedSummaryItem[] = Array.from(musclesWorkedMap.values());
   const exercisesPerformedSummary = Array.from(performedExerciseNamesForSummary).join(", ");
 
+  const [planNameResult, dayNameResult] = await Promise.all([
+    finishData.workout_plan_id
+      ? supabase.from("workout_plans").select("name").eq("id", finishData.workout_plan_id).single()
+      : Promise.resolve({ data: { name: "Unknown Plan" }, error: null }),
+    finishData.workout_plan_day_id
+      ? supabase.from("workout_plan_days").select("day_name").eq("id", finishData.workout_plan_day_id).single()
+      : Promise.resolve({ data: { day_name: "Unknown Day" }, error: null }),
+  ]);
+
+  const workoutContext = {
+    plan_name: planNameResult.data?.name ?? "Unknown Plan",
+    day_name: dayNameResult.data?.day_name ?? "Unknown Day",
+  };
+
   let durationSeconds = finishData.duration_seconds;
   if (durationSeconds === undefined || durationSeconds === null) {
     const startTime = new Date(finishData.started_at).getTime();
@@ -464,6 +513,8 @@ export async function _gatherAndPrepareWorkoutData(
     userProfile,
     userData,
     userBodyweight,
+    workoutContext,
+    bestSet,
     exerciseDetailsMap,
     exerciseMuscleMappings,
     existingUserExercisePRs,

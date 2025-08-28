@@ -21,7 +21,7 @@ export async function calculateRankForEntry(
     userGender,
     userBodyweight,
     exerciseDetails,
-    existingPr,
+    existingPrs,
     exerciseRankBenchmarks,
     exercises,
     mcw,
@@ -97,8 +97,14 @@ export async function calculateRankForEntry(
 
     // 4. Prepare data for PR update
     const existingPrMap = new Map();
-    if (existingPr) {
-      existingPrMap.set(entry.exercise_id, existingPr);
+    if (existingPrs && existingPrs.length > 0) {
+      const prs = existingPrs.reduce((acc, pr) => {
+        if (pr.pr_type) {
+          acc[pr.pr_type] = pr;
+        }
+        return acc;
+      }, {} as { [key: string]: any });
+      existingPrMap.set(entry.exercise_id, prs);
     }
     const exerciseDetailsMap = new Map([[exerciseDetails.id as string, exerciseDetails as any]]);
 
