@@ -14,7 +14,7 @@ export interface FeedItemCreationData {
   userProfile: Tables<"profiles">;
   workoutSession: Tables<"workout_sessions">;
   workoutContext: {
-    plan_name: string;
+    plan_name: string | null;
     day_name: string;
   };
   summaryStats: {
@@ -110,10 +110,13 @@ export async function createWorkoutFeedItem(fastify: FastifyInstance, inputData:
   };
 
   // Example using Supabase client
+  fastify.log.info("Attempting to insert workout feed item...");
   const { error } = await supabase.from("feed_items").insert(feedItemToInsert);
 
   if (error) {
     // Handle error logging and reporting
+    fastify.log.error(`Failed to create feed item: ${error.message}`, { error });
     throw new Error(`Failed to create feed item: ${error.message}`);
   }
+  fastify.log.info("Successfully created workout feed item.");
 }

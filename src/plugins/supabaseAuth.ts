@@ -33,7 +33,12 @@ async function supabaseAuthPlugin(fastify: FastifyInstance, options: SupabaseAut
         "Supabase URL and Service Role Key must be provided via env vars or a client instance must be passed."
       );
     }
-    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
   }
 
   // Decorate the Fastify instance with the client if needed elsewhere (optional)
@@ -52,14 +57,19 @@ async function supabaseAuthPlugin(fastify: FastifyInstance, options: SupabaseAut
         return reply.code(401).send({ error: "Unauthorized", message: "Invalid Authorization header format" });
       }
 
-      // Use the initialized Supabase client (mock or real)
+      // Create a temporary client specifically for auth validation
+      const authClient = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
       const {
         data: { user },
         error,
-      } = await supabase.auth.getUser(token); // Use the resolved 'supabase' variable
+      } = await authClient.auth.getUser(token);
 
       if (error || !user) {
-        fastify.log.warn({ error: error?.message }, "Authentication failed: Invalid token or Supabase error");
+        fastify.log.warn(
+          { error: error?.message, token: token },
+          "Authentication failed: Invalid token or Supabase error"
+        );
         // Use the error message from the (potentially mocked) client response
         return reply.code(401).send({ error: "Unauthorized", message: error?.message || "Invalid token" });
       }

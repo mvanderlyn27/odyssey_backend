@@ -47,7 +47,7 @@ export type PreparedWorkoutData = {
   userData: Tables<"users">;
   userBodyweight: number | null;
   workoutContext: {
-    plan_name: string;
+    plan_name: string | null;
     day_name: string;
   };
   bestSet: {
@@ -457,15 +457,15 @@ export async function _gatherAndPrepareWorkoutData(
   const [planNameResult, dayNameResult] = await Promise.all([
     finishData.workout_plan_id
       ? supabase.from("workout_plans").select("name").eq("id", finishData.workout_plan_id).single()
-      : Promise.resolve({ data: { name: "Unknown Plan" }, error: null }),
+      : Promise.resolve({ data: { name: null }, error: null }),
     finishData.workout_plan_day_id
       ? supabase.from("workout_plan_days").select("day_name").eq("id", finishData.workout_plan_day_id).single()
-      : Promise.resolve({ data: { day_name: "Unknown Day" }, error: null }),
+      : Promise.resolve({ data: { day_name: "Quick Workout" }, error: null }),
   ]);
 
   const workoutContext = {
-    plan_name: planNameResult.data?.name ?? "Unknown Plan",
-    day_name: dayNameResult.data?.day_name ?? "Unknown Day",
+    plan_name: planNameResult.data?.name || null,
+    day_name: dayNameResult.data?.day_name ?? "Quick Workout",
   };
 
   let durationSeconds = finishData.duration_seconds;
