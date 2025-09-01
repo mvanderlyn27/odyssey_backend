@@ -33,10 +33,11 @@ export function findRank(score: number, rankThresholds: { id: number; min_score:
 
 export function findExerciseRank(
   sps: number,
-  gender: "male" | "female",
-  benchmarks: { rank_id: number | null; min_threshold: number; gender: "male" | "female" }[]
+  input_gender: "male" | "female" | "other",
+  benchmarks: { rank_id: number | null; min_threshold: number; gender: "male" | "female" | "other" }[]
 ): number | null {
   // Filter benchmarks for the user's gender and sort descending by threshold
+  const gender = input_gender === "other" ? "male" : input_gender;
   const sortedBenchmarks = benchmarks
     .filter((b) => b.gender === gender)
     .sort((a, b) => b.min_threshold - a.min_threshold);

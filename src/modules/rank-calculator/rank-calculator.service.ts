@@ -2,12 +2,10 @@ import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database } from "../../types/database";
 import { RankEntryType } from "./rank-calculator.routes";
-import {
-  _updateUserExerciseAndMuscleGroupRanks,
-  RankUpdateResults,
-} from "../workout-sessions/workout-sessions.ranking";
+import { _updateUserRanks, RankUpdateResults } from "../workout-sessions/workout-sessions.ranking";
 import { _updateUserExercisePRs } from "../workout-sessions/workout-sessions.prs";
 import { getRankCalculationData } from "./rank-calculator.data";
+import { RankUpData } from "../workout-sessions/types";
 
 export async function calculateRankForEntry(
   fastify: FastifyInstance,
@@ -15,6 +13,28 @@ export async function calculateRankForEntry(
   entry: RankEntryType
 ): Promise<RankUpdateResults> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
+  let calculationLog: { id: string } | null = null;
+
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("is_premium, rank_calculator_balance")
+    .eq("id", userId)
+    .single();
+
+  if (userError) throw new Error("User not found");
+
+  if (!user.is_premium) {
+    if (user.rank_calculator_balance <= 0) {
+      throw new Error("No rank calculations remaining");
+    }
+
+    const { error: updateError } = await supabase
+      .from("users")
+      .update({ rank_calculator_balance: user.rank_calculator_balance - 1 })
+      .eq("id", userId);
+
+    if (updateError) throw new Error("Failed to update rank calculator balance");
+  }
 
   // 1. Fetch all necessary data in parallel
   const {
@@ -77,47 +97,99 @@ export async function calculateRankForEntry(
   }
 
   try {
-    // 3. Call the existing ranking logic with the persisted set
-    const rankUpdateResults = await _updateUserExerciseAndMuscleGroupRanks(
-      fastify,
-      userId,
-      userGender,
-      userBodyweight,
-      [persistedSet],
-      exercises,
-      mcw,
-      allMuscles,
-      allMuscleGroups,
-      allRanks,
-      allRankThresholds,
-      initialUserRank,
-      initialMuscleGroupRanks,
-      initialMuscleRanks
-    );
+    if (!user.is_premium) {
+      const { data: log, error: logError } = await supabase
+        .from("rank_calculations")
+        .insert({ user_id: userId, exercise_id: entry.exercise_id })
+        .select("id")
+        .single();
+      if (logError || !log) throw new Error("Failed to create rank calculation log");
+      calculationLog = log;
+    }
 
-    // 4. Prepare data for PR update
+    const exerciseDetailsMap = new Map([[exerciseDetails.id as string, exerciseDetails as any]]);
+    const userExerciseRanks = await supabase
+      .from("user_exercise_ranks")
+      .select("*")
+      .eq("user_id", userId)
+      .in("exercise_id", [entry.exercise_id]);
+    if (userExerciseRanks.error) throw userExerciseRanks.error;
+
     const existingPrMap = new Map();
     if (existingPrs && existingPrs.length > 0) {
       const prs = existingPrs.reduce((acc, pr) => {
-        if (pr.pr_type) {
-          acc[pr.pr_type] = pr;
+        if ("pr_type" in pr && pr.pr_type) {
+          acc[pr.pr_type as string] = pr;
         }
         return acc;
       }, {} as { [key: string]: any });
       existingPrMap.set(entry.exercise_id, prs);
     }
-    const exerciseDetailsMap = new Map([[exerciseDetails.id as string, exerciseDetails as any]]);
 
-    // 5. Update the user's PR for this exercise
-    await _updateUserExercisePRs(
-      fastify,
-      userId,
-      userGender,
-      [persistedSet],
-      existingPrMap,
-      exerciseDetailsMap,
-      exerciseRankBenchmarks
-    );
+    const [rankUpdateResults] = await Promise.all([
+      _updateUserRanks(
+        fastify,
+        userId,
+        userGender,
+        userBodyweight,
+        [persistedSet],
+        exercises,
+        mcw,
+        allMuscles,
+        allMuscleGroups,
+        allRanks,
+        allRankThresholds,
+        initialUserRank,
+        initialMuscleGroupRanks,
+        initialMuscleRanks,
+        exerciseRankBenchmarks,
+        userExerciseRanks.data,
+        false // Ranks calculated here are always unlocked
+      ),
+      _updateUserExercisePRs(fastify, userId, userBodyweight, [persistedSet], existingPrMap, exerciseDetailsMap),
+    ]);
+
+    if (calculationLog) {
+      const rankUpData: RankUpData = {
+        overall_rank_up: {
+          old_rank_id: rankUpdateResults.overall_user_rank_progression?.initial_rank.rank_id ?? 0,
+          new_rank_id: rankUpdateResults.overall_user_rank_progression?.current_rank.rank_id ?? 0,
+          old_strength_score: rankUpdateResults.overall_user_rank_progression?.initial_strength_score ?? 0,
+          new_strength_score: rankUpdateResults.overall_user_rank_progression?.final_strength_score ?? 0,
+        },
+        muscle_group_rank_ups:
+          rankUpdateResults.muscle_group_progressions?.map((p) => ({
+            muscle_group_id: p.muscle_group_id,
+            old_rank_id: p.progression_details.initial_rank.rank_id ?? 0,
+            new_rank_id: p.progression_details.current_rank.rank_id ?? 0,
+            old_strength_score: p.progression_details.initial_strength_score,
+            new_strength_score: p.progression_details.final_strength_score,
+          })) ?? [],
+        muscle_rank_ups: [], // This can be populated if muscle rank changes are tracked
+        exercise_rank_ups:
+          rankUpdateResults.newExerciseRanks?.map((r) => ({
+            exercise_id: r.exercise_id,
+            old_rank_id: userExerciseRanks.data.find((e) => e.exercise_id === r.exercise_id)?.rank_id ?? 0,
+            new_rank_id: r.rank_id ?? 0,
+            old_strength_score:
+              userExerciseRanks.data.find((e) => e.exercise_id === r.exercise_id)?.strength_score ?? 0,
+            new_strength_score: r.strength_score ?? 0,
+          })) ?? [],
+      };
+
+      await supabase
+        .from("rank_calculations")
+        .update({
+          rank_up_data: rankUpData as any,
+          new_calculator_balance: user.rank_calculator_balance - 1,
+          old_calculator_balance: user.rank_calculator_balance,
+          weight_kg: entry.weight,
+          reps: entry.reps,
+          bodyweight_kg: userBodyweight,
+          status: "success",
+        })
+        .eq("id", calculationLog.id);
+    }
 
     return rankUpdateResults;
   } finally {

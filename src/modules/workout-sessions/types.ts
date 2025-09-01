@@ -28,3 +28,33 @@ export type WorkoutFeedMetadata = {
   }[];
   rank_ups?: RankUp[];
 };
+
+export interface RankUpData {
+  overall_rank_up: {
+    old_rank_id: number;
+    new_rank_id: number;
+    old_strength_score: number;
+    new_strength_score: number;
+  };
+  muscle_group_rank_ups: {
+    muscle_group_id: string;
+    old_rank_id: number;
+    new_rank_id: number;
+    old_strength_score: number;
+    new_strength_score: number;
+  }[];
+  muscle_rank_ups: {
+    muscle_id: string;
+    old_rank_id: number;
+    new_rank_id: number;
+    old_strength_score: number;
+    new_strength_score: number;
+  }[];
+  exercise_rank_ups: {
+    exercise_id: string;
+    old_rank_id: number;
+    new_rank_id: number;
+    old_strength_score: number;
+    new_strength_score: number;
+  }[];
+}

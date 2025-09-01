@@ -73,6 +73,7 @@ export type PreparedWorkoutData = {
       | null;
   })[];
   existingUserExercisePRs: UserPRExerciseMap;
+  userExerciseRanks: Tables<"user_exercise_ranks">[];
   muscles_worked_summary: MuscleWorkedSummaryItem[];
   exercises: Tables<"exercises">[];
   mcw: Tables<"exercise_muscles">[];
@@ -123,6 +124,7 @@ export async function _gatherAndPrepareWorkoutData(
     activeWorkoutPlansResult,
     exerciseRankBenchmarksResult,
     friendsResult,
+    userExerciseRanksResult,
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", userId).single(),
     supabase.from("users").select("*").eq("id", userId).single(),
@@ -205,6 +207,9 @@ export async function _gatherAndPrepareWorkoutData(
       .select("*")
       .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
       .eq("status", "accepted"),
+    sessionExerciseIds.length > 0
+      ? supabase.from("user_exercise_ranks").select("*").eq("user_id", userId).in("exercise_id", sessionExerciseIds)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   if (profileResult.error || !profileResult.data) {
@@ -505,6 +510,12 @@ export async function _gatherAndPrepareWorkoutData(
       "[PREPARE_WORKOUT_DATA] Error fetching data required for the ranking system."
     );
   }
+  if (userExerciseRanksResult.error) {
+    fastify.log.error(
+      { error: userExerciseRanksResult.error, userId },
+      "[PREPARE_WORKOUT_DATA] Error fetching user exercise ranks."
+    );
+  }
 
   return {
     sessionInsertPayload,
@@ -518,6 +529,7 @@ export async function _gatherAndPrepareWorkoutData(
     exerciseDetailsMap,
     exerciseMuscleMappings,
     existingUserExercisePRs,
+    userExerciseRanks: userExerciseRanksResult.data || [],
     muscles_worked_summary,
     exercises: allExercises,
     mcw: allMcw,

@@ -4,7 +4,7 @@ import axios from "axios";
 import { Profile } from "../../schemas/profileSchemas";
 import config from "../../config";
 import { InitialRankBodySchema } from "../../schemas/onboardSchemas";
-import { _updateUserExerciseAndMuscleGroupRanks } from "../workout-sessions/workout-sessions.ranking";
+import { _updateUserRanks } from "../workout-sessions/workout-sessions.ranking";
 import { _updateUserExercisePRs } from "../workout-sessions/workout-sessions.prs";
 import { calculate_1RM, calculate_SWR } from "../workout-sessions/workout-sessions.helpers";
 import { TablesInsert, TablesUpdate, Database, Tables, Enums } from "../../types/database";
@@ -98,17 +98,9 @@ export const handleOnboarding = async (
       push_notification_token: data.push_notification_token ?? existingUserData?.push_notification_token,
     };
 
-    const { error: upsertProfileError } = await supabase.from("profiles").upsert(profilePayload);
-    const { error: upsertUserError } = await supabase.from("users").upsert(userPayload);
-
-    if (upsertProfileError || upsertUserError) {
-      fastify.log.error(
-        { profileError: upsertProfileError, userError: upsertUserError, userId },
-        "Error upserting profile during onboarding"
-      );
-      throw new Error(`Failed to upsert profile: ${upsertProfileError?.message || upsertUserError?.message}`);
-    }
-    fastify.log.info(`Profile upserted for user ${userId}`);
+    const promises = [];
+    promises.push(supabase.from("profiles").upsert(profilePayload));
+    promises.push(supabase.from("users").upsert(userPayload));
 
     if (data.weight !== undefined && data.weight !== null) {
       const bodyMeasurementPayload: BodyMeasurementInsert = {
@@ -117,13 +109,17 @@ export const handleOnboarding = async (
         value: data.weight,
         measured_at: new Date().toISOString(),
       };
-      const { error: bodyMeasurementError } = await supabase.from("body_measurements").insert(bodyMeasurementPayload);
-      if (bodyMeasurementError) {
-        fastify.log.error({ error: bodyMeasurementError, userId }, "Error saving body measurement");
-      } else {
-        fastify.log.info(`Body measurement (weight) saved for user ${userId}`);
-      }
+      promises.push(supabase.from("body_measurements").insert(bodyMeasurementPayload));
     }
+
+    const results = await Promise.all(promises);
+    results.forEach((result, i) => {
+      if (result.error) {
+        fastify.log.error({ error: result.error, userId, operation: i }, "Error during parallel onboarding upserts");
+        throw new Error(`Failed during onboarding operation ${i}: ${result.error.message}`);
+      }
+    });
+    fastify.log.info(`Parallel profile, user, and body measurement upserts completed for user ${userId}`);
 
     let workoutSessionId: string | null = null;
     let createdSetId: string | null = null;
@@ -226,7 +222,14 @@ export const handleOnboarding = async (
             const persistedSessionSets = [setForRanking];
             fastify.log.info(`Starting peak contribution rank calculation for user ${userId}`);
             try {
-              await _updateUserExerciseAndMuscleGroupRanks(
+              const userExerciseRanks = await supabase
+                .from("user_exercise_ranks")
+                .select("*")
+                .eq("user_id", userId)
+                .in("exercise_id", [data.selected_exercise_id as string]);
+              if (userExerciseRanks.error) throw userExerciseRanks.error;
+
+              await _updateUserRanks(
                 fastify,
                 userId,
                 userGenderForRanking as Enums<"gender">,
@@ -240,7 +243,10 @@ export const handleOnboarding = async (
                 preparedData.allRankThresholds,
                 preparedData.initialUserRank,
                 preparedData.initialMuscleGroupRanks,
-                preparedData.initialMuscleRanks
+                preparedData.initialMuscleRanks,
+                preparedData.exerciseRankBenchmarks,
+                userExerciseRanks.data,
+                false // Onboarding ranks are always unlocked
               );
               fastify.log.info(`Peak contribution rank calculation completed for user ${userId}`);
             } catch (rankingError: any) {
@@ -252,11 +258,10 @@ export const handleOnboarding = async (
               await _updateUserExercisePRs(
                 fastify,
                 userId,
-                userGenderForRanking as Enums<"gender">,
+                userBodyweight,
                 persistedSessionSets,
                 existingUserExercisePRs,
-                preparedData.rankingExerciseMap,
-                preparedData.exerciseRankBenchmarks
+                preparedData.rankingExerciseMap
               );
               fastify.log.info(`Initial exercise PR calculation completed for user ${userId}`);
             } catch (prError: any) {

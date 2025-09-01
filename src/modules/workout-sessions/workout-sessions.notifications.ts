@@ -26,7 +26,7 @@ export async function _handleWorkoutCompletionNotifications(
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   try {
-    if (userData.activity_visibility === "private") {
+    if (userData.profile_privacy === "private") {
       fastify.log.info(
         `[NOTIFICATIONS] User ${userId} has private activity visibility. No notifications will be sent.`
       );

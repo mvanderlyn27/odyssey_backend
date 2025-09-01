@@ -8,7 +8,7 @@ import {
   SessionStatus,
 } from "@/schemas/workoutSessionsSchemas";
 import { _gatherAndPrepareWorkoutData } from "./workout-sessions.data";
-import { _updateUserExerciseAndMuscleGroupRanks, RankUpdateResults } from "./workout-sessions.ranking";
+import { _updateUserRanks, RankUpdateResults } from "./workout-sessions.ranking";
 import {
   _updateWorkoutPlanProgression,
   PlanProgressionResults,
@@ -167,7 +167,8 @@ export const finishWorkoutSession = async (
         if (!userData.gender) {
           fastify.log.warn({ userId }, "User gender is not specified. Defaulting to 'male' for ranking calculations.");
         }
-        return _updateUserExerciseAndMuscleGroupRanks(
+        const isLocked = !userData.is_premium;
+        return _updateUserRanks(
           fastify,
           userId,
           genderForRanking,
@@ -181,7 +182,10 @@ export const finishWorkoutSession = async (
           allRankThresholds,
           initialUserRank,
           initialMuscleGroupRanks,
-          initialMuscleRanks
+          initialMuscleRanks,
+          exerciseRankBenchmarks,
+          [],
+          isLocked
         );
       })(),
       _awardXpAndLevel(fastify, userProfile, allLevelDefinitions),
@@ -200,15 +204,13 @@ export const finishWorkoutSession = async (
         activeWorkoutPlans
       ),
       (() => {
-        const genderForRanking = (userData.gender || "male") as Enums<"gender">;
         return _updateUserExercisePRs(
           fastify,
           userId,
-          genderForRanking,
+          userBodyweight,
           persistedSessionSets,
           existingUserExercisePRs,
-          exerciseDetailsMap,
-          exerciseRankBenchmarks
+          exerciseDetailsMap
         );
       })(),
       (() => {

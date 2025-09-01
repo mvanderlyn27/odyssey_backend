@@ -1,7 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Enums, Tables, TablesInsert } from "../../types/database";
-import { findExerciseRank } from "./workout-sessions.helpers";
 import { UserPRExerciseMap } from "./workout-sessions.data";
 
 export type NewPr = TablesInsert<"user_exercise_prs"> & {
@@ -13,7 +12,7 @@ export type NewPr = TablesInsert<"user_exercise_prs"> & {
  *
  * @param fastify - The Fastify instance for logging and database access.
  * @param userId - The ID of the user.
- * @param userGender - The gender of the user, used for rank calculation.
+ * @param userBodyweight - The bodyweight of the user in kg.
  * @param persistedSessionSets - An array of sets that have been successfully saved to the database for the current session.
  * @param existingUserExercisePRs - A map of existing PRs for the user, keyed by exercise_id, to compare against.
  * @returns A promise that resolves when the operation is complete.
@@ -21,7 +20,7 @@ export type NewPr = TablesInsert<"user_exercise_prs"> & {
 export async function _updateUserExercisePRs(
   fastify: FastifyInstance,
   userId: string,
-  userGender: Enums<"gender">,
+  userBodyweight: number | null,
   persistedSessionSets: Tables<"workout_session_sets">[],
   existingUserExercisePRs: UserPRExerciseMap,
   exerciseDetailsMap: Map<
@@ -33,8 +32,7 @@ export async function _updateUserExercisePRs(
       bodyweight_percentage: number | null;
       source_type: "standard" | "custom" | null;
     }
-  >,
-  exerciseRankBenchmarks: Tables<"exercise_rank_benchmarks">[]
+  >
 ): Promise<NewPr[]> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
   fastify.log.info(`[USER_EXERCISE_PRS] Starting PR update process for user: ${userId}`);
@@ -97,6 +95,7 @@ export async function _updateUserExercisePRs(
         reps: set.actual_reps,
         swr: set.calculated_swr,
         weight_kg: set.actual_weight_kg,
+        bodyweight_kg: userBodyweight,
         source_set_id: set.id,
         achieved_at: set.performed_at || new Date().toISOString(),
       };
