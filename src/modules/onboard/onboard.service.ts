@@ -121,9 +121,6 @@ export const handleOnboarding = async (
     });
     fastify.log.info(`Parallel profile, user, and body measurement upserts completed for user ${userId}`);
 
-    let workoutSessionId: string | null = null;
-    let createdSetId: string | null = null;
-
     if (
       data.selected_exercise_id &&
       data.rank_exercise_sets &&
@@ -156,118 +153,133 @@ export const handleOnboarding = async (
       if (sessionInsertError || !sessionData) {
         fastify.log.error({ error: sessionInsertError, userId }, "Error creating workout session for onboarding");
       } else {
-        workoutSessionId = sessionData.id;
-        fastify.log.info(`Workout session created for onboarding rank, user ${userId}, session ID ${workoutSessionId}`);
+        const workoutSessionId = sessionData.id;
+        let createdSetId: string | null = null;
 
-        const calculated_1rm = calculate_1RM(data.rank_exercise_weight_kg, data.rank_exercise_reps);
-        const calculated_swr = calculate_SWR(calculated_1rm, data.weight ?? null);
-
-        const isCustomExercise = preparedData.rankingExercise.source_type === "custom";
-        const setPayload: WorkoutSessionSetInsert = {
-          workout_session_id: workoutSessionId as string,
-          exercise_id: isCustomExercise ? null : preparedData.rankingExercise.id,
-          custom_exercise_id: isCustomExercise ? preparedData.rankingExercise.id : null,
-          set_order: 1,
-          actual_reps: data.rank_exercise_reps,
-          actual_weight_kg: data.rank_exercise_weight_kg,
-          performed_at: new Date().toISOString(),
-          calculated_1rm: calculated_1rm,
-          calculated_swr: calculated_swr,
-        };
-        const { data: setData, error: setsInsertError } = await supabase
-          .from("workout_session_sets")
-          .insert(setPayload)
-          .select("id")
-          .single();
-
-        if (setsInsertError || !setData) {
-          fastify.log.error(
-            { error: setsInsertError, sessionId: workoutSessionId },
-            "Error saving workout session set for onboarding"
+        try {
+          fastify.log.info(
+            `Workout session created for onboarding rank, user ${userId}, session ID ${workoutSessionId}`
           );
-        } else {
-          createdSetId = setData.id;
-          fastify.log.info(`Workout session set saved for session ${workoutSessionId}, set ID ${createdSetId}`);
 
-          const userGenderForRanking = data.gender ?? userPayload.gender;
-          const userBodyweight = data.weight ?? null;
+          const calculated_1rm = calculate_1RM(data.rank_exercise_weight_kg, data.rank_exercise_reps);
+          const calculated_swr = calculate_SWR(calculated_1rm, data.weight ?? null);
 
-          if (
-            userGenderForRanking &&
-            userBodyweight &&
-            data.selected_exercise_id &&
-            data.rank_exercise_reps &&
-            data.rank_exercise_weight_kg
-          ) {
-            const setForRanking = {
-              id: createdSetId as string,
-              workout_session_id: workoutSessionId as string,
-              exercise_id: isCustomExercise ? null : preparedData.rankingExercise.id,
-              custom_exercise_id: isCustomExercise ? preparedData.rankingExercise.id : null,
-              set_order: 1,
-              actual_reps: data.rank_exercise_reps,
-              actual_weight_kg: data.rank_exercise_weight_kg,
-              performed_at: setPayload.performed_at ?? "",
-              updated_at: new Date().toISOString(),
-              planned_min_reps: null,
-              planned_max_reps: null,
-              planned_weight_kg: null,
-              notes: null,
-              calculated_swr: setPayload.calculated_swr,
-              calculated_1rm: setPayload.calculated_1rm,
-              is_warmup: false,
-              is_success: true,
-              rest_seconds_taken: null,
-            } as Tables<"workout_session_sets">;
-            const persistedSessionSets = [setForRanking];
-            fastify.log.info(`Starting peak contribution rank calculation for user ${userId}`);
-            try {
-              const userExerciseRanks = await supabase
-                .from("user_exercise_ranks")
-                .select("*")
-                .eq("user_id", userId)
-                .in("exercise_id", [data.selected_exercise_id as string]);
-              if (userExerciseRanks.error) throw userExerciseRanks.error;
+          const isCustomExercise = preparedData.rankingExercise.source_type === "custom";
+          const setPayload: WorkoutSessionSetInsert = {
+            workout_session_id: workoutSessionId as string,
+            exercise_id: isCustomExercise ? null : preparedData.rankingExercise.id,
+            custom_exercise_id: isCustomExercise ? preparedData.rankingExercise.id : null,
+            set_order: 1,
+            actual_reps: data.rank_exercise_reps,
+            actual_weight_kg: data.rank_exercise_weight_kg,
+            performed_at: new Date().toISOString(),
+            calculated_1rm: calculated_1rm,
+            calculated_swr: calculated_swr,
+          };
+          const { data: setData, error: setsInsertError } = await supabase
+            .from("workout_session_sets")
+            .insert(setPayload)
+            .select("id")
+            .single();
 
-              await _updateUserRanks(
-                fastify,
-                userId,
-                userGenderForRanking as Enums<"gender">,
-                userBodyweight,
-                persistedSessionSets,
-                preparedData.exercises,
-                preparedData.mcw,
-                preparedData.allMuscles,
-                preparedData.allMuscleGroups,
-                preparedData.allRanks,
-                preparedData.allRankThresholds,
-                preparedData.initialUserRank,
-                preparedData.initialMuscleGroupRanks,
-                preparedData.initialMuscleRanks,
-                preparedData.exerciseRankBenchmarks,
-                userExerciseRanks.data,
-                false // Onboarding ranks are always unlocked
-              );
-              fastify.log.info(`Peak contribution rank calculation completed for user ${userId}`);
-            } catch (rankingError: any) {
-              fastify.log.error({ error: rankingError, userId }, "Error during peak contribution ranking calculation.");
-            }
+          if (setsInsertError || !setData) {
+            fastify.log.error(
+              { error: setsInsertError, sessionId: workoutSessionId },
+              "Error saving workout session set for onboarding"
+            );
+          } else {
+            createdSetId = setData.id;
+            fastify.log.info(`Workout session set saved for session ${workoutSessionId}, set ID ${createdSetId}`);
 
-            try {
-              const existingUserExercisePRs = new Map();
-              await _updateUserExercisePRs(
-                fastify,
-                userId,
-                userBodyweight,
-                persistedSessionSets,
-                existingUserExercisePRs,
-                preparedData.rankingExerciseMap
-              );
-              fastify.log.info(`Initial exercise PR calculation completed for user ${userId}`);
-            } catch (prError: any) {
-              fastify.log.error({ error: prError, userId }, "Error during initial exercise PR calculation.");
+            const userGenderForRanking = data.gender ?? userPayload.gender;
+            const userBodyweight = data.weight ?? null;
+
+            if (
+              userGenderForRanking &&
+              userBodyweight &&
+              data.selected_exercise_id &&
+              data.rank_exercise_reps &&
+              data.rank_exercise_weight_kg
+            ) {
+              const setForRanking = {
+                id: createdSetId as string,
+                workout_session_id: workoutSessionId as string,
+                exercise_id: isCustomExercise ? null : preparedData.rankingExercise.id,
+                custom_exercise_id: isCustomExercise ? preparedData.rankingExercise.id : null,
+                set_order: 1,
+                actual_reps: data.rank_exercise_reps,
+                actual_weight_kg: data.rank_exercise_weight_kg,
+                performed_at: setPayload.performed_at ?? "",
+                updated_at: new Date().toISOString(),
+                planned_min_reps: null,
+                planned_max_reps: null,
+                planned_weight_kg: null,
+                notes: null,
+                calculated_swr: setPayload.calculated_swr,
+                calculated_1rm: setPayload.calculated_1rm,
+                is_warmup: false,
+                is_success: true,
+                rest_seconds_taken: null,
+              } as Tables<"workout_session_sets">;
+              const persistedSessionSets = [setForRanking];
+              fastify.log.info(`Starting peak contribution rank calculation for user ${userId}`);
+              try {
+                const userExerciseRanks = await supabase
+                  .from("user_exercise_ranks")
+                  .select("*")
+                  .eq("user_id", userId)
+                  .in("exercise_id", [data.selected_exercise_id as string]);
+                if (userExerciseRanks.error) throw userExerciseRanks.error;
+
+                await _updateUserRanks(
+                  fastify,
+                  userId,
+                  userGenderForRanking as Enums<"gender">,
+                  userBodyweight,
+                  persistedSessionSets,
+                  preparedData.exercises,
+                  preparedData.mcw,
+                  preparedData.allMuscles,
+                  preparedData.allMuscleGroups,
+                  preparedData.allRanks,
+                  preparedData.allRankThresholds,
+                  preparedData.initialUserRank,
+                  preparedData.initialMuscleGroupRanks,
+                  preparedData.initialMuscleRanks,
+                  preparedData.exerciseRankBenchmarks,
+                  userExerciseRanks.data,
+                  false // Onboarding ranks are always unlocked
+                );
+                fastify.log.info(`Peak contribution rank calculation completed for user ${userId}`);
+              } catch (rankingError: any) {
+                fastify.log.error(
+                  { error: rankingError, userId },
+                  "Error during peak contribution ranking calculation."
+                );
+              }
+
+              try {
+                const existingUserExercisePRs = new Map();
+                await _updateUserExercisePRs(
+                  fastify,
+                  userId,
+                  userBodyweight,
+                  persistedSessionSets,
+                  existingUserExercisePRs,
+                  preparedData.rankingExerciseMap
+                );
+                fastify.log.info(`Initial exercise PR calculation completed for user ${userId}`);
+              } catch (prError: any) {
+                fastify.log.error({ error: prError, userId }, "Error during initial exercise PR calculation.");
+              }
             }
           }
+        } finally {
+          if (createdSetId) {
+            await supabase.from("workout_session_sets").delete().eq("id", createdSetId);
+          }
+          await supabase.from("workout_sessions").delete().eq("id", workoutSessionId);
+          fastify.log.info(`[Onboard] Cleaned up synthetic session and set for user ${userId}`);
         }
       }
     }

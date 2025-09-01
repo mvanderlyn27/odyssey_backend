@@ -355,6 +355,7 @@ export async function _updateUserExerciseRanks(
   fastify: FastifyInstance,
   userId: string,
   userGender: Enums<"gender">,
+  userBodyweight: number,
   persistedSessionSets: Tables<"workout_session_sets">[],
   exerciseDetailsMap: Map<
     string,
@@ -389,7 +390,7 @@ export async function _updateUserExerciseRanks(
     setsByExercise.get(exerciseId)!.push(set);
   }
 
-  const newRanksToInsert: TablesInsert<"user_exercise_ranks">[] = [];
+  const ranksToUpsert: TablesInsert<"user_exercise_ranks">[] = [];
   const ranksMap = new Map(existingUserExerciseRanks.map((r) => [r.exercise_id, r]));
 
   for (const [exerciseId, sets] of setsByExercise.entries()) {
@@ -412,24 +413,33 @@ export async function _updateUserExerciseRanks(
 
       if (newRankId) {
         const existingRank = ranksMap.get(exerciseId);
-        if (!existingRank || newRankId > (existingRank.rank_id || 0)) {
-          newRanksToInsert.push({
+        if (!existingRank || sessionBestSWRSet.calculated_swr > (existingRank.strength_score || 0)) {
+          ranksToUpsert.push({
             user_id: userId,
             exercise_id: exerciseId,
             rank_id: newRankId,
+            strength_score: sessionBestSWRSet.calculated_swr,
             session_set_id: sessionBestSWRSet.id,
-            created_at: sessionBestSWRSet.performed_at || new Date().toISOString(),
+            last_calculated_at: new Date().toISOString(),
+            weight_kg: sessionBestSWRSet.actual_weight_kg,
+            reps: sessionBestSWRSet.actual_reps,
+            bodyweight_kg: userBodyweight,
+            estimated_1rm: sessionBestSWRSet.calculated_1rm,
+            swr: sessionBestSWRSet.calculated_swr,
           });
         }
       }
     }
   }
 
-  if (newRanksToInsert.length > 0) {
-    fastify.log.info(`[USER_EXERCISE_RANKS] Inserting ${newRanksToInsert.length} new rank(s).`);
-    const { data, error } = await supabase.from("user_exercise_ranks").insert(newRanksToInsert).select();
+  if (ranksToUpsert.length > 0) {
+    fastify.log.info(`[USER_EXERCISE_RANKS] Upserting ${ranksToUpsert.length} new rank(s).`);
+    const { data, error } = await supabase
+      .from("user_exercise_ranks")
+      .upsert(ranksToUpsert, { onConflict: "user_id,exercise_id" })
+      .select();
     if (error) {
-      fastify.log.error({ error }, "[USER_EXERCISE_RANKS] Failed to insert exercise ranks.");
+      fastify.log.error({ error }, "[USER_EXERCISE_RANKS] Failed to upsert exercise ranks.");
       return [];
     }
     return data || [];
@@ -519,6 +529,7 @@ export async function _updateUserRanks(
       fastify,
       userId,
       userGender,
+      userBodyweight,
       persistedSessionSets,
       exercisesMap,
       exerciseRankBenchmarks,
