@@ -102,6 +102,14 @@ export const handleOnboarding = async (
     promises.push(supabase.from("profiles").upsert(profilePayload));
     promises.push(supabase.from("users").upsert(userPayload));
 
+    const profileUserResults = await Promise.all(promises);
+    profileUserResults.forEach((result, i) => {
+      if (result.error) {
+        fastify.log.error({ error: result.error, userId, operation: i }, "Error during parallel onboarding upserts");
+        throw new Error(`Failed during onboarding operation ${i}: ${result.error.message}`);
+      }
+    });
+
     if (data.weight !== undefined && data.weight !== null) {
       const bodyMeasurementPayload: BodyMeasurementInsert = {
         user_id: userId,
@@ -109,17 +117,13 @@ export const handleOnboarding = async (
         value: data.weight,
         measured_at: new Date().toISOString(),
       };
-      promises.push(supabase.from("body_measurements").insert(bodyMeasurementPayload));
-    }
-
-    const results = await Promise.all(promises);
-    results.forEach((result, i) => {
-      if (result.error) {
-        fastify.log.error({ error: result.error, userId, operation: i }, "Error during parallel onboarding upserts");
-        throw new Error(`Failed during onboarding operation ${i}: ${result.error.message}`);
+      const { error } = await supabase.from("body_measurements").insert(bodyMeasurementPayload);
+      if (error) {
+        fastify.log.error({ error, userId, operation: 2 }, "Error during body measurement insert");
+        throw new Error(`Failed during onboarding operation 2: ${error.message}`);
       }
-    });
-    fastify.log.info(`Parallel profile, user, and body measurement upserts completed for user ${userId}`);
+    }
+    fastify.log.info(`Profile, user, and body measurement upserts completed for user ${userId}`);
 
     if (
       data.selected_exercise_id &&

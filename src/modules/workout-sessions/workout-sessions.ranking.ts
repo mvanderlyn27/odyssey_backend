@@ -412,13 +412,18 @@ export async function _updateUserExerciseRanks(
       );
 
       if (newRankId) {
+        // The strength_score for an exercise rank is an integer representation of the SWR.
+        // We use the same scaling factor K=4000 that is used for calculating individual muscle scores
+        // in _calculateIndividualMuscleScores to maintain consistency across the ranking system.
+        const K = 4000;
+        const strengthScore = Math.round(sessionBestSWRSet.calculated_swr * K);
         const existingRank = ranksMap.get(exerciseId);
-        if (!existingRank || sessionBestSWRSet.calculated_swr > (existingRank.strength_score || 0)) {
+        if (!existingRank || strengthScore > (existingRank.strength_score || 0)) {
           ranksToUpsert.push({
             user_id: userId,
             exercise_id: exerciseId,
             rank_id: newRankId,
-            strength_score: sessionBestSWRSet.calculated_swr,
+            strength_score: strengthScore,
             session_set_id: sessionBestSWRSet.id,
             last_calculated_at: new Date().toISOString(),
             weight_kg: sessionBestSWRSet.actual_weight_kg,
