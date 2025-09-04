@@ -83,8 +83,8 @@ export type PreparedWorkoutData = {
   allRankThresholds: Pick<Tables<"ranks">, "id" | "min_score">[];
   allLevelDefinitions: Tables<"level_definitions">[];
   initialUserRank: { strength_score: number | null } | null;
-  initialMuscleGroupRanks: Pick<Tables<"muscle_group_ranks">, "muscle_group_id" | "strength_score">[];
-  initialMuscleRanks: Pick<Tables<"muscle_ranks">, "muscle_id" | "strength_score">[];
+  initialMuscleGroupRanks: Pick<Tables<"muscle_group_ranks">, "muscle_group_id" | "strength_score" | "locked">[];
+  initialMuscleRanks: Pick<Tables<"muscle_ranks">, "muscle_id" | "strength_score" | "locked">[];
   activeWorkoutPlans: Tables<"active_workout_plans">[];
   exerciseRankBenchmarks: Tables<"exercise_rank_benchmarks">[];
   friends: Tables<"friendships">[];
@@ -194,8 +194,8 @@ export async function _gatherAndPrepareWorkoutData(
       return data || [];
     }),
     supabase.from("user_ranks").select("strength_score").eq("user_id", userId).single(),
-    supabase.from("muscle_group_ranks").select("muscle_group_id, strength_score").eq("user_id", userId),
-    supabase.from("muscle_ranks").select("muscle_id, strength_score").eq("user_id", userId),
+    supabase.from("muscle_group_ranks").select("muscle_group_id, strength_score, locked").eq("user_id", userId),
+    supabase.from("muscle_ranks").select("muscle_id, strength_score, locked").eq("user_id", userId),
     supabase.from("active_workout_plans").select("*").eq("user_id", userId),
     fastify.appCache.get("allExerciseRankBenchmarks", async () => {
       const { data, error } = await supabase.from("exercise_rank_benchmarks").select("*");

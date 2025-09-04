@@ -184,7 +184,7 @@ export const finishWorkoutSession = async (
           initialMuscleGroupRanks,
           initialMuscleRanks,
           exerciseRankBenchmarks,
-          [],
+          [], // This is existingUserExerciseRanks, which is not needed here.
           isLocked
         );
       })(),
@@ -233,6 +233,7 @@ export const finishWorkoutSession = async (
     if (userProfile && newlyCreatedOrFetchedSession) {
       createWorkoutFeedItem(fastify, {
         userProfile,
+        userData,
         workoutSession: newlyCreatedOrFetchedSession,
         workoutContext,
         summaryStats: {

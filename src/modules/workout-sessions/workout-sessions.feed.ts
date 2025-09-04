@@ -12,6 +12,7 @@ import { NewPr } from "./workout-sessions.prs";
 export interface FeedItemCreationData {
   // Raw data from the workout session service
   userProfile: Tables<"profiles">;
+  userData: Tables<"users">;
   workoutSession: Tables<"workout_sessions">;
   workoutContext: {
     plan_name: string | null;
@@ -29,7 +30,10 @@ export interface FeedItemCreationData {
   rankUpdateResults: RankUpdateResults;
 }
 
-function _transformRankUpdateResultsToRankUps(rankUpdateResults?: RankUpdateResults): RankUp[] {
+function _transformRankUpdateResultsToRankUps(
+  rankUpdateResults: RankUpdateResults | undefined,
+  isPremium: boolean
+): RankUp[] {
   if (!rankUpdateResults) {
     return [];
   }
@@ -49,20 +53,22 @@ function _transformRankUpdateResultsToRankUps(rankUpdateResults?: RankUpdateResu
     });
   }
 
-  rankUpdateResults.muscle_group_progressions?.forEach((progression) => {
-    if (
-      progression.progression_details.current_rank.rank_id &&
-      progression.progression_details.initial_rank.rank_id &&
-      progression.progression_details.current_rank.rank_id > progression.progression_details.initial_rank.rank_id
-    ) {
-      rankUps.push({
-        type: "muscle_group",
-        rank_name: progression.progression_details.current_rank.rank_name || "Unknown Rank",
-        rank_level: progression.progression_details.current_rank.rank_id,
-        group_name: progression.muscle_group_name,
-      });
-    }
-  });
+  if (isPremium) {
+    rankUpdateResults.muscle_group_progressions?.forEach((progression) => {
+      if (
+        progression.progression_details.current_rank.rank_id &&
+        progression.progression_details.initial_rank.rank_id &&
+        progression.progression_details.current_rank.rank_id > progression.progression_details.initial_rank.rank_id
+      ) {
+        rankUps.push({
+          type: "muscle_group",
+          rank_name: progression.progression_details.current_rank.rank_name || "Unknown Rank",
+          rank_level: progression.progression_details.current_rank.rank_id,
+          group_name: progression.muscle_group_name,
+        });
+      }
+    });
+  }
 
   return rankUps;
 }
@@ -96,7 +102,10 @@ export async function createWorkoutFeedItem(fastify: FastifyInstance, inputData:
   }
 
   // Handle Rank Ups
-  const rankUps = _transformRankUpdateResultsToRankUps(inputData.rankUpdateResults);
+  const rankUps = _transformRankUpdateResultsToRankUps(
+    inputData.rankUpdateResults,
+    inputData.userData.is_premium || false
+  );
   if (rankUps.length > 0) {
     metadata.rank_ups = rankUps;
   }

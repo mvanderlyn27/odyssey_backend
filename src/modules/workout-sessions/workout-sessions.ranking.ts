@@ -243,7 +243,7 @@ async function _updateUserMuscleRanks(
   trainedMuscleGroupIds: Set<string>,
   allMuscles: Tables<"muscles">[],
   allMuscleGroups: Tables<"muscle_groups">[],
-  initialMuscleGroupRanks: Pick<Tables<"muscle_group_ranks">, "muscle_group_id" | "strength_score">[],
+  initialMuscleGroupRanks: Pick<Tables<"muscle_group_ranks">, "muscle_group_id" | "strength_score" | "locked">[],
   allRankThresholds: Pick<Tables<"ranks">, "id" | "min_score">[],
   allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[],
   isLocked: boolean
@@ -279,6 +279,10 @@ async function _updateUserMuscleRanks(
   const upsertPromises: Promise<any>[] = [];
   const affectedGroupIds = new Set<string>();
   const musclesMap = new Map(allMuscles.map((m) => [m.id, m]));
+  const initialMuscleGroupRanksMap = new Map(
+    initialMuscleGroupRanks.map((r) => [r.muscle_group_id, { locked: r.locked }])
+  );
+
   for (const muscleId of updatedMuscleIds) {
     const muscleInfo = musclesMap.get(muscleId);
     if (muscleInfo?.muscle_group_id) {
@@ -289,9 +293,13 @@ async function _updateUserMuscleRanks(
   for (const groupId of affectedGroupIds) {
     const score = finalMuscleGroupScores.get(groupId);
     if (score !== undefined) {
+      const existingRank = initialMuscleGroupRanksMap.get(groupId);
+      if (isLocked && existingRank && !existingRank.locked) {
+        continue; // Skip update for non-premium user with an unlocked rank
+      }
       upsertPromises.push(
-        Promise.resolve(
-          supabase.from("muscle_group_ranks").upsert(
+        (async () => {
+          const { error } = await supabase.from("muscle_group_ranks").upsert(
             {
               user_id: userId,
               muscle_group_id: groupId,
@@ -300,8 +308,11 @@ async function _updateUserMuscleRanks(
               locked: isLocked,
             },
             { onConflict: "user_id,muscle_group_id" }
-          )
-        )
+          );
+          if (error) {
+            fastify.log.error({ error, userId, groupId }, `[RANK_SYSTEM] Error upserting muscle group rank.`);
+          }
+        })()
       );
     }
   }
@@ -309,9 +320,16 @@ async function _updateUserMuscleRanks(
   for (const muscleId of updatedMuscleIds) {
     const score = finalIndividualMuscleScores.get(muscleId);
     if (score !== undefined) {
+      const muscleInfo = musclesMap.get(muscleId);
+      if (muscleInfo) {
+        const existingRank = initialMuscleGroupRanksMap.get(muscleInfo.muscle_group_id);
+        if (isLocked && existingRank && !existingRank.locked) {
+          continue; // Skip update for non-premium user with an unlocked rank
+        }
+      }
       upsertPromises.push(
-        Promise.resolve(
-          supabase.from("muscle_ranks").upsert(
+        (async () => {
+          const { error } = await supabase.from("muscle_ranks").upsert(
             {
               user_id: userId,
               muscle_id: muscleId,
@@ -320,8 +338,11 @@ async function _updateUserMuscleRanks(
               locked: isLocked,
             },
             { onConflict: "user_id,muscle_id" }
-          )
-        )
+          );
+          if (error) {
+            fastify.log.error({ error, userId, muscleId }, `[RANK_SYSTEM] Error upserting muscle rank.`);
+          }
+        })()
       );
     }
   }
@@ -470,8 +491,8 @@ export async function _updateUserRanks(
   allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[],
   allRankThresholds: Pick<Tables<"ranks">, "id" | "min_score">[],
   initialUserRank: { strength_score: number | null } | null,
-  initialMuscleGroupRanks: Pick<Tables<"muscle_group_ranks">, "muscle_group_id" | "strength_score">[],
-  initialMuscleRanks: Pick<Tables<"muscle_ranks">, "muscle_id" | "strength_score">[],
+  initialMuscleGroupRanks: Pick<Tables<"muscle_group_ranks">, "muscle_group_id" | "strength_score" | "locked">[],
+  initialMuscleRanks: Pick<Tables<"muscle_ranks">, "muscle_id" | "strength_score" | "locked">[],
   exerciseRankBenchmarks: Tables<"exercise_rank_benchmarks">[],
   existingUserExerciseRanks: Tables<"user_exercise_ranks">[],
   isLocked: boolean
