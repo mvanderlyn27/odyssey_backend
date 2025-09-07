@@ -1,9 +1,8 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, TablesInsert } from "../../types/database";
-import { RankUpdateResults } from "./workout-sessions.ranking";
 import { WorkoutFeedMetadata, RankUp } from "./types";
-
+import { RankUpData } from "../../shared/ranking/types";
 import { Tables } from "../../types/database";
 import { MuscleWorkedSummaryItem } from "@/schemas/workoutSessionsSchemas";
 import { NewPr } from "./workout-sessions.prs";
@@ -27,44 +26,51 @@ export interface FeedItemCreationData {
     } | null;
   };
   personalRecords: NewPr[];
-  rankUpdateResults: RankUpdateResults;
+  rankUpData: RankUpData;
+  allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[];
+  allMuscleGroups: Tables<"muscle_groups">[];
 }
 
 function _transformRankUpdateResultsToRankUps(
-  rankUpdateResults: RankUpdateResults | undefined,
-  isPremium: boolean
+  rankUpData: RankUpData | undefined,
+  isPremium: boolean,
+  allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[],
+  allMuscleGroups: Tables<"muscle_groups">[]
 ): RankUp[] {
-  if (!rankUpdateResults) {
+  if (!rankUpData) {
     return [];
   }
   const rankUps: RankUp[] = [];
 
   if (
-    rankUpdateResults.overall_user_rank_progression &&
-    rankUpdateResults.overall_user_rank_progression.current_rank.rank_id &&
-    rankUpdateResults.overall_user_rank_progression.initial_rank.rank_id &&
-    rankUpdateResults.overall_user_rank_progression.current_rank.rank_id >
-      rankUpdateResults.overall_user_rank_progression.initial_rank.rank_id
+    rankUpData.userRankChange &&
+    rankUpData.userRankChange.new_permanent_rank_id &&
+    rankUpData.userRankChange.old_permanent_rank_id
   ) {
-    rankUps.push({
-      type: "user",
-      rank_name: rankUpdateResults.overall_user_rank_progression.current_rank.rank_name || "Unknown Rank",
-      rank_level: rankUpdateResults.overall_user_rank_progression.current_rank.rank_id,
-    });
+    if (rankUpData.userRankChange.new_permanent_rank_id > rankUpData.userRankChange.old_permanent_rank_id) {
+      const rank = allRanks.find((r) => r.id === rankUpData.userRankChange?.new_permanent_rank_id);
+      rankUps.push({
+        type: "user",
+        rank_name: rank?.rank_name || "Unknown Rank",
+        rank_level: rankUpData.userRankChange.new_permanent_rank_id,
+      });
+    }
   }
 
   if (isPremium) {
-    rankUpdateResults.muscle_group_progressions?.forEach((progression) => {
+    rankUpData.muscleGroupRankChanges?.forEach((change) => {
       if (
-        progression.progression_details.current_rank.rank_id &&
-        progression.progression_details.initial_rank.rank_id &&
-        progression.progression_details.current_rank.rank_id > progression.progression_details.initial_rank.rank_id
+        change.new_permanent_rank_id &&
+        change.old_permanent_rank_id &&
+        change.new_permanent_rank_id > change.old_permanent_rank_id
       ) {
+        const rank = allRanks.find((r) => r.id === change.new_permanent_rank_id);
+        const muscleGroup = allMuscleGroups.find((mg) => mg.id === change.muscle_group_id);
         rankUps.push({
           type: "muscle_group",
-          rank_name: progression.progression_details.current_rank.rank_name || "Unknown Rank",
-          rank_level: progression.progression_details.current_rank.rank_id,
-          group_name: progression.muscle_group_name,
+          rank_name: rank?.rank_name || "Unknown Rank",
+          rank_level: change.new_permanent_rank_id,
+          group_name: muscleGroup?.name || "Unknown Muscle Group",
         });
       }
     });
@@ -103,8 +109,10 @@ export async function createWorkoutFeedItem(fastify: FastifyInstance, inputData:
 
   // Handle Rank Ups
   const rankUps = _transformRankUpdateResultsToRankUps(
-    inputData.rankUpdateResults,
-    inputData.userData.is_premium || false
+    inputData.rankUpData,
+    inputData.userData.is_premium || false,
+    inputData.allRanks,
+    inputData.allMuscleGroups
   );
   if (rankUps.length > 0) {
     metadata.rank_ups = rankUps;

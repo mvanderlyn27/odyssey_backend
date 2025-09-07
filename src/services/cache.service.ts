@@ -3,20 +3,13 @@ import fp from "fastify-plugin";
 
 export enum CACHE_KEYS {
   ALL_RANKS = "allRanks",
+  ALL_INTER_RANKS = "allInterRanks",
   ALL_MUSCLES = "allMuscles",
   ALL_EXERCISE_MUSCLES = "allExerciseMuscles",
   ALL_MUSCLE_GROUPS = "allMuscleGroups",
   ALL_CUSTOM_EXERCISE_MUSCLES = "allCustomExerciseMuscles",
   ALL_EXERCISES = "allExercises",
   ALL_LEVEL_DEFINITIONS = "allLevelDefinitions",
-  MUSCLE_RANK_BENCHMARKS_MALE = "muscle_rank_benchmarks_male",
-  MUSCLE_RANK_BENCHMARKS_FEMALE = "muscle_rank_benchmarks_female",
-  MUSCLE_GROUP_RANK_BENCHMARKS_MALE = "muscle_group_rank_benchmarks_male",
-  MUSCLE_GROUP_RANK_BENCHMARKS_FEMALE = "muscle_group_rank_benchmarks_female",
-  OVERALL_RANK_BENCHMARKS_MALE = "overall_rank_benchmarks_male",
-  OVERALL_RANK_BENCHMARKS_FEMALE = "overall_rank_benchmarks_female",
-  EXERCISE_BENCHMARKS_MALE = "exercise_benchmarks_male",
-  EXERCISE_BENCHMARKS_FEMALE = "exercise_benchmarks_female",
 }
 
 // A simple in-memory cache store
@@ -83,6 +76,11 @@ export class CacheService {
         if (error) throw error;
         return data || [];
       }),
+      this.get(CACHE_KEYS.ALL_INTER_RANKS, async () => {
+        const { data, error } = await supabase.from("inter_ranks").select("*");
+        if (error) throw error;
+        return data || [];
+      }),
       this.get(CACHE_KEYS.ALL_MUSCLES, async () => {
         const { data, error } = await supabase.from("muscles").select("id, name, muscle_group_id, muscle_group_weight");
         if (error) throw error;
@@ -114,46 +112,6 @@ export class CacheService {
       }),
       this.get(CACHE_KEYS.ALL_LEVEL_DEFINITIONS, async () => {
         const { data, error } = await supabase.from("level_definitions").select("*");
-        if (error) throw error;
-        return data || [];
-      }),
-      this.get(CACHE_KEYS.MUSCLE_RANK_BENCHMARKS_MALE, async () => {
-        const { data, error } = await supabase.from("muscle_rank_benchmarks").select("*").eq("gender", "male");
-        if (error) throw error;
-        return data || [];
-      }),
-      this.get(CACHE_KEYS.MUSCLE_RANK_BENCHMARKS_FEMALE, async () => {
-        const { data, error } = await supabase.from("muscle_rank_benchmarks").select("*").eq("gender", "female");
-        if (error) throw error;
-        return data || [];
-      }),
-      this.get(CACHE_KEYS.MUSCLE_GROUP_RANK_BENCHMARKS_MALE, async () => {
-        const { data, error } = await supabase.from("muscle_group_rank_benchmarks").select("*").eq("gender", "male");
-        if (error) throw error;
-        return data || [];
-      }),
-      this.get(CACHE_KEYS.MUSCLE_GROUP_RANK_BENCHMARKS_FEMALE, async () => {
-        const { data, error } = await supabase.from("muscle_group_rank_benchmarks").select("*").eq("gender", "female");
-        if (error) throw error;
-        return data || [];
-      }),
-      this.get(CACHE_KEYS.OVERALL_RANK_BENCHMARKS_MALE, async () => {
-        const { data, error } = await supabase.from("overall_rank_benchmarks").select("*").eq("gender", "male");
-        if (error) throw error;
-        return data || [];
-      }),
-      this.get(CACHE_KEYS.OVERALL_RANK_BENCHMARKS_FEMALE, async () => {
-        const { data, error } = await supabase.from("overall_rank_benchmarks").select("*").eq("gender", "female");
-        if (error) throw error;
-        return data || [];
-      }),
-      this.get(CACHE_KEYS.EXERCISE_BENCHMARKS_MALE, async () => {
-        const { data, error } = await supabase.from("exercise_rank_benchmarks").select("*").eq("gender", "male");
-        if (error) throw error;
-        return data || [];
-      }),
-      this.get(CACHE_KEYS.EXERCISE_BENCHMARKS_FEMALE, async () => {
-        const { data, error } = await supabase.from("exercise_rank_benchmarks").select("*").eq("gender", "female");
         if (error) throw error;
         return data || [];
       }),

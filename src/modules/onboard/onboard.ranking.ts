@@ -1,0 +1,94 @@
+import { FastifyInstance } from "fastify";
+import { Enums, Tables } from "../../types/database";
+import { RankingService } from "../../shared/ranking/ranking.service";
+import { _saveRankingResults } from "../../shared/ranking/ranking.helpers";
+import { PreparedOnboardingData } from "./onboard.data";
+import { OnboardingData } from "./onboard.types";
+
+export async function _handleOnboardingRanking(
+  fastify: FastifyInstance,
+  userId: string,
+  data: OnboardingData,
+  preparedData: PreparedOnboardingData,
+  persistedSessionSets: Tables<"workout_session_sets">[]
+) {
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+  const userGenderForRanking = data.gender ?? preparedData.userData?.gender;
+  const userBodyweight = data.weight ?? null;
+
+  if (
+    userGenderForRanking &&
+    userBodyweight &&
+    data.selected_exercise_id &&
+    data.rank_exercise_reps &&
+    data.rank_exercise_weight_kg
+  ) {
+    try {
+      const userExerciseRanks = await fastify.supabase
+        .from("user_exercise_ranks")
+        .select("*")
+        .eq("user_id", userId)
+        .in("exercise_id", [data.selected_exercise_id as string]);
+      if (userExerciseRanks.error) throw userExerciseRanks.error;
+
+      const rankingService = new RankingService();
+      const calculationInput = persistedSessionSets.map((s) => ({
+        exercise_id: s.exercise_id || s.custom_exercise_id!,
+        reps: s.actual_reps || 0,
+        duration: 0,
+        weight_kg: s.actual_weight_kg || 0,
+        score: 0, // Initialize score to 0, it will be calculated in the service
+      }));
+
+      const results = await rankingService.updateUserRanks(
+        userId,
+        userGenderForRanking as Enums<"gender">,
+        userBodyweight,
+        calculationInput,
+        preparedData.exercises,
+        preparedData.mcw,
+        preparedData.allMuscles,
+        preparedData.allMuscleGroups,
+        preparedData.allRanks,
+        preparedData.allInterRanks,
+        preparedData.initialUserRank,
+        preparedData.initialMuscleGroupRanks,
+        preparedData.initialMuscleRanks,
+        userExerciseRanks.data,
+        false, // Onboarding ranks are always unlocked
+        "onboard"
+      );
+
+      fastify.log.info(
+        { userId, payload: results.rankUpdatePayload },
+        `[ONBOARD_RANKING] Rank update payload calculated.`
+      );
+      if (Object.keys(results.rankUpdatePayload).length > 0) {
+        await _saveRankingResults(fastify, results.rankUpdatePayload);
+      } else {
+        fastify.log.warn({ userId }, `[ONBOARD_RANKING] No rank updates to save; payload is empty.`);
+      }
+
+      fastify.log.info(
+        { userId, rankUpData: results.rankUpData },
+        `Onboarding rank calculation completed for user ${userId}`
+      );
+    } catch (rankingError: any) {
+      fastify.log.error({ error: rankingError, userId }, "Error during onboarding ranking calculation.");
+    }
+  } else {
+    fastify.log.warn(
+      {
+        userId,
+        hasGender: !!userGenderForRanking,
+        hasBodyweight: !!userBodyweight,
+        hasExerciseId: !!data.selected_exercise_id,
+        hasReps: data.rank_exercise_reps !== undefined,
+        hasWeight: data.rank_exercise_weight_kg !== undefined,
+      },
+      "Skipping onboarding ranking calculation due to missing data."
+    );
+  }
+}

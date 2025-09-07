@@ -11,17 +11,16 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
     bodyweightData,
     exerciseDetails,
     existingPrs,
-    exerciseRankBenchmarksMale,
-    exerciseRankBenchmarksFemale,
     exercises,
     mcw,
     allMuscles,
     allMuscleGroups,
     allRanks,
-    allRankThresholds,
+    allInterRanks,
     initialUserRank,
     initialMuscleGroupRanks,
     initialMuscleRanks,
+    userExerciseRanks,
   ] = await Promise.all([
     supabase.from("users").select("gender").eq("id", userId).single(),
     supabase
@@ -32,27 +31,22 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
       .order("measured_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase
-      .from("v_full_exercises")
-      .select("id, name, exercise_type, bodyweight_percentage, source_type")
-      .eq("id", exerciseId)
-      .single(),
+    supabase.from("v_full_exercises").select("id, name, exercise_type, source_type").eq("id", exerciseId).single(),
     supabase
       .from("user_exercise_prs")
-      .select("exercise_id, custom_exercise_id, pr_type, estimated_1rm, reps, swr, rank_id")
+      .select("exercise_id, custom_exercise_id, pr_type, estimated_1rm, reps, swr")
       .eq("user_id", userId)
       .eq("exercise_key", exerciseId),
-    fastify.appCache.get<Tables<"exercise_rank_benchmarks">[]>(CACHE_KEYS.EXERCISE_BENCHMARKS_MALE, async () => []),
-    fastify.appCache.get<Tables<"exercise_rank_benchmarks">[]>(CACHE_KEYS.EXERCISE_BENCHMARKS_FEMALE, async () => []),
     fastify.appCache.get<Tables<"exercises">[]>(CACHE_KEYS.ALL_EXERCISES, async () => []),
     fastify.appCache.get<Tables<"exercise_muscles">[]>(CACHE_KEYS.ALL_EXERCISE_MUSCLES, async () => []),
     fastify.appCache.get<Tables<"muscles">[]>(CACHE_KEYS.ALL_MUSCLES, async () => []),
     fastify.appCache.get<Tables<"muscle_groups">[]>(CACHE_KEYS.ALL_MUSCLE_GROUPS, async () => []),
     fastify.appCache.get<Pick<Tables<"ranks">, "id" | "rank_name">[]>(CACHE_KEYS.ALL_RANKS, async () => []),
-    fastify.appCache.get<Pick<Tables<"ranks">, "id" | "min_score">[]>(CACHE_KEYS.ALL_RANKS, async () => []),
-    supabase.from("user_ranks").select("strength_score").eq("user_id", userId).single(),
-    supabase.from("muscle_group_ranks").select("muscle_group_id, strength_score").eq("user_id", userId),
-    supabase.from("muscle_ranks").select("muscle_id, strength_score").eq("user_id", userId),
+    fastify.appCache.get<Tables<"inter_ranks">[]>(CACHE_KEYS.ALL_INTER_RANKS, async () => []),
+    supabase.from("user_ranks").select("*").eq("user_id", userId).single(),
+    supabase.from("muscle_group_ranks").select("*").eq("user_id", userId),
+    supabase.from("muscle_ranks").select("*").eq("user_id", userId),
+    supabase.from("user_exercise_ranks").select("*").eq("user_id", userId).eq("exercise_id", exerciseId),
   ]);
 
   if (userData.error || !userData.data) throw new Error("User not found.");
@@ -62,24 +56,24 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
   if (initialUserRank.error) throw initialUserRank.error;
   if (initialMuscleGroupRanks.error) throw initialMuscleGroupRanks.error;
   if (initialMuscleRanks.error) throw initialMuscleRanks.error;
+  if (userExerciseRanks.error) throw userExerciseRanks.error;
 
   const userGender = userData.data.gender as Enums<"gender">;
-  const exerciseRankBenchmarks = userGender === "male" ? exerciseRankBenchmarksMale : exerciseRankBenchmarksFemale;
 
   return {
     userGender,
     userBodyweight: bodyweightData.data.value,
     exerciseDetails: exerciseDetails.data,
     existingPrs: existingPrs.data,
-    exerciseRankBenchmarks,
     exercises,
     mcw,
     allMuscles,
     allMuscleGroups,
     allRanks,
-    allRankThresholds,
+    allInterRanks,
     initialUserRank: initialUserRank.data,
     initialMuscleGroupRanks: initialMuscleGroupRanks.data,
     initialMuscleRanks: initialMuscleRanks.data,
+    userExerciseRanks: userExerciseRanks.data,
   };
 }

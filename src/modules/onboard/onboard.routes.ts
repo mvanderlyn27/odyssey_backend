@@ -1,8 +1,9 @@
 import { Type } from "@sinclair/typebox";
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
-import { handleOnboarding, rerollUsername } from "./onboard.service"; // Corrected path
-import { type OnboardingData } from "./onboard.service"; // Renamed type and corrected path
+import { handleOnboarding } from "./onboard.service"; // Corrected path
+import { rerollUsername } from "./onboard.helpers";
+import { type OnboardingData } from "./onboard.types"; // Renamed type and corrected path
 import { ProfileSchema, type Profile } from "../../schemas/profileSchemas";
 import { InitialRankBodySchema } from "../../schemas/onboardSchemas"; // Corrected path
 // Assuming ErrorResponseSchema is globally available or added via fastify.addSchema

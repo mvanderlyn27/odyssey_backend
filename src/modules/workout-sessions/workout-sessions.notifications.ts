@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Tables, TablesInsert } from "../../types/database";
-import { RankUpdateResults } from "./workout-sessions.ranking";
+import { RankUpData } from "../../shared/ranking/types";
 
 /**
  * Handles creating notifications for a completed workout session.
@@ -17,10 +17,11 @@ export async function _handleWorkoutCompletionNotifications(
   userId: string,
   workoutSessionId: string,
   newPrs: TablesInsert<"user_exercise_prs">[],
-  rankUpResults: RankUpdateResults,
+  rankUpData: RankUpData,
   userData: Tables<"users">,
   userProfile: Tables<"profiles">,
-  friends: Tables<"friendships">[]
+  friends: Tables<"friendships">[],
+  allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[]
 ): Promise<void> {
   fastify.log.info(`[NOTIFICATIONS] Starting notification handling for user: ${userId}, session: ${workoutSessionId}`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
@@ -47,10 +48,29 @@ export async function _handleWorkoutCompletionNotifications(
     let title = "New Workout!";
     let message = `${senderName} just completed a workout.`;
 
-    const overallRankUp = rankUpResults.overall_user_rank_progression;
-    if (overallRankUp && overallRankUp.current_rank.rank_id !== overallRankUp.initial_rank.rank_id) {
+    const userRankChange = rankUpData.userRankChange;
+    if (
+      userRankChange &&
+      userRankChange.new_permanent_rank_id &&
+      userRankChange.old_permanent_rank_id &&
+      userRankChange.new_permanent_rank_id > userRankChange.old_permanent_rank_id
+    ) {
+      const rank = allRanks.find((r) => r.id === userRankChange.new_permanent_rank_id);
       title = "Rank Up!";
-      message = `${senderName} just reached the rank of ${overallRankUp.current_rank.rank_name}!`;
+      message = `${senderName} just reached the rank of ${rank?.rank_name || "Unknown Rank"}!`;
+    } else if (
+      userData.is_premium &&
+      rankUpData.muscleGroupRankChanges &&
+      rankUpData.muscleGroupRankChanges.length > 0
+    ) {
+      const muscleGroupRankUp = rankUpData.muscleGroupRankChanges.find(
+        (c) => c.new_permanent_rank_id && c.old_permanent_rank_id && c.new_permanent_rank_id > c.old_permanent_rank_id
+      );
+      if (muscleGroupRankUp) {
+        const rank = allRanks.find((r) => r.id === muscleGroupRankUp.new_permanent_rank_id);
+        title = "Muscle Group Rank Up!";
+        message = `${senderName} just ranked up a muscle group to ${rank?.rank_name || "Unknown Rank"}!`;
+      }
     } else if (newPrs.length > 0) {
       title = "New Personal Record!";
       message = `${senderName} just set a new PR!`;

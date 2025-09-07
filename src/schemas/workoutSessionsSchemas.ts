@@ -399,8 +399,7 @@ export const DetailedFinishSessionResponseSchema = Type.Object(
       // Renamed and type changed
       description: "Array of individual muscles worked in this session, including their intensity.",
     }),
-    overall_user_rank_progression: Type.Optional(Type.Ref(RankProgressionDetailsSchema)),
-    muscle_group_progressions: Type.Array(Type.Ref(MuscleGroupProgressionSchema)),
+    rank_up_data: Type.Any(),
 
     // Page 3: Logged Set Overview & Plan Progression
     logged_set_overview: Type.Array(Type.Ref(LoggedSetOverviewItemSchema)),

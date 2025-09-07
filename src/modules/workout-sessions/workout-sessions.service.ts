@@ -8,7 +8,7 @@ import {
   SessionStatus,
 } from "@/schemas/workoutSessionsSchemas";
 import { _gatherAndPrepareWorkoutData } from "./workout-sessions.data";
-import { _updateUserRanks, RankUpdateResults } from "./workout-sessions.ranking";
+import { _updateUserRanks } from "./workout-sessions.ranking";
 import {
   _updateWorkoutPlanProgression,
   PlanProgressionResults,
@@ -21,6 +21,22 @@ import { _updateUserMuscleLastWorked } from "./workout-sessions.lastWorked";
 import { _updateUserExercisePRs } from "./workout-sessions.prs";
 import { _handleWorkoutCompletionNotifications } from "./workout-sessions.notifications";
 import { createWorkoutFeedItem } from "./workout-sessions.feed";
+
+async function _updateSessionSummary(
+  fastify: FastifyInstance,
+  sessionId: string,
+  summaryData: DetailedFinishSessionResponse
+) {
+  const supabase = fastify.supabase as SupabaseClient<Database>;
+  const { error } = await supabase
+    .from("workout_sessions")
+    .update({ workout_summary_data: summaryData as any })
+    .eq("id", sessionId);
+
+  if (error) {
+    fastify.log.error(error, `[SUMMARY_SAVE] Failed to save summary data for session ${sessionId}`);
+  }
+}
 
 // Comments for types/constants moved or no longer used have been removed.
 
@@ -65,13 +81,12 @@ export const finishWorkoutSession = async (
       allMuscles,
       allMuscleGroups,
       allRanks,
-      allRankThresholds,
+      allInterRanks,
       allLevelDefinitions,
       initialUserRank,
       initialMuscleGroupRanks,
       initialMuscleRanks,
       activeWorkoutPlans,
-      exerciseRankBenchmarks,
       friends,
       workoutContext,
       bestSet,
@@ -179,11 +194,10 @@ export const finishWorkoutSession = async (
           allMuscles,
           allMuscleGroups,
           allRanks,
-          allRankThresholds,
+          allInterRanks,
           initialUserRank,
           initialMuscleGroupRanks,
           initialMuscleRanks,
-          exerciseRankBenchmarks,
           [], // This is existingUserExerciseRanks, which is not needed here.
           isLocked
         );
@@ -206,7 +220,7 @@ export const finishWorkoutSession = async (
       (() => {
         return _updateUserExercisePRs(
           fastify,
-          userId,
+          userData,
           userBodyweight,
           persistedSessionSets,
           existingUserExercisePRs,
@@ -241,7 +255,9 @@ export const finishWorkoutSession = async (
           best_set: bestSet,
         },
         personalRecords: newPrs,
-        rankUpdateResults: rankUpdateResults,
+        rankUpData: rankUpdateResults.rankUpData,
+        allRanks,
+        allMuscleGroups,
       }).catch((err) => {
         fastify.log.error(err, `[FEED] Failed to create feed item for session ${newlyCreatedOrFetchedSession.id}`);
       });
@@ -252,10 +268,11 @@ export const finishWorkoutSession = async (
       userId,
       newlyCreatedOrFetchedSession.id,
       newPrs,
-      rankUpdateResults,
+      rankUpdateResults.rankUpData,
       userData,
       userProfile,
-      friends
+      friends,
+      allRanks
     );
 
     if (previousSessionDataResult.error) {
@@ -293,8 +310,7 @@ export const finishWorkoutSession = async (
         ? (newlyCreatedOrFetchedSession.total_sets || 0) - (previousSessionData.total_sets || 0)
         : newlyCreatedOrFetchedSession.total_sets || 0,
       muscles_worked_summary: muscles_worked_summary,
-      overall_user_rank_progression: rankUpdateResults.overall_user_rank_progression,
-      muscle_group_progressions: rankUpdateResults.muscle_group_progressions || [],
+      rank_up_data: rankUpdateResults.rankUpData,
       logged_set_overview: Array.from(
         persistedSessionSets
           .reduce((acc, set) => {
@@ -321,13 +337,13 @@ export const finishWorkoutSession = async (
           .values()
       ),
       plan_progression: [
-        ...planProgressionResults.weightIncreases.map((pi) => ({
+        ...planProgressionResults.weightIncreases.map((pi: any) => ({
           exercise_name: pi.exercise_name,
           exercise_type: pi.exercise_type,
           old_max_weight: pi.old_target_weight,
           new_max_weight: pi.new_target_weight,
         })),
-        ...planProgressionResults.repIncreases.map((ri) => ({
+        ...planProgressionResults.repIncreases.map((ri: any) => ({
           exercise_name: ri.exercise_name,
           exercise_type: ri.exercise_type,
           old_min_reps: ri.old_min_reps,
@@ -337,6 +353,15 @@ export const finishWorkoutSession = async (
         })),
       ],
     };
+
+    // ASYNCHRONOUSLY save the summary data. Do not block the response for this.
+    _updateSessionSummary(fastify, newlyCreatedOrFetchedSession.id, responsePayload).catch((err) => {
+      fastify.log.error(
+        err,
+        `[SUMMARY_SAVE] Failed to save summary data for session ${newlyCreatedOrFetchedSession.id}`
+      );
+    });
+
     fastify.log.info("[FINISH_SESSION_SUCCESS] Successfully processed finishWorkoutSession.", {
       sessionId: responsePayload.sessionId,
     });

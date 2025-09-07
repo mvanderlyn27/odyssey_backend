@@ -61,7 +61,6 @@ export type PreparedWorkoutData = {
       id: string;
       name: string;
       exercise_type: Enums<"exercise_type"> | null;
-      bodyweight_percentage: number | null;
       source_type: "standard" | "custom" | null;
     }
   >;
@@ -80,13 +79,12 @@ export type PreparedWorkoutData = {
   allMuscles: Tables<"muscles">[];
   allMuscleGroups: Tables<"muscle_groups">[];
   allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[];
-  allRankThresholds: Pick<Tables<"ranks">, "id" | "min_score">[];
+  allInterRanks: Tables<"inter_ranks">[];
   allLevelDefinitions: Tables<"level_definitions">[];
-  initialUserRank: { strength_score: number | null } | null;
-  initialMuscleGroupRanks: Pick<Tables<"muscle_group_ranks">, "muscle_group_id" | "strength_score" | "locked">[];
-  initialMuscleRanks: Pick<Tables<"muscle_ranks">, "muscle_id" | "strength_score" | "locked">[];
+  initialUserRank: Tables<"user_ranks"> | null;
+  initialMuscleGroupRanks: Tables<"muscle_group_ranks">[];
+  initialMuscleRanks: Tables<"muscle_ranks">[];
   activeWorkoutPlans: Tables<"active_workout_plans">[];
-  exerciseRankBenchmarks: Tables<"exercise_rank_benchmarks">[];
   friends: Tables<"friendships">[];
 };
 
@@ -116,13 +114,12 @@ export async function _gatherAndPrepareWorkoutData(
     allMuscles,
     allMuscleGroups,
     allRanks,
-    allRankThresholds,
+    allInterRanks,
     allLevelDefinitions,
     initialUserRankResult,
     initialMuscleGroupRanksResult,
     initialMuscleRanksResult,
     activeWorkoutPlansResult,
-    exerciseRankBenchmarksResult,
     friendsResult,
     userExerciseRanksResult,
   ] = await Promise.all([
@@ -138,10 +135,7 @@ export async function _gatherAndPrepareWorkoutData(
       .limit(1)
       .maybeSingle(),
     sessionExerciseIds.length > 0
-      ? supabase
-          .from("v_full_exercises")
-          .select("id, name, exercise_type, bodyweight_percentage, source_type")
-          .in("id", sessionExerciseIds)
+      ? supabase.from("v_full_exercises").select("id, name, exercise_type, source_type").in("id", sessionExerciseIds)
       : Promise.resolve({ data: [], error: null }),
     sessionExerciseIds.length > 0
       ? supabase
@@ -183,8 +177,8 @@ export async function _gatherAndPrepareWorkoutData(
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("ranks_id_min_score", async () => {
-      const { data, error } = await supabase.from("ranks").select("id, min_score");
+    fastify.appCache.get("allInterRanks", async () => {
+      const { data, error } = await supabase.from("inter_ranks").select("*");
       if (error) throw error;
       return data || [];
     }),
@@ -193,15 +187,10 @@ export async function _gatherAndPrepareWorkoutData(
       if (error) throw error;
       return data || [];
     }),
-    supabase.from("user_ranks").select("strength_score").eq("user_id", userId).single(),
-    supabase.from("muscle_group_ranks").select("muscle_group_id, strength_score, locked").eq("user_id", userId),
-    supabase.from("muscle_ranks").select("muscle_id, strength_score, locked").eq("user_id", userId),
+    supabase.from("user_ranks").select("*").eq("user_id", userId).single(),
+    supabase.from("muscle_group_ranks").select("*").eq("user_id", userId),
+    supabase.from("muscle_ranks").select("*").eq("user_id", userId),
     supabase.from("active_workout_plans").select("*").eq("user_id", userId),
-    fastify.appCache.get("allExerciseRankBenchmarks", async () => {
-      const { data, error } = await supabase.from("exercise_rank_benchmarks").select("*");
-      if (error) throw error;
-      return data || [];
-    }),
     supabase
       .from("friendships")
       .select("*")
@@ -244,7 +233,6 @@ export async function _gatherAndPrepareWorkoutData(
       id: string;
       name: string;
       exercise_type: Enums<"exercise_type"> | null;
-      bodyweight_percentage: number | null;
       source_type: "standard" | "custom" | null;
     }
   >();
@@ -257,7 +245,6 @@ export async function _gatherAndPrepareWorkoutData(
           id: ex.id,
           name: ex.name,
           exercise_type: ex.exercise_type,
-          bodyweight_percentage: ex.bodyweight_percentage,
           source_type: ex.source_type as "standard" | "custom" | null,
         });
       }
@@ -383,8 +370,8 @@ export async function _gatherAndPrepareWorkoutData(
         if (actual_weight_kg !== null && actual_reps !== null) {
           const exerciseType = exerciseDetail?.exercise_type;
           let setVolume = 0;
-          if (exerciseType === "calisthenics" && userBodyweight && exerciseDetail?.bodyweight_percentage) {
-            setVolume = userBodyweight * exerciseDetail.bodyweight_percentage * actual_reps;
+          if (exerciseType === "calisthenics" && userBodyweight) {
+            setVolume = userBodyweight * 1 * actual_reps;
           } else if (exerciseType === "assisted_body_weight" && userBodyweight) {
             setVolume = (userBodyweight - actual_weight_kg) * actual_reps;
           } else if (exerciseType === "weighted_body_weight" && userBodyweight) {
@@ -536,13 +523,12 @@ export async function _gatherAndPrepareWorkoutData(
     allMuscles: allMuscles,
     allMuscleGroups: allMuscleGroups,
     allRanks: allRanks,
-    allRankThresholds: allRankThresholds,
+    allInterRanks: allInterRanks,
     allLevelDefinitions,
     initialUserRank: initialUserRankResult.data,
     initialMuscleGroupRanks: initialMuscleGroupRanksResult.data || [],
     initialMuscleRanks: initialMuscleRanksResult.data || [],
     activeWorkoutPlans: activeWorkoutPlansResult.data || [],
-    exerciseRankBenchmarks: exerciseRankBenchmarksResult || [],
     friends: friendsResult.data || [],
   };
 }

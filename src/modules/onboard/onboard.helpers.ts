@@ -1,4 +1,5 @@
 import { FastifyInstance } from "fastify";
+import { ProfileUpdate } from "./onboard.types";
 
 // Expanded + tuned word lists
 const wordLists = {
@@ -302,3 +303,33 @@ export async function generateUniqueUsername(
     }
   }
 }
+
+export const rerollUsername = async (
+  fastify: FastifyInstance,
+  userId: string
+): Promise<{ username: string; displayName: string }> => {
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+  const supabase = fastify.supabase;
+
+  const { username, displayName } = await generateUniqueUsername(fastify);
+  const newAvatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/png?seed=${username}`;
+
+  const profileUpdatePayload: ProfileUpdate = {
+    updated_at: new Date().toISOString(),
+    username: username,
+    display_name: displayName,
+    avatar_url: newAvatarUrl,
+  };
+
+  const { error: updateProfileError } = await supabase.from("profiles").update(profileUpdatePayload).eq("id", userId);
+
+  if (updateProfileError) {
+    fastify.log.error({ profileError: updateProfileError, userId }, "Error rerolling username");
+    throw new Error(`Failed to reroll username: ${updateProfileError.message}`);
+  }
+
+  fastify.log.info(`Username rerolled for user ${userId} to ${username}`);
+  return { username, displayName };
+};

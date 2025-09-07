@@ -17,7 +17,6 @@ export type PreparedOnboardingData = {
       id: string;
       name: string;
       exercise_type: Enums<"exercise_type"> | null;
-      bodyweight_percentage: number | null;
       source_type: "standard" | "custom" | null;
     }
   >;
@@ -25,12 +24,11 @@ export type PreparedOnboardingData = {
   allMuscles: Tables<"muscles">[];
   allMuscleGroups: Tables<"muscle_groups">[];
   allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[];
-  allRankThresholds: Pick<Tables<"ranks">, "id" | "min_score">[];
+  allInterRanks: Tables<"inter_ranks">[];
   allLevelDefinitions: Tables<"level_definitions">[];
-  initialUserRank: { strength_score: number | null } | null;
-  initialMuscleGroupRanks: Pick<Tables<"muscle_group_ranks">, "muscle_group_id" | "strength_score">[];
-  initialMuscleRanks: Pick<Tables<"muscle_ranks">, "muscle_id" | "strength_score">[];
-  exerciseRankBenchmarks: Tables<"exercise_rank_benchmarks">[];
+  initialUserRank: Tables<"user_ranks"> | null;
+  initialMuscleGroupRanks: Tables<"muscle_group_ranks">[];
+  initialMuscleRanks: Tables<"muscle_ranks">[];
 };
 
 export async function _gatherAndPrepareOnboardingData(
@@ -54,18 +52,17 @@ export async function _gatherAndPrepareOnboardingData(
     allMuscles,
     allMuscleGroups,
     allRanks,
-    allRankThresholds,
+    allInterRanks,
     allLevelDefinitions,
     initialUserRankResult,
     initialMuscleGroupRanksResult,
     initialMuscleRanksResult,
-    exerciseRankBenchmarksResult,
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
     supabase.from("users").select("*").eq("id", userId).maybeSingle(),
     supabase
       .from("v_full_exercises")
-      .select("id, name, exercise_type, bodyweight_percentage, source_type")
+      .select("id, name, exercise_type, source_type")
       .eq("id", data.selected_exercise_id)
       .single(),
     fastify.appCache.get("exercises", async () => {
@@ -93,8 +90,8 @@ export async function _gatherAndPrepareOnboardingData(
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("ranks_id_min_score", async () => {
-      const { data, error } = await supabase.from("ranks").select("id, min_score");
+    fastify.appCache.get("inter_ranks", async () => {
+      const { data, error } = await supabase.from("inter_ranks").select("*");
       if (error) throw error;
       return data || [];
     }),
@@ -103,14 +100,9 @@ export async function _gatherAndPrepareOnboardingData(
       if (error) throw error;
       return data || [];
     }),
-    supabase.from("user_ranks").select("strength_score").eq("user_id", userId).maybeSingle(),
-    supabase.from("muscle_group_ranks").select("muscle_group_id, strength_score").eq("user_id", userId),
-    supabase.from("muscle_ranks").select("muscle_id, strength_score").eq("user_id", userId),
-    fastify.appCache.get("allExerciseRankBenchmarks", async () => {
-      const { data, error } = await supabase.from("exercise_rank_benchmarks").select("*");
-      if (error) throw error;
-      return data || [];
-    }),
+    supabase.from("user_ranks").select("*").eq("user_id", userId).maybeSingle(),
+    supabase.from("muscle_group_ranks").select("*").eq("user_id", userId),
+    supabase.from("muscle_ranks").select("*").eq("user_id", userId),
   ]);
 
   if (profileResult.error) {
@@ -147,7 +139,6 @@ export async function _gatherAndPrepareOnboardingData(
       id: string;
       name: string;
       exercise_type: Enums<"exercise_type"> | null;
-      bodyweight_percentage: number | null;
       source_type: "standard" | "custom" | null;
     }
   >();
@@ -157,7 +148,6 @@ export async function _gatherAndPrepareOnboardingData(
       id: ex.id,
       name: ex.name,
       exercise_type: ex.exercise_type,
-      bodyweight_percentage: ex.bodyweight_percentage,
       source_type: ex.source_type as "standard" | "custom",
     });
   }
@@ -175,11 +165,10 @@ export async function _gatherAndPrepareOnboardingData(
     allMuscles: allMuscles,
     allMuscleGroups: allMuscleGroups,
     allRanks: allRanks,
-    allRankThresholds: allRankThresholds,
+    allInterRanks: allInterRanks,
     allLevelDefinitions,
     initialUserRank: initialUserRankResult.data,
     initialMuscleGroupRanks: initialMuscleGroupRanksResult.data || [],
     initialMuscleRanks: initialMuscleRanksResult.data || [],
-    exerciseRankBenchmarks: exerciseRankBenchmarksResult || [],
   };
 }

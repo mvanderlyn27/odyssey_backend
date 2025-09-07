@@ -236,7 +236,6 @@ export type Database = {
       }
       custom_exercises: {
         Row: {
-          bodyweight_percentage: number | null
           created_at: string
           deleted: boolean
           description: string | null
@@ -253,7 +252,6 @@ export type Database = {
           video_url: string | null
         }
         Insert: {
-          bodyweight_percentage?: number | null
           created_at?: string
           deleted?: boolean
           description?: string | null
@@ -270,7 +268,6 @@ export type Database = {
           video_url?: string | null
         }
         Update: {
-          bodyweight_percentage?: number | null
           created_at?: string
           deleted?: boolean
           description?: string | null
@@ -463,92 +460,68 @@ export type Database = {
           },
         ]
       }
-      exercise_rank_benchmarks: {
-        Row: {
-          created_at: string | null
-          exercise_id: string
-          gender: Database["public"]["Enums"]["gender"]
-          id: string
-          min_threshold: number
-          rank_id: number | null
-          updated_at: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          exercise_id: string
-          gender: Database["public"]["Enums"]["gender"]
-          id?: string
-          min_threshold: number
-          rank_id?: number | null
-          updated_at?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          exercise_id?: string
-          gender?: Database["public"]["Enums"]["gender"]
-          id?: string
-          min_threshold?: number
-          rank_id?: number | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "exercise_swr_benchmarks_exercise_id_fkey"
-            columns: ["exercise_id"]
-            isOneToOne: false
-            referencedRelation: "exercises"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_rank_id"
-            columns: ["rank_id"]
-            isOneToOne: false
-            referencedRelation: "ranks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       exercises: {
         Row: {
-          bodyweight_percentage: number | null
+          alpha_value: number | null
           created_at: string
           deleted: boolean
           description: string | null
           difficulty: string | null
+          elite_duration_female: number | null
+          elite_duration_male: number | null
+          elite_reps_female: number | null
+          elite_reps_male: number | null
+          elite_swr_female: number | null
+          elite_swr_male: number | null
           exercise_type: Database["public"]["Enums"]["exercise_type"] | null
           id: string
           instructions: string | null
           is_bilateral: boolean | null
+          movement_type: Database["public"]["Enums"]["movement_types"] | null
           name: string
           popularity: number
           updated_at: string
           video_url: string | null
         }
         Insert: {
-          bodyweight_percentage?: number | null
+          alpha_value?: number | null
           created_at?: string
           deleted?: boolean
           description?: string | null
           difficulty?: string | null
+          elite_duration_female?: number | null
+          elite_duration_male?: number | null
+          elite_reps_female?: number | null
+          elite_reps_male?: number | null
+          elite_swr_female?: number | null
+          elite_swr_male?: number | null
           exercise_type?: Database["public"]["Enums"]["exercise_type"] | null
           id?: string
           instructions?: string | null
           is_bilateral?: boolean | null
+          movement_type?: Database["public"]["Enums"]["movement_types"] | null
           name: string
           popularity?: number
           updated_at?: string
           video_url?: string | null
         }
         Update: {
-          bodyweight_percentage?: number | null
+          alpha_value?: number | null
           created_at?: string
           deleted?: boolean
           description?: string | null
           difficulty?: string | null
+          elite_duration_female?: number | null
+          elite_duration_male?: number | null
+          elite_reps_female?: number | null
+          elite_reps_male?: number | null
+          elite_swr_female?: number | null
+          elite_swr_male?: number | null
           exercise_type?: Database["public"]["Enums"]["exercise_type"] | null
           id?: string
           instructions?: string | null
           is_bilateral?: boolean | null
+          movement_type?: Database["public"]["Enums"]["movement_types"] | null
           name?: string
           popularity?: number
           updated_at?: string
@@ -704,6 +677,41 @@ export type Database = {
         }
         Relationships: []
       }
+      inter_ranks: {
+        Row: {
+          id: number
+          max_score: number
+          min_score: number
+          name: string
+          rank_id: number
+          sort_order: number
+        }
+        Insert: {
+          id?: number
+          max_score: number
+          min_score: number
+          name: string
+          rank_id: number
+          sort_order: number
+        }
+        Update: {
+          id?: number
+          max_score?: number
+          min_score?: number
+          name?: string
+          rank_id?: number
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inter_ranks_rank_id_fkey"
+            columns: ["rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       level_definitions: {
         Row: {
           created_at: string
@@ -728,80 +736,67 @@ export type Database = {
         }
         Relationships: []
       }
-      muscle_group_rank_benchmarks: {
-        Row: {
-          created_at: string
-          gender: Database["public"]["Enums"]["gender"]
-          id: string
-          min_threshold: number
-          muscle_group_id: string
-          rank_id: number
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          gender: Database["public"]["Enums"]["gender"]
-          id?: string
-          min_threshold: number
-          muscle_group_id: string
-          rank_id: number
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          gender?: Database["public"]["Enums"]["gender"]
-          id?: string
-          min_threshold?: number
-          muscle_group_id?: string
-          rank_id?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fk_muscle_group"
-            columns: ["muscle_group_id"]
-            isOneToOne: false
-            referencedRelation: "muscle_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_rank"
-            columns: ["rank_id"]
-            isOneToOne: false
-            referencedRelation: "ranks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       muscle_group_rank_history: {
         Row: {
           achieved_at: string
           id: string
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
           locked: boolean
           muscle_group_id: string
-          rank_id: number
-          strength_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_rank_id: number | null
+          permanent_score: number | null
           user_id: string
         }
         Insert: {
           achieved_at: string
           id?: string
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
           locked?: boolean
           muscle_group_id: string
-          rank_id: number
-          strength_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           user_id: string
         }
         Update: {
           achieved_at?: string
           id?: string
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
           locked?: boolean
           muscle_group_id?: string
-          rank_id?: number
-          strength_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "muscle_group_rank_history_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_group_rank_history_permanent_inter_rank_id_fkey"
+            columns: ["permanent_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "muscle_group_rank_history_user_id_fkey"
             columns: ["user_id"]
@@ -816,10 +811,16 @@ export type Database = {
           created_at: string
           id: string
           last_calculated_at: string | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
           locked: boolean
           muscle_group_id: string
-          rank_id: number | null
-          strength_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_rank_id: number | null
+          permanent_score: number | null
           updated_at: string
           user_id: string
         }
@@ -827,10 +828,16 @@ export type Database = {
           created_at?: string
           id?: string
           last_calculated_at?: string | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
           locked?: boolean
           muscle_group_id: string
-          rank_id?: number | null
-          strength_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           updated_at?: string
           user_id: string
         }
@@ -838,10 +845,16 @@ export type Database = {
           created_at?: string
           id?: string
           last_calculated_at?: string | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
           locked?: boolean
           muscle_group_id?: string
-          rank_id?: number | null
-          strength_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -854,6 +867,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "muscle_group_ranks_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_leaderboard_rank_id_fkey"
+            columns: ["leaderboard_rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "muscle_group_ranks_muscle_group_id_fkey"
             columns: ["muscle_group_id"]
             isOneToOne: false
@@ -861,8 +888,15 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "muscle_group_ranks_permanent_inter_rank_id_fkey"
+            columns: ["permanent_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "muscle_group_ranks_rank_id_fkey"
-            columns: ["rank_id"]
+            columns: ["permanent_rank_id"]
             isOneToOne: false
             referencedRelation: "ranks"
             referencedColumns: ["id"]
@@ -914,80 +948,67 @@ export type Database = {
         }
         Relationships: []
       }
-      muscle_rank_benchmarks: {
-        Row: {
-          created_at: string
-          gender: Database["public"]["Enums"]["gender"]
-          id: string
-          min_threshold: number
-          muscle_id: string
-          rank_id: number
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          gender: Database["public"]["Enums"]["gender"]
-          id?: string
-          min_threshold: number
-          muscle_id: string
-          rank_id: number
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          gender?: Database["public"]["Enums"]["gender"]
-          id?: string
-          min_threshold?: number
-          muscle_id?: string
-          rank_id?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fk_muscle"
-            columns: ["muscle_id"]
-            isOneToOne: false
-            referencedRelation: "muscles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_rank"
-            columns: ["rank_id"]
-            isOneToOne: false
-            referencedRelation: "ranks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       muscle_rank_history: {
         Row: {
           achieved_at: string
           id: string
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
           locked: boolean
           muscle_id: string
-          rank_id: number
-          strength_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_rank_id: number | null
+          permanent_score: number | null
           user_id: string
         }
         Insert: {
           achieved_at: string
           id?: string
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
           locked?: boolean
           muscle_id: string
-          rank_id: number
-          strength_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           user_id: string
         }
         Update: {
           achieved_at?: string
           id?: string
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
           locked?: boolean
           muscle_id?: string
-          rank_id?: number
-          strength_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "muscle_rank_history_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_rank_history_permanent_inter_rank_id_fkey"
+            columns: ["permanent_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "muscle_rank_history_user_id_fkey"
             columns: ["user_id"]
@@ -1002,10 +1023,16 @@ export type Database = {
           created_at: string
           id: string
           last_calculated_at: string | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
           locked: boolean
           muscle_id: string
-          rank_id: number | null
-          strength_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_rank_id: number | null
+          permanent_score: number | null
           updated_at: string
           user_id: string
         }
@@ -1013,10 +1040,16 @@ export type Database = {
           created_at?: string
           id?: string
           last_calculated_at?: string | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
           locked?: boolean
           muscle_id: string
-          rank_id?: number | null
-          strength_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           updated_at?: string
           user_id: string
         }
@@ -1024,10 +1057,16 @@ export type Database = {
           created_at?: string
           id?: string
           last_calculated_at?: string | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
           locked?: boolean
           muscle_id?: string
-          rank_id?: number | null
-          strength_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           updated_at?: string
           user_id?: string
         }
@@ -1040,6 +1079,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "muscle_ranks_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_ranks_leaderboard_rank_id_fkey"
+            columns: ["leaderboard_rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "muscle_ranks_muscle_id_fkey"
             columns: ["muscle_id"]
             isOneToOne: false
@@ -1047,8 +1100,15 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "muscle_ranks_permanent_inter_rank_id_fkey"
+            columns: ["permanent_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "muscle_ranks_rank_id_fkey"
-            columns: ["rank_id"]
+            columns: ["permanent_rank_id"]
             isOneToOne: false
             referencedRelation: "ranks"
             referencedColumns: ["id"]
@@ -1170,41 +1230,6 @@ export type Database = {
           },
         ]
       }
-      overall_rank_benchmarks: {
-        Row: {
-          created_at: string
-          gender: Database["public"]["Enums"]["gender"]
-          id: string
-          min_threshold: number
-          rank_id: number
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          gender: Database["public"]["Enums"]["gender"]
-          id?: string
-          min_threshold: number
-          rank_id: number
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          gender?: Database["public"]["Enums"]["gender"]
-          id?: string
-          min_threshold?: number
-          rank_id?: number
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "fk_rank"
-            columns: ["rank_id"]
-            isOneToOne: false
-            referencedRelation: "ranks"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       profiles: {
         Row: {
           avatar_blurhash: string | null
@@ -1319,18 +1344,21 @@ export type Database = {
         Row: {
           description: string | null
           id: number
+          max_score: number | null
           min_score: number | null
           rank_name: string
         }
         Insert: {
           description?: string | null
           id?: number
+          max_score?: number | null
           min_score?: number | null
           rank_name: string
         }
         Update: {
           description?: string | null
           id?: number
+          max_score?: number | null
           min_score?: number | null
           rank_name?: string
         }
@@ -1552,10 +1580,16 @@ export type Database = {
           estimated_1rm: number | null
           exercise_id: string
           id: string
-          rank_id: number | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_rank_id: number | null
+          permanent_score: number | null
           reps: number | null
           session_set_id: string | null
-          strength_score: number | null
           swr: number | null
           user_id: string
           weight_kg: number | null
@@ -1566,10 +1600,16 @@ export type Database = {
           estimated_1rm?: number | null
           exercise_id: string
           id?: string
-          rank_id?: number | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           reps?: number | null
           session_set_id?: string | null
-          strength_score?: number | null
           swr?: number | null
           user_id: string
           weight_kg?: number | null
@@ -1580,18 +1620,45 @@ export type Database = {
           estimated_1rm?: number | null
           exercise_id?: string
           id?: string
-          rank_id?: number | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           reps?: number | null
           session_set_id?: string | null
-          strength_score?: number | null
           swr?: number | null
           user_id?: string
           weight_kg?: number | null
         }
         Relationships: [
           {
-            foreignKeyName: "user_exercise_rank_history_rank_id_fkey"
-            columns: ["rank_id"]
+            foreignKeyName: "user_exercise_rank_history_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_rank_history_leaderboard_rank_id_fkey"
+            columns: ["leaderboard_rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_rank_history_permanent_inter_rank_id_fkey"
+            columns: ["permanent_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_rank_history_permanent_rank_id_fkey"
+            columns: ["permanent_rank_id"]
             isOneToOne: false
             referencedRelation: "ranks"
             referencedColumns: ["id"]
@@ -1620,10 +1687,16 @@ export type Database = {
           exercise_id: string
           id: string
           last_calculated_at: string | null
-          rank_id: number | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_rank_id: number | null
+          permanent_score: number | null
           reps: number | null
           session_set_id: string | null
-          strength_score: number | null
           swr: number | null
           updated_at: string | null
           user_id: string
@@ -1636,10 +1709,16 @@ export type Database = {
           exercise_id: string
           id?: string
           last_calculated_at?: string | null
-          rank_id?: number | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           reps?: number | null
           session_set_id?: string | null
-          strength_score?: number | null
           swr?: number | null
           updated_at?: string | null
           user_id: string
@@ -1652,10 +1731,16 @@ export type Database = {
           exercise_id?: string
           id?: string
           last_calculated_at?: string | null
-          rank_id?: number | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           reps?: number | null
           session_set_id?: string | null
-          strength_score?: number | null
           swr?: number | null
           updated_at?: string | null
           user_id?: string
@@ -1670,8 +1755,29 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_exercise_ranks_rank_id_fkey"
-            columns: ["rank_id"]
+            foreignKeyName: "user_exercise_ranks_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_leaderboard_rank_id_fkey"
+            columns: ["leaderboard_rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_permanent_inter_rank_id_fkey"
+            columns: ["permanent_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_permanent_rank_id_fkey"
+            columns: ["permanent_rank_id"]
             isOneToOne: false
             referencedRelation: "ranks"
             referencedColumns: ["id"]
@@ -1851,25 +1957,57 @@ export type Database = {
         Row: {
           achieved_at: string
           id: string
-          rank_id: number
-          strength_score: number | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_rank_id: number | null
+          permanent_score: number | null
           user_id: string
         }
         Insert: {
           achieved_at: string
           id?: string
-          rank_id: number
-          strength_score?: number | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           user_id: string
         }
         Update: {
           achieved_at?: string
           id?: string
-          rank_id?: number
-          strength_score?: number | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_rank_history_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_rank_history_permanent_inter_rank_id_fkey"
+            columns: ["permanent_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_rank_history_user_id_fkey"
             columns: ["user_id"]
@@ -1884,8 +2022,14 @@ export type Database = {
           created_at: string
           id: string
           last_calculated_at: string | null
-          rank_id: number | null
-          strength_score: number | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_rank_id: number | null
+          permanent_score: number | null
           updated_at: string
           user_id: string
         }
@@ -1893,8 +2037,14 @@ export type Database = {
           created_at?: string
           id?: string
           last_calculated_at?: string | null
-          rank_id?: number | null
-          strength_score?: number | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           updated_at?: string
           user_id: string
         }
@@ -1902,15 +2052,42 @@ export type Database = {
           created_at?: string
           id?: string
           last_calculated_at?: string | null
-          rank_id?: number | null
-          strength_score?: number | null
+          leaderboard_inter_rank_id?: number | null
+          leaderboard_position?: number | null
+          leaderboard_position_change?: number | null
+          leaderboard_rank_id?: number | null
+          leaderboard_score?: number | null
+          permanent_inter_rank_id?: number | null
+          permanent_rank_id?: number | null
+          permanent_score?: number | null
           updated_at?: string
           user_id?: string
         }
         Relationships: [
           {
+            foreignKeyName: "user_ranks_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_ranks_leaderboard_rank_id_fkey"
+            columns: ["leaderboard_rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_ranks_permanent_inter_rank_id_fkey"
+            columns: ["permanent_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "user_ranks_rank_id_fkey"
-            columns: ["rank_id"]
+            columns: ["permanent_rank_id"]
             isOneToOne: false
             referencedRelation: "ranks"
             referencedColumns: ["id"]
@@ -1999,6 +2176,7 @@ export type Database = {
           gender: Database["public"]["Enums"]["gender"] | null
           id: string
           is_premium: boolean | null
+          last_workout_timestamp: string | null
           notification_enabled: boolean | null
           onboard_complete: boolean
           plan_type: string | null
@@ -2018,6 +2196,7 @@ export type Database = {
           gender?: Database["public"]["Enums"]["gender"] | null
           id: string
           is_premium?: boolean | null
+          last_workout_timestamp?: string | null
           notification_enabled?: boolean | null
           onboard_complete?: boolean
           plan_type?: string | null
@@ -2037,6 +2216,7 @@ export type Database = {
           gender?: Database["public"]["Enums"]["gender"] | null
           id?: string
           is_premium?: boolean | null
+          last_workout_timestamp?: string | null
           notification_enabled?: boolean | null
           onboard_complete?: boolean
           plan_type?: string | null
@@ -2432,10 +2612,7 @@ export type Database = {
           duration_seconds: number | null
           exercises_performed_summary: string | null
           id: string
-          muscle_group_rank_ups_count: number
-          muscle_rank_ups_count: number
           notes: string | null
-          overall_rank_up_count: number
           public: boolean
           session_name: string | null
           started_at: string
@@ -2447,6 +2624,7 @@ export type Database = {
           user_id: string
           workout_plan_day_id: string | null
           workout_plan_id: string | null
+          workout_summary_data: Json | null
         }
         Insert: {
           completed_at?: string | null
@@ -2455,10 +2633,7 @@ export type Database = {
           duration_seconds?: number | null
           exercises_performed_summary?: string | null
           id?: string
-          muscle_group_rank_ups_count?: number
-          muscle_rank_ups_count?: number
           notes?: string | null
-          overall_rank_up_count?: number
           public?: boolean
           session_name?: string | null
           started_at?: string
@@ -2470,6 +2645,7 @@ export type Database = {
           user_id: string
           workout_plan_day_id?: string | null
           workout_plan_id?: string | null
+          workout_summary_data?: Json | null
         }
         Update: {
           completed_at?: string | null
@@ -2478,10 +2654,7 @@ export type Database = {
           duration_seconds?: number | null
           exercises_performed_summary?: string | null
           id?: string
-          muscle_group_rank_ups_count?: number
-          muscle_rank_ups_count?: number
           notes?: string | null
-          overall_rank_up_count?: number
           public?: boolean
           session_name?: string | null
           started_at?: string
@@ -2493,6 +2666,7 @@ export type Database = {
           user_id?: string
           workout_plan_day_id?: string | null
           workout_plan_id?: string | null
+          workout_summary_data?: Json | null
         }
         Relationships: [
           {
@@ -2534,10 +2708,12 @@ export type Database = {
           display_name: string | null
           estimated_1rm: number | null
           exercise_id: string | null
-          rank: number | null
-          rank_id: number | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
           reps: number | null
-          strength_score: number | null
           swr: number | null
           user_id: string | null
           username: string | null
@@ -2552,8 +2728,15 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_exercise_ranks_rank_id_fkey"
-            columns: ["rank_id"]
+            foreignKeyName: "user_exercise_ranks_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_leaderboard_rank_id_fkey"
+            columns: ["leaderboard_rank_id"]
             isOneToOne: false
             referencedRelation: "ranks"
             referencedColumns: ["id"]
@@ -2571,16 +2754,17 @@ export type Database = {
         Row: {
           avatar_url: string | null
           display_name: string | null
-          rank: number | null
-          rank_id: number | null
-          strength_score: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
           user_id: string | null
           username: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "user_ranks_rank_id_fkey"
-            columns: ["rank_id"]
+            foreignKeyName: "user_ranks_leaderboard_rank_id_fkey"
+            columns: ["leaderboard_rank_id"]
             isOneToOne: false
             referencedRelation: "ranks"
             referencedColumns: ["id"]
@@ -2591,10 +2775,12 @@ export type Database = {
         Row: {
           avatar_url: string | null
           display_name: string | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
           muscle_group_id: string | null
-          rank: number | null
-          rank_id: number | null
-          strength_score: number | null
           user_id: string | null
           username: string | null
         }
@@ -2607,17 +2793,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "muscle_group_ranks_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_leaderboard_rank_id_fkey"
+            columns: ["leaderboard_rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "muscle_group_ranks_muscle_group_id_fkey"
             columns: ["muscle_group_id"]
             isOneToOne: false
             referencedRelation: "muscle_groups"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "muscle_group_ranks_rank_id_fkey"
-            columns: ["rank_id"]
-            isOneToOne: false
-            referencedRelation: "ranks"
             referencedColumns: ["id"]
           },
           {
@@ -2647,10 +2840,12 @@ export type Database = {
         Row: {
           avatar_url: string | null
           display_name: string | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
           muscle_id: string | null
-          rank: number | null
-          rank_id: number | null
-          strength_score: number | null
           user_id: string | null
           username: string | null
         }
@@ -2663,17 +2858,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "muscle_ranks_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "muscle_ranks_leaderboard_rank_id_fkey"
+            columns: ["leaderboard_rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "muscle_ranks_muscle_id_fkey"
             columns: ["muscle_id"]
             isOneToOne: false
             referencedRelation: "muscles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "muscle_ranks_rank_id_fkey"
-            columns: ["rank_id"]
-            isOneToOne: false
-            referencedRelation: "ranks"
             referencedColumns: ["id"]
           },
           {
@@ -2701,12 +2903,18 @@ export type Database = {
       }
       v_full_exercises: {
         Row: {
+          alpha_value: number | null
           alternate_names: string[] | null
-          bodyweight_percentage: number | null
           created_at: string | null
           deleted: boolean | null
           description: string | null
           difficulty: string | null
+          elite_duration_female: number | null
+          elite_duration_male: number | null
+          elite_reps_female: number | null
+          elite_reps_male: number | null
+          elite_swr_female: number | null
+          elite_swr_male: number | null
           exercise_equipment_requirements: Json | null
           exercise_muscles: Json | null
           exercise_type: Database["public"]["Enums"]["exercise_type"] | null
@@ -2781,10 +2989,16 @@ export type Database = {
           exercise_id: string | null
           id: string | null
           last_calculated_at: string | null
-          rank_id: number | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_rank_id: number | null
+          permanent_score: number | null
           reps: number | null
           session_set_id: string | null
-          strength_score: number | null
           swr: number | null
           updated_at: string | null
           user_id: string | null
@@ -2799,8 +3013,29 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "user_exercise_ranks_rank_id_fkey"
-            columns: ["rank_id"]
+            foreignKeyName: "user_exercise_ranks_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_leaderboard_rank_id_fkey"
+            columns: ["leaderboard_rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_permanent_inter_rank_id_fkey"
+            columns: ["permanent_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_permanent_rank_id_fkey"
+            columns: ["permanent_rank_id"]
             isOneToOne: false
             referencedRelation: "ranks"
             referencedColumns: ["id"]
@@ -2828,18 +3063,46 @@ export type Database = {
           bio: string | null
           created_at: string | null
           display_name: string | null
-          global_rank: number | null
           is_premium: boolean | null
-          rank_name: string | null
-          strength_score: number | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_inter_rank_name: string | null
+          leaderboard_position: number | null
+          leaderboard_rank_name: string | null
+          leaderboard_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_inter_rank_name: string | null
+          permanent_rank_name: string | null
+          permanent_score: number | null
           user_id: string | null
-          user_rank_id: number | null
+          user_leaderboard_rank_id: number | null
+          user_permanent_rank_id: number | null
           username: string | null
         }
         Relationships: [
           {
+            foreignKeyName: "user_ranks_leaderboard_inter_rank_id_fkey"
+            columns: ["leaderboard_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_ranks_leaderboard_rank_id_fkey"
+            columns: ["user_leaderboard_rank_id"]
+            isOneToOne: false
+            referencedRelation: "ranks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_ranks_permanent_inter_rank_id_fkey"
+            columns: ["permanent_inter_rank_id"]
+            isOneToOne: false
+            referencedRelation: "inter_ranks"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "user_ranks_rank_id_fkey"
-            columns: ["user_rank_id"]
+            columns: ["user_permanent_rank_id"]
             isOneToOne: false
             referencedRelation: "ranks"
             referencedColumns: ["id"]
@@ -2900,10 +3163,7 @@ export type Database = {
           deleted: boolean | null
           duration_seconds: number | null
           exercises_performed_summary: string | null
-          muscle_group_rank_ups_count: number | null
-          muscle_rank_ups_count: number | null
           notes: string | null
-          overall_rank_up_count: number | null
           public: boolean | null
           session_name: string | null
           sets: Json | null
@@ -2917,6 +3177,7 @@ export type Database = {
           workout_plan_day_id: string | null
           workout_plan_id: string | null
           workout_session_id: string | null
+          workout_summary_data: Json | null
         }
         Relationships: [
           {
@@ -2956,6 +3217,15 @@ export type Database = {
         Returns: {
           j: Json
         }[]
+      }
+      bulk_update_ranks: {
+        Args: {
+          p_muscle_group_rank_updates?: Database["public"]["CompositeTypes"]["muscle_group_rank_update"][]
+          p_muscle_rank_updates?: Database["public"]["CompositeTypes"]["muscle_rank_update"][]
+          p_user_exercise_rank_updates?: Database["public"]["CompositeTypes"]["user_exercise_rank_update"][]
+          p_user_rank_update?: Database["public"]["CompositeTypes"]["user_rank_update"]
+        }
+        Returns: undefined
       }
       can_view_user_info: {
         Args: { p_user_id: string }
@@ -3005,7 +3275,6 @@ export type Database = {
         }
         Returns: {
           alternate_names: string[]
-          bodyweight_percentage: number
           created_at: string
           deleted: boolean
           description: string
@@ -3041,20 +3310,20 @@ export type Database = {
           exercise_id: string | null
           id: string | null
           last_calculated_at: string | null
-          rank_id: number | null
+          leaderboard_inter_rank_id: number | null
+          leaderboard_position: number | null
+          leaderboard_position_change: number | null
+          leaderboard_rank_id: number | null
+          leaderboard_score: number | null
+          permanent_inter_rank_id: number | null
+          permanent_rank_id: number | null
+          permanent_score: number | null
           reps: number | null
           session_set_id: string | null
-          strength_score: number | null
           swr: number | null
           updated_at: string | null
           user_id: string | null
           weight_kg: number | null
-        }[]
-      }
-      get_user_strength_rank: {
-        Args: { p_user_id: string }
-        Returns: {
-          rank: number
         }[]
       }
       gtrgm_compress: {
@@ -3101,6 +3370,10 @@ export type Database = {
         Args: { target_user_id: string }
         Returns: undefined
       }
+      refresh_all_leaderboard_mviews: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       save_workout_plan_changes: {
         Args: { p_changes: Json }
         Returns: Json
@@ -3116,6 +3389,14 @@ export type Database = {
       show_trgm: {
         Args: { "": string }
         Returns: string[]
+      }
+      update_all_leaderboard_positions: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      update_and_refresh_all_leaderboards_job: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
     }
     Enums: {
@@ -3158,6 +3439,14 @@ export type Database = {
       friendship_status: "pending" | "accepted" | "blocked"
       gender: "male" | "female" | "other"
       meal_type: "breakfast" | "lunch" | "dinner" | "snack"
+      movement_types:
+        | "horizontal_push"
+        | "vertical_push"
+        | "horizontal_pull"
+        | "vertical_pull"
+        | "squat"
+        | "hinge"
+        | "core"
       muscle_group_type:
         | "BackLeftHead"
         | "BackLeftNeck"
@@ -3378,7 +3667,57 @@ export type Database = {
       visibility_level: "public" | "friends_only" | "private"
     }
     CompositeTypes: {
-      [_ in never]: never
+      muscle_group_rank_update: {
+        user_id: string | null
+        muscle_group_id: string | null
+        permanent_rank_id: number | null
+        permanent_inter_rank_id: number | null
+        permanent_score: number | null
+        leaderboard_score: number | null
+        locked: boolean | null
+        leaderboard_rank_id: number | null
+        leaderboard_inter_rank_id: number | null
+        last_calculated_at: string | null
+      }
+      muscle_rank_update: {
+        user_id: string | null
+        muscle_id: string | null
+        permanent_rank_id: number | null
+        permanent_inter_rank_id: number | null
+        permanent_score: number | null
+        leaderboard_score: number | null
+        locked: boolean | null
+        leaderboard_rank_id: number | null
+        leaderboard_inter_rank_id: number | null
+        last_calculated_at: string | null
+      }
+      user_exercise_rank_update: {
+        user_id: string | null
+        exercise_id: string | null
+        permanent_rank_id: number | null
+        permanent_inter_rank_id: number | null
+        permanent_score: number | null
+        leaderboard_score: number | null
+        leaderboard_rank_id: number | null
+        leaderboard_inter_rank_id: number | null
+        weight_kg: number | null
+        reps: number | null
+        bodyweight_kg: number | null
+        estimated_1rm: number | null
+        swr: number | null
+        session_set_id: string | null
+        last_calculated_at: string | null
+      }
+      user_rank_update: {
+        user_id: string | null
+        permanent_rank_id: number | null
+        permanent_inter_rank_id: number | null
+        permanent_score: number | null
+        leaderboard_score: number | null
+        leaderboard_rank_id: number | null
+        leaderboard_inter_rank_id: number | null
+        last_calculated_at: string | null
+      }
     }
   }
 }
@@ -3545,6 +3884,15 @@ export const Constants = {
       friendship_status: ["pending", "accepted", "blocked"],
       gender: ["male", "female", "other"],
       meal_type: ["breakfast", "lunch", "dinner", "snack"],
+      movement_types: [
+        "horizontal_push",
+        "vertical_push",
+        "horizontal_pull",
+        "vertical_pull",
+        "squat",
+        "hinge",
+        "core",
+      ],
       muscle_group_type: [
         "BackLeftHead",
         "BackLeftNeck",
