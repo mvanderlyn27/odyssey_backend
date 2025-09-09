@@ -15,7 +15,8 @@ export const handleOnboarding = async (
   userId: string,
   data: OnboardingData
 ): Promise<Profile> => {
-  fastify.log.info({ userId, data }, "Handling comprehensive onboarding process for user");
+  fastify.log.info({ userId }, "[ONBOARD_SERVICE] Starting comprehensive onboarding process");
+  fastify.log.debug({ userId, data }, "[ONBOARD_SERVICE] Full onboarding data");
 
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
@@ -26,7 +27,7 @@ export const handleOnboarding = async (
   const { userProfile: existingProfileData, userData: existingUserData } = preparedData;
 
   if (existingUserData?.onboard_complete) {
-    fastify.log.info(`User ${userId} is already onboarded. Skipping onboarding process.`);
+    fastify.log.info({ userId }, "[ONBOARD_SERVICE] User is already onboarded. Skipping.");
     if (!existingProfileData) {
       throw new Error(`User ${userId} is marked as onboarded, but profile data is missing.`);
     }
@@ -83,9 +84,14 @@ export const handleOnboarding = async (
     ];
 
     if (newlyCreatedUser) {
-      fastify.log.info({ userId }, "User data confirmed. Proceeding with ranking and PR calculation.");
-      await _handleOnboardingRanking(fastify, userId, data, preparedData, inMemorySets);
-      await _handleOnboardingPRs(fastify, newlyCreatedUser, data, preparedData, inMemorySets);
+      fastify.log.info(
+        { userId },
+        "[ONBOARD_SERVICE] User profile created. Proceeding with ranking and PR calculation"
+      );
+      await Promise.all([
+        _handleOnboardingRanking(fastify, userId, data, preparedData, inMemorySets),
+        _handleOnboardingPRs(fastify, newlyCreatedUser, data, preparedData, inMemorySets),
+      ]);
     }
 
     return await _finalizeOnboarding(fastify, userId);

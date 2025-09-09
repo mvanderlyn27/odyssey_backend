@@ -91,6 +91,9 @@ export interface RankUpData {
   muscleGroupRankChanges?: MuscleGroupRankChange[];
   muscleRankChanges?: MuscleRankChange[];
   exerciseRankChanges?: ExerciseRankChange[];
+  unchangedMuscleGroupRanks?: Tables<"muscle_group_ranks">[];
+  unchangedMuscleRanks?: Tables<"muscle_ranks">[];
+  unchangedExerciseRanks?: Tables<"user_exercise_ranks">[];
   leaderboardScoresRestored?: boolean;
 }
 

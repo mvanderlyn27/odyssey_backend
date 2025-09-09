@@ -240,10 +240,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(PaginationQuerySchema);
   app.addSchema(PrimaryMuscleGroupEnum);
   app.addSchema(ExerciseDifficultyEnum);
-  app.log.info("Registered common schemas and enums.");
+  app.log.info("[APP_SETUP] Registered common schemas and enums");
 
   // --- Register ALL Schemas Centrally ---
-  app.log.info("Registering all application schemas centrally...");
+  app.log.info("[APP_SETUP] Registering all application schemas centrally...");
 
   // Base Schemas
   app.addSchema(EquipmentSchema);
@@ -342,9 +342,10 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(GetCurrentGoalResponseSchema);
   app.addSchema(GetGoalHistoryResponseSchema);
 
-  app.log.info("Registered all application schemas centrally.");
+  app.log.info("[APP_SETUP] All application schemas registered");
 
   // --- Register Core Plugins ---
+  app.log.info("[APP_SETUP] Registering core plugins...");
   app.register(helmet, { contentSecurityPolicy: false });
   app.register(rateLimit, { max: 100, timeWindow: "1 minute" });
   app.register(caching, { expiresIn: 60 * 1000 });
@@ -359,23 +360,27 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
       fileSize: 10 * 1024 * 1024, // 10 MiB limit
     },
   });
+  app.log.info("[APP_SETUP] Core plugins registered");
 
   // --- Register Application-Specific Plugins ---
+  app.log.info("[APP_SETUP] Registering application-specific plugins...");
   app.register(geminiPlugin, { ...opts.geminiOptions, mockServices: opts.mockServices });
   app.register(supabaseAuthPlugin, { ...opts.supabaseOptions, mockServices: opts.mockServices });
   app.register(cacheService);
   app.register(posthogPlugin);
+  app.log.info("[APP_SETUP] Application-specific plugins registered");
 
   // --- Register Swagger (conditionally) ---
   if (!isProduction) {
     app.register(fastifySwagger, swaggerOptions);
     app.register(fastifySwaggerUi, swaggerUiOptions);
-    app.log.info(`Swagger docs available at /docs`);
+    app.log.info("[APP_SETUP] Swagger docs available at /docs");
   } else {
-    app.log.info("Swagger docs disabled in production environment.");
+    app.log.info("[APP_SETUP] Swagger docs disabled in production environment");
   }
 
   // --- Register Routes Explicitly ---
+  app.log.info("[APP_SETUP] Registering routes...");
   app.register(statusRoutes, { prefix: "/status" });
 
   // --- Register New Module Routes ---
@@ -384,7 +389,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
     indexPattern: /\.routes\.ts$/, // Only load files ending with .routes.ts
     options: { prefix: "/api" }, // Options passed to each loaded plugin
   });
-  app.log.info("Explicitly registered all application routes.");
+  app.log.info("[APP_SETUP] All application routes registered");
 
   return app;
 }

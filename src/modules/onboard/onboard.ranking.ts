@@ -33,7 +33,7 @@ export async function _handleOnboardingRanking(
         .in("exercise_id", [data.selected_exercise_id as string]);
       if (userExerciseRanks.error) throw userExerciseRanks.error;
 
-      const rankingService = new RankingService();
+      const rankingService = new RankingService(fastify);
       const calculationInput = persistedSessionSets.map((s) => ({
         exercise_id: s.exercise_id || s.custom_exercise_id!,
         reps: s.actual_reps || 0,
@@ -61,22 +61,23 @@ export async function _handleOnboardingRanking(
         "onboard"
       );
 
-      fastify.log.info(
+      fastify.log.debug(
         { userId, payload: results.rankUpdatePayload },
-        `[ONBOARD_RANKING] Rank update payload calculated.`
+        `[ONBOARD_RANKING] Rank update payload calculated`
       );
       if (Object.keys(results.rankUpdatePayload).length > 0) {
         await _saveRankingResults(fastify, results.rankUpdatePayload);
       } else {
-        fastify.log.warn({ userId }, `[ONBOARD_RANKING] No rank updates to save; payload is empty.`);
+        fastify.log.warn({ userId }, `[ONBOARD_RANKING] No rank updates to save; payload is empty`);
       }
 
-      fastify.log.info(
-        { userId, rankUpData: results.rankUpData },
-        `Onboarding rank calculation completed for user ${userId}`
-      );
+      fastify.log.info({ userId }, `[ONBOARD_RANKING] Onboarding rank calculation completed`);
+      fastify.log.debug({ userId, rankUpData: results.rankUpData }, `[ONBOARD_RANKING] Rank up data`);
     } catch (rankingError: any) {
-      fastify.log.error({ error: rankingError, userId }, "Error during onboarding ranking calculation.");
+      fastify.log.error(
+        { error: rankingError, userId },
+        "[ONBOARD_RANKING] Error during onboarding ranking calculation"
+      );
     }
   } else {
     fastify.log.warn(
@@ -88,7 +89,7 @@ export async function _handleOnboardingRanking(
         hasReps: data.rank_exercise_reps !== undefined,
         hasWeight: data.rank_exercise_weight_kg !== undefined,
       },
-      "Skipping onboarding ranking calculation due to missing data."
+      "[ONBOARD_RANKING] Skipping onboarding ranking calculation due to missing data"
     );
   }
 }

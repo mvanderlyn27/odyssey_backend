@@ -330,6 +330,6 @@ export const rerollUsername = async (
     throw new Error(`Failed to reroll username: ${updateProfileError.message}`);
   }
 
-  fastify.log.info(`Username rerolled for user ${userId} to ${username}`);
+  fastify.log.info({ userId, newUsername: username }, `[ONBOARD_HELPERS] Username rerolled`);
   return { username, displayName };
 };

@@ -1,3 +1,4 @@
+import { FastifyInstance } from "fastify";
 import { Database, Tables, Enums } from "../../types/database";
 import { findRankAndInterRank, calculateRankPoints, calculate_1RM, calculate_SWR } from "./ranking.helpers";
 import {
@@ -20,7 +21,11 @@ export type RankCalculationInput = {
 };
 
 export class RankingService {
-  constructor() {}
+  private log: FastifyInstance["log"];
+
+  constructor(fastify: FastifyInstance) {
+    this.log = fastify.log;
+  }
 
   public async updateUserRanks(
     userId: string,
@@ -44,6 +49,8 @@ export class RankingService {
       return { rankUpData: {}, rankUpdatePayload: {} };
     }
 
+    this.log.info({ userId, source }, "[RankingService] Starting updateUserRanks");
+
     const { affectedExerciseIds, affectedMuscleIds, affectedMuscleGroupIds } = this._getAffectedEntities(
       calculationInput,
       mcw,
@@ -64,61 +71,95 @@ export class RankingService {
 
     // Calculate new scores based on the workout session input
     const exerciseScores = this._calculateExerciseScores(calculationInput, exercises, userGender, userBodyweight);
-    const muscleScores = this._calculateMuscleScores(exerciseScores, mcw, allMuscles);
+    this.log.info(
+      { exerciseScores: Object.fromEntries(exerciseScores) },
+      "[RankingService] Newly calculated exercise scores"
+    );
+
+    const allExerciseScores = new Map<string, number>();
+    for (const rank of existingUserExerciseRanks) {
+      allExerciseScores.set(rank.exercise_id, rank.permanent_score ?? 0);
+    }
+    for (const [exerciseId, score] of exerciseScores.entries()) {
+      allExerciseScores.set(exerciseId, score);
+    }
+
+    const muscleScores = this._calculateMuscleScores(allExerciseScores, mcw, allMuscles);
     const muscleGroupScores = this._calculateMuscleGroupScores(muscleScores, allMuscles, allMuscleGroups);
     const overallScore = this._calculateOverallScore(muscleGroupScores, allMuscleGroups);
+
+    this.log.debug(
+      {
+        userId,
+        affectedExerciseIds: Array.from(affectedExerciseIds),
+        affectedMuscleIds: Array.from(affectedMuscleIds),
+        affectedMuscleGroupIds: Array.from(affectedMuscleGroupIds),
+      },
+      "[RankingService] Affected entities"
+    );
+
+    this.log.debug(
+      { userId, exerciseScores, muscleScores, muscleGroupScores, overallScore },
+      "[RankingService] Calculated scores"
+    );
 
     const rankUpData: RankUpData = {
       muscleGroupRankChanges: [],
       muscleRankChanges: [],
       exerciseRankChanges: [],
+      unchangedMuscleGroupRanks: [],
+      unchangedMuscleRanks: [],
+      unchangedExerciseRanks: [],
       leaderboardScoresRestored,
     };
     const rankUpdatePayload: RankUpdatePayload = {
+      userRank: undefined,
       muscleGroupRanks: [],
       muscleRanks: [],
       exerciseRanks: [],
     };
 
     // --- Process User Rank ---
-    const finalOverallScore =
-      overallScore > (initialUserRank?.permanent_score ?? 0) ? overallScore : initialUserRank?.permanent_score ?? 0;
-    const newUserInterRank = findRankAndInterRank(finalOverallScore, allInterRanks);
+    if (overallScore > (initialUserRank?.leaderboard_score ?? 0)) {
+      const newPermanentScore = Math.max(overallScore, initialUserRank?.permanent_score ?? 0);
+      const newUserInterRank = findRankAndInterRank(newPermanentScore, allInterRanks);
+      const newLeaderboardInterRank = findRankAndInterRank(overallScore, allInterRanks);
 
-    if (newUserInterRank) {
-      const hasChanged =
-        !initialUserRank ||
-        initialUserRank.permanent_score !== finalOverallScore ||
-        initialUserRank.permanent_inter_rank_id !== newUserInterRank.id;
+      if (newUserInterRank && newLeaderboardInterRank) {
+        const hasChanged =
+          !initialUserRank ||
+          initialUserRank.permanent_score !== newPermanentScore ||
+          initialUserRank.permanent_inter_rank_id !== newUserInterRank.id;
 
-      if (hasChanged) {
-        rankUpData.userRankChange = {
+        if (hasChanged) {
+          rankUpData.userRankChange = {
+            user_id: userId,
+            old_permanent_rank_id: initialUserRank?.permanent_rank_id ?? null,
+            new_permanent_rank_id: newUserInterRank.rank_id,
+            old_permanent_inter_rank_id: initialUserRank?.permanent_inter_rank_id ?? null,
+            new_permanent_inter_rank_id: newUserInterRank.id,
+            old_leaderboard_rank_id: initialUserRank?.leaderboard_rank_id ?? null,
+            new_leaderboard_rank_id: newLeaderboardInterRank.rank_id,
+            old_leaderboard_inter_rank_id: initialUserRank?.leaderboard_inter_rank_id ?? null,
+            new_leaderboard_inter_rank_id: newLeaderboardInterRank.id,
+            old_permanent_score: initialUserRank?.permanent_score ?? 0,
+            new_permanent_score: newPermanentScore,
+            old_leaderboard_score: initialUserRank?.leaderboard_score ?? 0,
+            new_leaderboard_score: overallScore,
+          };
+        }
+        const userRankUpdate: UserRankUpdate = {
           user_id: userId,
-          old_permanent_rank_id: initialUserRank?.permanent_rank_id ?? null,
-          new_permanent_rank_id: newUserInterRank.rank_id,
-          old_permanent_inter_rank_id: initialUserRank?.permanent_inter_rank_id ?? null,
-          new_permanent_inter_rank_id: newUserInterRank.id,
-          old_leaderboard_rank_id: initialUserRank?.leaderboard_rank_id ?? null,
-          new_leaderboard_rank_id: newUserInterRank.rank_id,
-          old_leaderboard_inter_rank_id: initialUserRank?.leaderboard_inter_rank_id ?? null,
-          new_leaderboard_inter_rank_id: newUserInterRank.id,
-          old_permanent_score: initialUserRank?.permanent_score ?? 0,
-          new_permanent_score: finalOverallScore,
-          old_leaderboard_score: initialUserRank?.leaderboard_score ?? 0,
-          new_leaderboard_score: finalOverallScore,
+          permanent_rank_id: newUserInterRank.rank_id,
+          permanent_inter_rank_id: newUserInterRank.id,
+          permanent_score: newPermanentScore,
+          leaderboard_score: overallScore,
+          leaderboard_rank_id: newLeaderboardInterRank.rank_id,
+          leaderboard_inter_rank_id: newLeaderboardInterRank.id,
+          last_calculated_at: new Date().toISOString(),
         };
+        rankUpdatePayload.userRank = userRankUpdate;
       }
-      const userRankUpdate: UserRankUpdate = {
-        user_id: userId,
-        permanent_rank_id: newUserInterRank.rank_id,
-        permanent_inter_rank_id: newUserInterRank.id,
-        permanent_score: finalOverallScore,
-        leaderboard_score: finalOverallScore,
-        leaderboard_rank_id: newUserInterRank.rank_id,
-        leaderboard_inter_rank_id: newUserInterRank.id,
-        last_calculated_at: new Date().toISOString(),
-      };
-      rankUpdatePayload.userRank = userRankUpdate;
     }
 
     // --- Process Muscle Group Ranks ---
@@ -126,45 +167,60 @@ export class RankingService {
     for (const [muscleGroupId, newScore] of muscleGroupScores.entries()) {
       if (!affectedMuscleGroupIds.has(muscleGroupId)) continue;
       const initialRank = muscleGroupRanksMap.get(muscleGroupId);
-      const finalScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
-      const newInterRank = findRankAndInterRank(finalScore, allInterRanks);
 
-      if (newInterRank) {
-        if (isPremium || !initialRank || (initialRank.locked && !isPremium) || initialRank.locked === false) {
-          const hasChanged =
-            !initialRank ||
-            initialRank.permanent_score !== finalScore ||
-            initialRank.permanent_inter_rank_id !== newInterRank.id;
-          if (hasChanged) {
-            rankUpData.muscleGroupRankChanges?.push({
+      if (newScore > (initialRank?.leaderboard_score ?? 0)) {
+        const newPermanentScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
+        const newPermanentInterRank = findRankAndInterRank(newPermanentScore, allInterRanks);
+        const newLeaderboardInterRank = findRankAndInterRank(newScore, allInterRanks);
+
+        this.log.debug(
+          { userId, muscleGroupId, newScore, newPermanentScore },
+          "[RankingService] Processing muscle group"
+        );
+
+        if (newPermanentInterRank && newLeaderboardInterRank) {
+          if (isPremium || !initialRank || (initialRank.locked && !isPremium) || initialRank.locked === false) {
+            const hasChanged =
+              !initialRank ||
+              initialRank.permanent_score !== newPermanentScore ||
+              initialRank.permanent_inter_rank_id !== newPermanentInterRank.id;
+            if (hasChanged) {
+              rankUpData.muscleGroupRankChanges?.push({
+                muscle_group_id: muscleGroupId,
+                old_permanent_rank_id: initialRank?.permanent_rank_id ?? null,
+                new_permanent_rank_id: newPermanentInterRank.rank_id,
+                old_permanent_inter_rank_id: initialRank?.permanent_inter_rank_id ?? null,
+                new_permanent_inter_rank_id: newPermanentInterRank.id,
+                old_leaderboard_rank_id: initialRank?.leaderboard_rank_id ?? null,
+                new_leaderboard_rank_id: newLeaderboardInterRank.rank_id,
+                old_leaderboard_inter_rank_id: initialRank?.leaderboard_inter_rank_id ?? null,
+                new_leaderboard_inter_rank_id: newLeaderboardInterRank.id,
+                old_permanent_score: initialRank?.permanent_score ?? 0,
+                new_permanent_score: newPermanentScore,
+                old_leaderboard_score: initialRank?.leaderboard_score ?? 0,
+                new_leaderboard_score: newScore,
+              });
+            } else if (initialRank) {
+              rankUpData.unchangedMuscleGroupRanks?.push(initialRank);
+            }
+            rankUpdatePayload.muscleGroupRanks?.push({
+              user_id: userId,
               muscle_group_id: muscleGroupId,
-              old_permanent_rank_id: initialRank?.permanent_rank_id ?? null,
-              new_permanent_rank_id: newInterRank.rank_id,
-              old_permanent_inter_rank_id: initialRank?.permanent_inter_rank_id ?? null,
-              new_permanent_inter_rank_id: newInterRank.id,
-              old_leaderboard_rank_id: initialRank?.leaderboard_rank_id ?? null,
-              new_leaderboard_rank_id: newInterRank.rank_id,
-              old_leaderboard_inter_rank_id: initialRank?.leaderboard_inter_rank_id ?? null,
-              new_leaderboard_inter_rank_id: newInterRank.id,
-              old_permanent_score: initialRank?.permanent_score ?? 0,
-              new_permanent_score: finalScore,
-              old_leaderboard_score: initialRank?.leaderboard_score ?? 0,
-              new_leaderboard_score: finalScore,
+              permanent_rank_id: newPermanentInterRank.rank_id,
+              permanent_inter_rank_id: newPermanentInterRank.id,
+              permanent_score: newPermanentScore,
+              leaderboard_score: newScore,
+              leaderboard_rank_id: newLeaderboardInterRank.rank_id,
+              leaderboard_inter_rank_id: newLeaderboardInterRank.id,
+              locked: source === "workout" ? !isPremium : false,
+              last_calculated_at: new Date().toISOString(),
             });
+          } else if (initialRank) {
+            rankUpData.unchangedMuscleGroupRanks?.push(initialRank);
           }
-          rankUpdatePayload.muscleGroupRanks?.push({
-            user_id: userId,
-            muscle_group_id: muscleGroupId,
-            permanent_rank_id: newInterRank.rank_id,
-            permanent_inter_rank_id: newInterRank.id,
-            permanent_score: finalScore,
-            leaderboard_score: finalScore,
-            leaderboard_rank_id: newInterRank.rank_id,
-            leaderboard_inter_rank_id: newInterRank.id,
-            locked: source === "workout" ? !isPremium : false,
-            last_calculated_at: new Date().toISOString(),
-          });
         }
+      } else if (initialRank) {
+        rankUpData.unchangedMuscleGroupRanks?.push(initialRank);
       }
     }
 
@@ -173,45 +229,57 @@ export class RankingService {
     for (const [muscleId, newScore] of muscleScores.entries()) {
       if (!affectedMuscleIds.has(muscleId)) continue;
       const initialRank = muscleRanksMap.get(muscleId);
-      const finalScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
-      const newInterRank = findRankAndInterRank(finalScore, allInterRanks);
 
-      if (newInterRank) {
-        if (isPremium || !initialRank || (initialRank.locked && !isPremium) || initialRank.locked === false) {
-          const hasChanged =
-            !initialRank ||
-            initialRank.permanent_score !== finalScore ||
-            initialRank.permanent_inter_rank_id !== newInterRank.id;
-          if (hasChanged) {
-            rankUpData.muscleRankChanges?.push({
+      if (newScore > (initialRank?.leaderboard_score ?? 0)) {
+        const newPermanentScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
+        const newPermanentInterRank = findRankAndInterRank(newPermanentScore, allInterRanks);
+        const newLeaderboardInterRank = findRankAndInterRank(newScore, allInterRanks);
+
+        this.log.debug({ userId, muscleId, newScore, newPermanentScore }, "[RankingService] Processing muscle");
+
+        if (newPermanentInterRank && newLeaderboardInterRank) {
+          if (isPremium || !initialRank || (initialRank.locked && !isPremium) || initialRank.locked === false) {
+            const hasChanged =
+              !initialRank ||
+              initialRank.permanent_score !== newPermanentScore ||
+              initialRank.permanent_inter_rank_id !== newPermanentInterRank.id;
+            if (hasChanged) {
+              rankUpData.muscleRankChanges?.push({
+                muscle_id: muscleId,
+                old_permanent_rank_id: initialRank?.permanent_rank_id ?? null,
+                new_permanent_rank_id: newPermanentInterRank.rank_id,
+                old_permanent_inter_rank_id: initialRank?.permanent_inter_rank_id ?? null,
+                new_permanent_inter_rank_id: newPermanentInterRank.id,
+                old_leaderboard_rank_id: initialRank?.leaderboard_rank_id ?? null,
+                new_leaderboard_rank_id: newLeaderboardInterRank.rank_id,
+                old_leaderboard_inter_rank_id: initialRank?.leaderboard_inter_rank_id ?? null,
+                new_leaderboard_inter_rank_id: newLeaderboardInterRank.id,
+                old_permanent_score: initialRank?.permanent_score ?? 0,
+                new_permanent_score: newPermanentScore,
+                old_leaderboard_score: initialRank?.leaderboard_score ?? 0,
+                new_leaderboard_score: newScore,
+              });
+            } else if (initialRank) {
+              rankUpData.unchangedMuscleRanks?.push(initialRank);
+            }
+            rankUpdatePayload.muscleRanks?.push({
+              user_id: userId,
               muscle_id: muscleId,
-              old_permanent_rank_id: initialRank?.permanent_rank_id ?? null,
-              new_permanent_rank_id: newInterRank.rank_id,
-              old_permanent_inter_rank_id: initialRank?.permanent_inter_rank_id ?? null,
-              new_permanent_inter_rank_id: newInterRank.id,
-              old_leaderboard_rank_id: initialRank?.leaderboard_rank_id ?? null,
-              new_leaderboard_rank_id: newInterRank.rank_id,
-              old_leaderboard_inter_rank_id: initialRank?.leaderboard_inter_rank_id ?? null,
-              new_leaderboard_inter_rank_id: newInterRank.id,
-              old_permanent_score: initialRank?.permanent_score ?? 0,
-              new_permanent_score: finalScore,
-              old_leaderboard_score: initialRank?.leaderboard_score ?? 0,
-              new_leaderboard_score: finalScore,
+              permanent_rank_id: newPermanentInterRank.rank_id,
+              permanent_inter_rank_id: newPermanentInterRank.id,
+              permanent_score: newPermanentScore,
+              leaderboard_score: newScore,
+              leaderboard_rank_id: newLeaderboardInterRank.rank_id,
+              leaderboard_inter_rank_id: newLeaderboardInterRank.id,
+              locked: source === "workout" ? !isPremium : false,
+              last_calculated_at: new Date().toISOString(),
             });
+          } else if (initialRank) {
+            rankUpData.unchangedMuscleRanks?.push(initialRank);
           }
-          rankUpdatePayload.muscleRanks?.push({
-            user_id: userId,
-            muscle_id: muscleId,
-            permanent_rank_id: newInterRank.rank_id,
-            permanent_inter_rank_id: newInterRank.id,
-            permanent_score: finalScore,
-            leaderboard_score: finalScore,
-            leaderboard_rank_id: newInterRank.rank_id,
-            leaderboard_inter_rank_id: newInterRank.id,
-            locked: source === "workout" ? !isPremium : false,
-            last_calculated_at: new Date().toISOString(),
-          });
         }
+      } else if (initialRank) {
+        rankUpData.unchangedMuscleRanks?.push(initialRank);
       }
     }
 
@@ -219,37 +287,53 @@ export class RankingService {
     const exerciseRanksMap = new Map(existingUserExerciseRanks.map((r) => [r.exercise_id, r]));
     const calculationInputMap = new Map(calculationInput.map((input) => [input.exercise_id, input]));
 
+    // Populate unchanged ranks for exercises that were not part of this calculation
+    for (const rank of existingUserExerciseRanks) {
+      if (!affectedExerciseIds.has(rank.exercise_id)) {
+        rankUpData.unchangedExerciseRanks?.push(rank);
+      }
+    }
+
     for (const [exerciseId, newScore] of exerciseScores.entries()) {
-      if (!affectedExerciseIds.has(exerciseId)) continue;
-
       const initialRank = exerciseRanksMap.get(exerciseId);
-      const finalScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
-      const newInterRank = findRankAndInterRank(finalScore, allInterRanks);
+      const newPermanentScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
+      const newPermanentInterRank = findRankAndInterRank(newPermanentScore, allInterRanks);
+      const newLeaderboardInterRank = findRankAndInterRank(newScore, allInterRanks);
 
-      if (newInterRank) {
-        const hasChanged =
-          !initialRank ||
-          initialRank.permanent_score !== finalScore ||
-          initialRank.permanent_inter_rank_id !== newInterRank.id;
+      this.log.debug({ userId, exerciseId, newScore, newPermanentScore }, "[RankingService] Processing exercise");
 
-        if (hasChanged) {
-          rankUpData.exerciseRankChanges?.push({
-            exercise_id: exerciseId,
-            old_permanent_rank_id: initialRank?.permanent_rank_id ?? null,
-            new_permanent_rank_id: newInterRank.rank_id,
-            old_permanent_inter_rank_id: initialRank?.permanent_inter_rank_id ?? null,
-            new_permanent_inter_rank_id: newInterRank.id,
-            old_leaderboard_rank_id: initialRank?.leaderboard_rank_id ?? null,
-            new_leaderboard_rank_id: newInterRank.rank_id,
-            old_leaderboard_inter_rank_id: initialRank?.leaderboard_inter_rank_id ?? null,
-            new_leaderboard_inter_rank_id: newInterRank.id,
-            old_permanent_score: initialRank?.permanent_score ?? 0,
-            new_permanent_score: finalScore,
-            old_leaderboard_score: initialRank?.leaderboard_score ?? 0,
-            new_leaderboard_score: finalScore,
-          });
-        }
+      if (!newPermanentInterRank || !newLeaderboardInterRank) {
+        if (initialRank) rankUpData.unchangedExerciseRanks?.push(initialRank);
+        continue;
+      }
 
+      // For the calculator, we always want to show a "change" to the user.
+      // For other sources, it's only a change if the permanent score is higher.
+      const hasChanged =
+        source === "calculator" || !initialRank || newPermanentScore > (initialRank?.permanent_score ?? 0);
+
+      if (hasChanged) {
+        rankUpData.exerciseRankChanges?.push({
+          exercise_id: exerciseId,
+          old_permanent_rank_id: initialRank?.permanent_rank_id ?? null,
+          new_permanent_rank_id: newPermanentInterRank.rank_id,
+          old_permanent_inter_rank_id: initialRank?.permanent_inter_rank_id ?? null,
+          new_permanent_inter_rank_id: newPermanentInterRank.id,
+          old_leaderboard_rank_id: initialRank?.leaderboard_rank_id ?? null,
+          new_leaderboard_rank_id: newLeaderboardInterRank.rank_id,
+          old_leaderboard_inter_rank_id: initialRank?.leaderboard_inter_rank_id ?? null,
+          new_leaderboard_inter_rank_id: newLeaderboardInterRank.id,
+          old_permanent_score: initialRank?.permanent_score ?? 0,
+          new_permanent_score: newPermanentScore,
+          old_leaderboard_score: initialRank?.leaderboard_score ?? 0,
+          new_leaderboard_score: newScore,
+        });
+      } else if (initialRank) {
+        rankUpData.unchangedExerciseRanks?.push(initialRank);
+      }
+
+      // We only want to save the rank to the DB if it's a real improvement.
+      if (newScore > (initialRank?.leaderboard_score ?? 0)) {
         const input = calculationInputMap.get(exerciseId);
         if (input) {
           const estimated_1rm = calculate_1RM(input.weight_kg, input.reps);
@@ -258,12 +342,12 @@ export class RankingService {
           rankUpdatePayload.exerciseRanks?.push({
             user_id: userId,
             exercise_id: exerciseId,
-            permanent_rank_id: newInterRank.rank_id,
-            permanent_inter_rank_id: newInterRank.id,
-            permanent_score: finalScore,
-            leaderboard_score: finalScore,
-            leaderboard_rank_id: newInterRank.rank_id,
-            leaderboard_inter_rank_id: newInterRank.id,
+            permanent_rank_id: newPermanentInterRank.rank_id,
+            permanent_inter_rank_id: newPermanentInterRank.id,
+            permanent_score: newPermanentScore,
+            leaderboard_score: newScore,
+            leaderboard_rank_id: newLeaderboardInterRank.rank_id,
+            leaderboard_inter_rank_id: newLeaderboardInterRank.id,
             weight_kg: input.weight_kg,
             reps: input.reps,
             bodyweight_kg: userBodyweight,
@@ -276,6 +360,8 @@ export class RankingService {
       }
     }
 
+    this.log.info({ userId, source }, "[RankingService] Finished updateUserRanks");
+    this.log.debug({ userId, rankUpData, rankUpdatePayload }, "[RankingService] Final ranking results");
     return { rankUpData, rankUpdatePayload };
   }
 
@@ -416,7 +502,7 @@ export class RankingService {
           break;
       }
 
-      const score = calculateRankPoints(exercise.alpha_value ?? 0.1, eliteRatio, userRatio);
+      const score = calculateRankPoints(exercise.alpha_value ?? 0.1, eliteRatio, userRatio, 5000, this.log);
       exerciseScores.set(input.exercise_id, score);
     }
     return exerciseScores;

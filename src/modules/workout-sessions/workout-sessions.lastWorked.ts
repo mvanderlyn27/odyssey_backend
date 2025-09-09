@@ -17,12 +17,15 @@ export async function _updateUserMuscleLastWorked(
   sessionEndedAt: string,
   exerciseMuscleMappings: ExerciseMuscleMapping[]
 ): Promise<void> {
-  fastify.log.info(`[MUSCLE_LAST_WORKED] Starting update for user: ${userId}, session: ${currentSessionId}`);
+  fastify.log.info({ userId, sessionId: currentSessionId }, `[MUSCLE_LAST_WORKED] Starting update`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   const workedSets = persistedSessionSets.filter((s) => s.actual_reps && s.actual_reps > 0);
   if (workedSets.length === 0) {
-    fastify.log.info("[MUSCLE_LAST_WORKED] No sets with actual reps. Skipping.");
+    fastify.log.debug(
+      { userId, sessionId: currentSessionId },
+      "[MUSCLE_LAST_WORKED] No sets with actual reps. Skipping."
+    );
     return;
   }
 
@@ -30,7 +33,10 @@ export async function _updateUserMuscleLastWorked(
     new Set(workedSets.map((s) => s.exercise_id || s.custom_exercise_id).filter(Boolean))
   ) as string[];
   if (workedExerciseIds.length === 0) {
-    fastify.log.info("[MUSCLE_LAST_WORKED] No valid exercise IDs from worked sets. Skipping.");
+    fastify.log.debug(
+      { userId, sessionId: currentSessionId },
+      "[MUSCLE_LAST_WORKED] No valid exercise IDs from worked sets. Skipping."
+    );
     return;
   }
 
@@ -40,7 +46,10 @@ export async function _updateUserMuscleLastWorked(
     );
 
     if (!allMuscleMappings || allMuscleMappings.length === 0) {
-      fastify.log.info("[MUSCLE_LAST_WORKED] No muscle mappings found for worked exercises. Skipping.");
+      fastify.log.debug(
+        { userId, sessionId: currentSessionId },
+        "[MUSCLE_LAST_WORKED] No muscle mappings found for worked exercises. Skipping."
+      );
       return;
     }
 
@@ -64,7 +73,10 @@ export async function _updateUserMuscleLastWorked(
     const muscleIdsToUpdate = Array.from(new Set([...primaryMuscleIds, ...secondaryMuscleIdsToUpdate]));
 
     if (muscleIdsToUpdate.length === 0) {
-      fastify.log.info("[MUSCLE_LAST_WORKED] No unique muscle IDs to update. Skipping.");
+      fastify.log.debug(
+        { userId, sessionId: currentSessionId },
+        "[MUSCLE_LAST_WORKED] No unique muscle IDs to update. Skipping."
+      );
       return;
     }
 
@@ -83,7 +95,10 @@ export async function _updateUserMuscleLastWorked(
       if (upsertError) {
         fastify.log.error({ error: upsertError, userId }, "[MUSCLE_LAST_WORKED] Failed to upsert records.");
       } else {
-        fastify.log.info(`[MUSCLE_LAST_WORKED] Upserted ${upsertPayloads.length} records for user ${userId}.`);
+        fastify.log.info(
+          { userId, sessionId: currentSessionId, count: upsertPayloads.length },
+          `[MUSCLE_LAST_WORKED] Upserted records`
+        );
       }
     }
   } catch (err: any) {

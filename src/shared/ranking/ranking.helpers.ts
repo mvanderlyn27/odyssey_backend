@@ -45,18 +45,26 @@ export function findRankAndInterRank(score: number, interRanks: Tables<"inter_ra
   return null;
 }
 
+import { FastifyBaseLogger } from "fastify";
+
 export function calculateRankPoints(
   alpha: number,
   eliteRatio: number,
   userRatio: number,
-  maxScore: number = 5000
+  maxScore: number = 5000,
+  log?: FastifyBaseLogger
 ): number {
   if (userRatio <= 0) return 0;
-
+  if (eliteRatio <= 0) {
+    log?.error({ alpha, eliteRatio, userRatio }, "[calculateRankPoints] Missing Elite Ratio (elitRatio <= 0)");
+    return 0; // Prevent division by zero
+  }
   const numerator = Math.log(1 + alpha * (userRatio / eliteRatio));
   const denominator = Math.log(1 + alpha);
+  const score = Math.round(maxScore * (numerator / denominator));
+  log?.debug({ alpha, eliteRatio, userRatio, score }, "[calculateRankPoints] Calculation");
 
-  return Math.round(maxScore * (numerator / denominator));
+  return score;
 }
 
 export function buildRankProgression(
@@ -157,7 +165,11 @@ export async function _saveRankingResults(fastify: FastifyInstance, rankUpdatePa
     last_calculated_at: rank.last_calculated_at ?? null,
   }));
 
-  fastify.log.info({ payload: rankUpdatePayload }, "[SAVE_RANKING] Attempting to save ranking results.");
+  fastify.log.info(
+    { recordTypes: Object.keys(rankUpdatePayload) },
+    "[SAVE_RANKING] Attempting to save ranking results"
+  );
+  fastify.log.debug({ payload: rankUpdatePayload }, "[SAVE_RANKING] Full ranking payload");
 
   const { error } = await supabase.rpc("bulk_update_ranks", {
     p_user_rank_update,
@@ -170,6 +182,6 @@ export async function _saveRankingResults(fastify: FastifyInstance, rankUpdatePa
     fastify.log.error({ error }, "[SAVE_RANKING] Error saving ranking results");
     throw new Error("Error saving ranking results");
   } else {
-    fastify.log.info("[SAVE_RANKING] Successfully saved ranking results.");
+    fastify.log.info("[SAVE_RANKING] Successfully saved ranking results");
   }
 }

@@ -1,4 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { FastifyInstance } from "fastify";
 import { Database, Enums, Tables, TablesInsert } from "../../types/database";
 import { UserPRExerciseMap } from "../../modules/workout-sessions/workout-sessions.data";
 
@@ -9,9 +10,11 @@ export type NewPr = TablesInsert<"user_exercise_prs"> & {
 
 export class PrService {
   private supabase: SupabaseClient<Database>;
+  private log: FastifyInstance["log"];
 
-  constructor(supabase: SupabaseClient<Database>) {
-    this.supabase = supabase;
+  constructor(fastify: FastifyInstance) {
+    this.supabase = fastify.supabase as SupabaseClient<Database>;
+    this.log = fastify.log;
   }
 
   async calculateUserExercisePRs(
@@ -33,6 +36,8 @@ export class PrService {
       return [];
     }
 
+    this.log.info({ userId: user.id, setsCount: persistedSessionSets.length }, "[PrService] Starting PR calculation");
+
     // Group sets by exercise
     const setsByExercise = new Map<string, Tables<"workout_session_sets">[]>();
     for (const set of persistedSessionSets) {
@@ -46,13 +51,18 @@ export class PrService {
       setsByExercise.get(exerciseId)!.push(set);
     }
 
-    const newPrsToInsert: TablesInsert<"user_exercise_prs">[] = [];
+    const newPrsToUpsert: TablesInsert<"user_exercise_prs">[] = [];
     const newPrsForFeed: NewPr[] = [];
 
     for (const [exerciseId, sets] of setsByExercise.entries()) {
       const existingPRs = existingUserExercisePRs.get(exerciseId);
       const exerciseInfo = exerciseDetailsMap.get(exerciseId);
       if (!exerciseInfo) continue;
+
+      this.log.debug(
+        { userId: user.id, exerciseId, setCount: sets.length, existingPRs },
+        "[PrService] Processing exercise"
+      );
 
       // Find best performance in session for each PR type
       let sessionBest1RMSet: Tables<"workout_session_sets"> | null = null;
@@ -92,6 +102,17 @@ export class PrService {
         };
       };
 
+      this.log.debug(
+        {
+          userId: user.id,
+          exerciseId,
+          sessionBest1RMSet: sessionBest1RMSet?.id,
+          sessionBestRepsSet: sessionBestRepsSet?.id,
+          sessionBestSWRSet: sessionBestSWRSet?.id,
+        },
+        "[PrService] Found session bests"
+      );
+
       // Compare session bests to existing PRs
       const isBodyweightExercise =
         exerciseInfo.exercise_type === "calisthenics" || exerciseInfo.exercise_type === "body_weight";
@@ -101,11 +122,15 @@ export class PrService {
         const existing1RM = existingPRs?.one_rep_max;
         if (!existing1RM) {
           const payload = createPrPayload(sessionBest1RMSet, "one_rep_max");
-          newPrsToInsert.push(payload);
+          this.log.info({ userId: user.id, exerciseId }, "[PrService] New 1RM PR (no existing)");
+          this.log.debug({ userId: user.id, payload }, "[PrService] New 1RM PR payload");
+          newPrsToUpsert.push(payload);
           newPrsForFeed.push({ ...payload, exercise_name: exerciseInfo.name });
         } else if ((sessionBest1RMSet.calculated_1rm ?? -1) > (existing1RM.estimated_1rm ?? -1)) {
           const payload = createPrPayload(sessionBest1RMSet, "one_rep_max");
-          newPrsToInsert.push(payload);
+          this.log.info({ userId: user.id, exerciseId }, "[PrService] New 1RM PR (beat existing)");
+          this.log.debug({ userId: user.id, payload, existing: existing1RM }, "[PrService] New 1RM PR payload");
+          newPrsToUpsert.push(payload);
           newPrsForFeed.push({ ...payload, exercise_name: exerciseInfo.name });
         }
       }
@@ -115,11 +140,18 @@ export class PrService {
         const existingMaxReps = existingPRs?.max_reps;
         if (!existingMaxReps) {
           const payload = createPrPayload(sessionBestRepsSet, "max_reps");
-          newPrsToInsert.push(payload);
+          this.log.info({ userId: user.id, exerciseId }, "[PrService] New Max Reps PR (no existing)");
+          this.log.debug({ userId: user.id, payload }, "[PrService] New Max Reps PR payload");
+          newPrsToUpsert.push(payload);
           newPrsForFeed.push({ ...payload, exercise_name: exerciseInfo.name });
         } else if ((sessionBestRepsSet.actual_reps ?? -1) > (existingMaxReps.reps ?? -1)) {
           const payload = createPrPayload(sessionBestRepsSet, "max_reps");
-          newPrsToInsert.push(payload);
+          this.log.info({ userId: user.id, exerciseId }, "[PrService] New Max Reps PR (beat existing)");
+          this.log.debug(
+            { userId: user.id, payload, existing: existingMaxReps },
+            "[PrService] New Max Reps PR payload"
+          );
+          newPrsToUpsert.push(payload);
           newPrsForFeed.push({ ...payload, exercise_name: exerciseInfo.name });
         }
       }
@@ -129,20 +161,25 @@ export class PrService {
         const existingMaxSWR = existingPRs?.max_swr;
         if (!existingMaxSWR) {
           const payload = createPrPayload(sessionBestSWRSet, "max_swr");
-          newPrsToInsert.push(payload);
+          this.log.info({ userId: user.id, exerciseId }, "[PrService] New Max SWR PR (no existing)");
+          this.log.debug({ userId: user.id, payload }, "[PrService] New Max SWR PR payload");
+          newPrsToUpsert.push(payload);
           newPrsForFeed.push({ ...payload, exercise_name: exerciseInfo.name });
         } else if ((sessionBestSWRSet.calculated_swr ?? -1) > (existingMaxSWR.swr ?? -1)) {
           const payload = createPrPayload(sessionBestSWRSet, "max_swr");
-          newPrsToInsert.push(payload);
+          this.log.info({ userId: user.id, exerciseId }, "[PrService] New Max SWR PR (beat existing)");
+          this.log.debug({ userId: user.id, payload, existing: existingMaxSWR }, "[PrService] New Max SWR PR payload");
+          newPrsToUpsert.push(payload);
           newPrsForFeed.push({ ...payload, exercise_name: exerciseInfo.name });
         }
       }
     }
 
-    if (newPrsToInsert.length > 0) {
-      const { error } = await this.supabase.from("user_exercise_prs").insert(newPrsToInsert);
+    if (newPrsToUpsert.length > 0) {
+      this.log.info({ userId: user.id, count: newPrsToUpsert.length }, "[PrService] Upserting new PRs");
+      const { error } = await this.supabase.from("user_exercise_prs").upsert(newPrsToUpsert);
       if (error) {
-        // TODO: Add logging
+        this.log.error({ error }, "[PrService] Error upserting new PRs");
         return []; // Return empty on failure
       }
     }

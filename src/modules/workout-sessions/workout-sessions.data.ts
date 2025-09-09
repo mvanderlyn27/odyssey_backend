@@ -93,7 +93,8 @@ export async function _gatherAndPrepareWorkoutData(
   userId: string,
   finishData: NewFinishSessionBody
 ): Promise<PreparedWorkoutData> {
-  fastify.log.info(`[PREPARE_WORKOUT_DATA] Starting for user: ${userId}`, { finishData });
+  fastify.log.info({ userId }, `[PREPARE_WORKOUT_DATA] Starting data preparation`);
+  fastify.log.debug({ userId, finishData }, `[PREPARE_WORKOUT_DATA] Full workout data`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   const sessionExerciseIds =

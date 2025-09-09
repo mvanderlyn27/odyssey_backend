@@ -54,10 +54,11 @@ export const finishWorkoutSession = async (
   userId: string,
   finishData: NewFinishSessionBody
 ): Promise<DetailedFinishSessionResponse> => {
-  fastify.log.info(`[FINISH_SESSION_START] Processing finishWorkoutSession for user: ${userId}`);
+  fastify.log.info({ userId }, `[FINISH_SESSION] Starting`);
+  fastify.log.debug({ userId, finishData }, `[FINISH_SESSION] Full finish session data`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
   if (!supabase) {
-    fastify.log.error("[FINISH_SESSION_ERROR] Supabase client not available.");
+    fastify.log.error("[FINISH_SESSION] Supabase client not available.");
     throw new Error("Supabase client not available");
   }
 
@@ -110,7 +111,7 @@ export const finishWorkoutSession = async (
       if (updateError || !updatedSession) {
         fastify.log.error(
           { error: updateError, sessionId: finishData.existing_session_id },
-          "Error updating existing session."
+          "[FINISH_SESSION] Error updating existing session"
         );
         throw new Error(`Error updating existing session: ${updateError?.message || "No data returned"}`);
       }
@@ -122,7 +123,7 @@ export const finishWorkoutSession = async (
         .select()
         .single();
       if (insertError || !newSession) {
-        fastify.log.error({ error: insertError }, "Error inserting new session.");
+        fastify.log.error({ error: insertError, userId }, "[FINISH_SESSION] Error inserting new session");
         throw new Error(`Error inserting new session: ${insertError?.message || "No data returned"}`);
       }
       newlyCreatedOrFetchedSession = newSession;
@@ -263,6 +264,11 @@ export const finishWorkoutSession = async (
       });
     }
 
+    fastify.log.info(
+      { userId, sessionId: newlyCreatedOrFetchedSession.id },
+      "[FINISH_SESSION] Spawning post-workout operations (feed, notifications, etc.)"
+    );
+
     _handleWorkoutCompletionNotifications(
       fastify,
       userId,
@@ -362,9 +368,10 @@ export const finishWorkoutSession = async (
       );
     });
 
-    fastify.log.info("[FINISH_SESSION_SUCCESS] Successfully processed finishWorkoutSession.", {
-      sessionId: responsePayload.sessionId,
-    });
+    fastify.log.info(
+      { userId, sessionId: responsePayload.sessionId },
+      "[FINISH_SESSION] Successfully processed finishWorkoutSession."
+    );
     return responsePayload;
   } catch (error: any) {
     fastify.log.error(

@@ -18,6 +18,7 @@ export async function _createInitialProfile(
   data: OnboardingData,
   preparedData: PreparedOnboardingData
 ): Promise<Tables<"users">> {
+  fastify.log.info({ userId }, "[ONBOARD_PROFILE] Creating initial profile");
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
@@ -57,5 +58,22 @@ export async function _createInitialProfile(
     fastify.log.error({ error: userError, userId }, "Error updating user data");
     throw new Error("Failed to update user data");
   }
+
+  if (data.weight) {
+    const { error: bodyMeasurementError } = await fastify.supabase.from("body_measurements").insert({
+      user_id: userId,
+      measurement_type: "body_weight",
+      value: data.weight,
+    });
+
+    if (bodyMeasurementError) {
+      fastify.log.warn(
+        { error: bodyMeasurementError, userId },
+        "[ONBOARD_PROFILE] Failed to insert initial body weight measurement. This is a non-critical error."
+      );
+      // This is a non-critical error, so we just log a warning and continue.
+    }
+  }
+
   return userData;
 }

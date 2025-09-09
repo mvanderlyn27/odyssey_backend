@@ -32,9 +32,8 @@ export async function _updateUserExercisePRs(
     }
   >
 ): Promise<NewPr[]> {
-  const supabase = fastify.supabase as SupabaseClient<Database>;
-  const prService = new PrService(supabase);
-  fastify.log.info(`[USER_EXERCISE_PRS] Starting PR update process for user: ${user.id}`);
+  const prService = new PrService(fastify);
+  fastify.log.info({ userId: user.id }, `[USER_EXERCISE_PRS] Starting PR update process`);
 
   const newPrs = await prService.calculateUserExercisePRs(
     user,
@@ -45,9 +44,10 @@ export async function _updateUserExercisePRs(
   );
 
   if (newPrs.length > 0) {
-    fastify.log.info(`[USER_EXERCISE_PRS] Found ${newPrs.length} new PR(s).`);
+    fastify.log.info({ userId: user.id, count: newPrs.length }, `[USER_EXERCISE_PRS] Found new PR(s)`);
+    fastify.log.debug({ userId: user.id, newPrs }, `[USER_EXERCISE_PRS] Full new PRs data`);
   } else {
-    fastify.log.info("[USER_EXERCISE_PRS] No new PRs to update.");
+    fastify.log.info({ userId: user.id }, "[USER_EXERCISE_PRS] No new PRs to update.");
   }
 
   return newPrs;

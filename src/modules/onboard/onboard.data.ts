@@ -36,7 +36,8 @@ export async function _gatherAndPrepareOnboardingData(
   userId: string,
   data: OnboardBody
 ): Promise<PreparedOnboardingData> {
-  fastify.log.info(`[PREPARE_ONBOARDING_DATA] Starting for user: ${userId}`, { data });
+  fastify.log.info({ userId }, `[PREPARE_ONBOARDING_DATA] Starting data preparation for user`);
+  fastify.log.debug({ userId, data }, `[PREPARE_ONBOARDING_DATA] Full onboarding data`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   if (!data.selected_exercise_id) {

@@ -23,7 +23,7 @@ export async function _updateUserRanks(
   existingUserExerciseRanks: Tables<"user_exercise_ranks">[],
   isPremium: boolean
 ): Promise<RankingResults> {
-  const rankingService = new RankingService();
+  const rankingService = new RankingService(fastify);
   const calculationInput = persistedSessionSets.map((s) => ({
     exercise_id: s.exercise_id || s.custom_exercise_id!,
     reps: s.actual_reps || 0,

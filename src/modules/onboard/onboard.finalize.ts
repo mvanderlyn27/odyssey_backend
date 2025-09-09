@@ -28,9 +28,9 @@ async function _sendLoopsEvent(fastify: FastifyInstance, userId: string) {
             },
           }
         );
-        fastify.log.info(`Event sent to Loops.so for user ${userId}`);
+        fastify.log.info({ userId }, `[FINALIZE_ONBOARDING] Event sent to Loops.so`);
       } else {
-        fastify.log.warn("LOOPS_API_KEY not configured, skipping event send.");
+        fastify.log.warn("[FINALIZE_ONBOARDING] LOOPS_API_KEY not configured, skipping event send.");
       }
     }
   } catch (error) {
@@ -41,38 +41,33 @@ async function _sendLoopsEvent(fastify: FastifyInstance, userId: string) {
 export async function _finalizeOnboarding(fastify: FastifyInstance, userId: string): Promise<Profile> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
-  const activeWorkoutPlanPayload: TablesInsert<"active_workout_plans"> = {
-    user_id: userId,
-  };
-  const { error: activePlanError } = await supabase.from("active_workout_plans").insert(activeWorkoutPlanPayload);
-  if (activePlanError) {
-    fastify.log.error({ error: activePlanError, userId }, "Error creating blank active workout plan entry");
+  const [activePlanResult, activeSessionResult, profileResult] = await Promise.all([
+    supabase.from("active_workout_plans").insert({ user_id: userId }),
+    supabase.from("active_workout_sessions").insert({ user_id: userId }),
+    supabase.from("profiles").select("*").eq("id", userId).single(),
+  ]);
+
+  if (activePlanResult.error) {
+    fastify.log.error({ error: activePlanResult.error, userId }, "Error creating blank active workout plan entry");
   }
 
-  const activeWorkoutSessionPayload: TablesInsert<"active_workout_sessions"> = {
-    user_id: userId,
-  };
-  const { error: activeSessionError } = await supabase
-    .from("active_workout_sessions")
-    .insert(activeWorkoutSessionPayload);
-  if (activeSessionError) {
-    fastify.log.error({ error: activeSessionError, userId }, "Error creating blank active workout session entry");
+  if (activeSessionResult.error) {
+    fastify.log.error(
+      { error: activeSessionResult.error, userId },
+      "Error creating blank active workout session entry"
+    );
   }
 
-  const { data: finalProfileData, error: finalProfileError } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
+  const { data: finalProfileData, error: finalProfileError } = profileResult;
 
   if (finalProfileError || !finalProfileData) {
     fastify.log.error({ error: finalProfileError, userId }, "Error fetching final updated profile");
     throw new Error("Failed to fetch final updated profile after onboarding.");
   }
 
-  fastify.log.info(`Onboarding fully completed for user ${userId}.`);
+  fastify.log.info({ userId }, `[FINALIZE_ONBOARDING] Onboarding fully completed`);
 
-  await _sendLoopsEvent(fastify, userId);
+  _sendLoopsEvent(fastify, userId); // Fire-and-forget
 
   return {
     id: finalProfileData.id,

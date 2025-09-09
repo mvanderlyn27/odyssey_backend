@@ -129,7 +129,7 @@ export async function _awardXpAndLevel(
   allLevelDefinitions: LevelDefinition[]
 ): Promise<XPUpdateResult & { awardedXp: number; remaining_xp_for_next_level: number | null }> {
   const userId = userProfile.id;
-  fastify.log.info(`[XP_LEVEL] Starting XP and Level update for user: ${userId}`);
+  fastify.log.info({ userId }, `[XP_LEVEL] Starting XP and Level update`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
   const xpService = new XpService(supabase, fastify, allLevelDefinitions);
   const awardedXp = XP_PER_WORKOUT;
@@ -137,7 +137,7 @@ export async function _awardXpAndLevel(
   const xpResult = await xpService.addXPAndUpdateLevel(userProfile, awardedXp);
 
   if (!xpResult) {
-    fastify.log.error({ userId, awardedXp }, "[XP_LEVEL] Failed to update user XP and level via XpService.");
+    fastify.log.error({ userId, awardedXp }, "[XP_LEVEL] Failed to update user XP and level via XpService");
     // Construct a fallback response matching the expected return type
     return {
       userId,
@@ -164,11 +164,18 @@ export async function _awardXpAndLevel(
 
   if (xpResult.leveledUp) {
     fastify.log.info(
-      `[XP_LEVEL] User ${userId} leveled up! Old Level ID: ${xpResult.oldLevelId}, New Level ID: ${xpResult.newLevelId}, New Level Number: ${xpResult.newLevelNumber}`
+      {
+        userId,
+        oldLevelId: xpResult.oldLevelId,
+        newLevelId: xpResult.newLevelId,
+        newLevelNumber: xpResult.newLevelNumber,
+      },
+      `[XP_LEVEL] User leveled up`
     );
   } else {
     fastify.log.info(
-      `[XP_LEVEL] Awarded ${awardedXp} XP to user ${userId}. New total XP: ${xpResult.newExperiencePoints}. No level up.`
+      { userId, awardedXp, newTotalXp: xpResult.newExperiencePoints },
+      `[XP_LEVEL] Awarded XP. No level up.`
     );
   }
   return { ...xpResult, awardedXp, remaining_xp_for_next_level };

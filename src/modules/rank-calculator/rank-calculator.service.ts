@@ -8,6 +8,13 @@ import { _handleRankCalculation } from "./rank-calculator.ranking";
 import { _handlePrCalculation } from "./rank-calculator.prs";
 import { calculate_1RM, calculate_SWR } from "../workout-sessions/workout-sessions.helpers";
 
+export class InsufficientBalanceError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InsufficientBalanceError";
+  }
+}
+
 export async function calculateRankForEntry(
   fastify: FastifyInstance,
   userId: string,
@@ -16,13 +23,16 @@ export async function calculateRankForEntry(
   const supabase = fastify.supabase as SupabaseClient<Database>;
   let calculationLog: { id: string } | null = null;
 
+  fastify.log.info({ userId }, "[RankCalculator] Starting rank calculation for entry");
+  fastify.log.debug({ userId, entry }, "[RankCalculator] Full entry data");
+
   const { data: user, error: userError } = await supabase.from("users").select("*").eq("id", userId).single();
 
   if (userError || !user) throw new Error("User not found");
 
   if (!user.is_premium) {
     if (user.rank_calculator_balance <= 0) {
-      throw new Error("No rank calculations remaining");
+      throw new InsufficientBalanceError("insufficient_balance");
     }
 
     const { error: updateError } = await supabase
@@ -34,10 +44,17 @@ export async function calculateRankForEntry(
   }
 
   const rankCalculationData = await getRankCalculationData(fastify, userId, entry.exercise_id);
-  const { userGender, userBodyweight, exerciseDetails } = rankCalculationData;
+  const { user: userData, userGender, userBodyweight, exerciseDetails } = rankCalculationData;
+
+  fastify.log.debug(
+    { userId, userGender, userBodyweight, exerciseDetails },
+    "[RankCalculator] Fetched rank calculation data"
+  );
 
   const calculated_1rm = calculate_1RM(entry.weight, entry.reps);
   const calculated_swr = calculate_SWR(calculated_1rm, userBodyweight);
+
+  fastify.log.debug({ userId, calculated_1rm, calculated_swr }, "[RankCalculator] Calculated 1RM and SWR");
 
   const inMemorySet: Tables<"workout_session_sets"> = {
     id: "synthetic-set-id",
@@ -62,6 +79,7 @@ export async function calculateRankForEntry(
     workout_plan_day_exercise_sets_id: null,
   };
 
+  let rankUpdateResults: RankingResults | null = null;
   try {
     if (!user.is_premium) {
       const { data: log, error: logError } = await supabase
@@ -73,35 +91,55 @@ export async function calculateRankForEntry(
       calculationLog = log;
     }
 
-    const [rankUpdateResults] = await Promise.all([
-      _handleRankCalculation(fastify, userId, userGender, userBodyweight, inMemorySet, entry, rankCalculationData),
+    fastify.log.info({ userId }, "[RankCalculator] Handling PR and Rank calculations");
+    const [results] = await Promise.all([
+      _handleRankCalculation(fastify, userData, userGender, userBodyweight, inMemorySet, entry, rankCalculationData),
       _handlePrCalculation(fastify, user, userBodyweight, inMemorySet, entry, rankCalculationData),
     ]);
+    rankUpdateResults = results;
 
-    if (calculationLog) {
-      const { error: updateError } = await supabase
-        .from("rank_calculations")
-        .update({
-          rank_up_data: rankUpdateResults.rankUpData as any,
-          new_calculator_balance: user.rank_calculator_balance - 1,
-          old_calculator_balance: user.rank_calculator_balance,
-          weight_kg: entry.weight,
-          reps: entry.reps,
-          bodyweight_kg: userBodyweight,
-          status: "success",
-        })
-        .eq("id", calculationLog.id);
+    fastify.log.info({ userId }, "[RankCalculator] Rank calculation finished");
+    fastify.log.debug({ userId, rankUpdateResults }, "[RankCalculator] Full rank calculation results");
 
-      if (updateError) {
-        fastify.log.error(
-          { error: updateError, calculationLogId: calculationLog.id },
-          "[RankCalculator] Failed to update rank calculation log"
-        );
-      }
-    }
-
+    fastify.log.info({ userId }, "[RankCalculator] Returning rank calculation result");
     return rankUpdateResults;
   } finally {
-    fastify.log.info("finished calculating ranks");
+    if (calculationLog) {
+      await _updateRankCalculationLog(fastify, calculationLog.id, user, entry, userBodyweight, rankUpdateResults);
+    }
+    fastify.log.info({ userId }, "[RankCalculator] Finished calculating ranks");
+  }
+}
+
+async function _updateRankCalculationLog(
+  fastify: FastifyInstance,
+  logId: string,
+  user: Tables<"users">,
+  entry: RankEntryType,
+  userBodyweight: number,
+  rankUpdateResults: RankingResults | null
+) {
+  const supabase = fastify.supabase as SupabaseClient<Database>;
+  const status = rankUpdateResults ? "success" : "failed";
+  const updatePayload: Partial<Tables<"rank_calculations">> = {
+    new_calculator_balance: user.rank_calculator_balance - 1,
+    old_calculator_balance: user.rank_calculator_balance,
+    weight_kg: entry.weight,
+    reps: entry.reps,
+    bodyweight_kg: userBodyweight,
+    status,
+  };
+
+  if (rankUpdateResults) {
+    updatePayload.rank_up_data = rankUpdateResults.rankUpData as any;
+  }
+
+  const { error: updateError } = await supabase.from("rank_calculations").update(updatePayload).eq("id", logId);
+
+  if (updateError) {
+    fastify.log.error(
+      { error: updateError, calculationLogId: logId },
+      "[RankCalculator] Failed to update rank calculation log"
+    );
   }
 }

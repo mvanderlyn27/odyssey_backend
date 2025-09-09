@@ -106,7 +106,7 @@ export class CacheService {
         return data || [];
       }),
       this.get(CACHE_KEYS.ALL_EXERCISES, async () => {
-        const { data, error } = await supabase.from("v_full_exercises").select("id, exercise_type, source_type");
+        const { data, error } = await supabase.from("v_full_exercises").select("*");
         if (error) throw error;
         return data || [];
       }),

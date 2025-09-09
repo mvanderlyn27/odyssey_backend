@@ -127,13 +127,22 @@ export async function createWorkoutFeedItem(fastify: FastifyInstance, inputData:
   };
 
   // Example using Supabase client
-  fastify.log.info("Attempting to insert workout feed item...");
+  fastify.log.info(
+    { userId: inputData.userProfile.id, sessionId: inputData.workoutSession.id },
+    "[FEED] Attempting to insert workout feed item"
+  );
   const { error } = await supabase.from("feed_items").insert(feedItemToInsert);
 
   if (error) {
     // Handle error logging and reporting
-    fastify.log.error(`Failed to create feed item: ${error.message}`, { error });
+    fastify.log.error(
+      { error, userId: inputData.userProfile.id, sessionId: inputData.workoutSession.id },
+      `[FEED] Failed to create feed item`
+    );
     throw new Error(`Failed to create feed item: ${error.message}`);
   }
-  fastify.log.info("Successfully created workout feed item.");
+  fastify.log.info(
+    { userId: inputData.userProfile.id, sessionId: inputData.workoutSession.id },
+    "[FEED] Successfully created workout feed item"
+  );
 }

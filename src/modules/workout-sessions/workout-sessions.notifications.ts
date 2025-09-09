@@ -23,14 +23,12 @@ export async function _handleWorkoutCompletionNotifications(
   friends: Tables<"friendships">[],
   allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[]
 ): Promise<void> {
-  fastify.log.info(`[NOTIFICATIONS] Starting notification handling for user: ${userId}, session: ${workoutSessionId}`);
+  fastify.log.info({ userId, sessionId: workoutSessionId }, `[NOTIFICATIONS] Starting notification handling`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   try {
     if (userData.profile_privacy === "private") {
-      fastify.log.info(
-        `[NOTIFICATIONS] User ${userId} has private activity visibility. No notifications will be sent.`
-      );
+      fastify.log.info({ userId }, `[NOTIFICATIONS] User has private profile. No notifications will be sent.`);
       return;
     }
 
@@ -38,7 +36,7 @@ export async function _handleWorkoutCompletionNotifications(
       friends?.map((friend) => (friend.requester_id === userId ? friend.addressee_id : friend.requester_id)) || [];
 
     if (friendIds.length === 0) {
-      fastify.log.info(`[NOTIFICATIONS] User ${userId} has no friends. No notifications to send.`);
+      fastify.log.info({ userId }, `[NOTIFICATIONS] User has no friends. No notifications to send.`);
       return;
     }
 

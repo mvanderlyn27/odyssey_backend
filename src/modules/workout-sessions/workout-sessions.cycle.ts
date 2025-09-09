@@ -14,13 +14,14 @@ export async function _handleWorkoutPlanCycleCompletion(
   sessionPlanId: string | null | undefined,
   activeWorkoutPlans: Tables<"active_workout_plans">[]
 ): Promise<void> {
-  fastify.log.info(`[CYCLE_COMPLETION] Starting cycle completion check for user: ${userId}, plan: ${sessionPlanId}`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   if (!sessionPlanId) {
-    fastify.log.info(`[CYCLE_COMPLETION] No workout_plan_id provided. Skipping.`);
+    fastify.log.debug({ userId }, `[CYCLE_COMPLETION] No workout_plan_id provided. Skipping.`);
     return;
   }
+
+  fastify.log.info({ userId, planId: sessionPlanId }, `[CYCLE_COMPLETION] Starting cycle completion check`);
 
   try {
     // 1. Call the database function to check for cycle completion

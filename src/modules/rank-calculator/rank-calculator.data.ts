@@ -4,6 +4,7 @@ import { Database, Enums, Tables } from "../../types/database";
 import { CACHE_KEYS } from "../../services/cache.service";
 
 export async function getRankCalculationData(fastify: FastifyInstance, userId: string, exerciseId: string) {
+  fastify.log.info({ userId, exerciseId }, "[RankCalculator] Starting data fetch");
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   const [
@@ -22,7 +23,7 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
     initialMuscleRanks,
     userExerciseRanks,
   ] = await Promise.all([
-    supabase.from("users").select("gender").eq("id", userId).single(),
+    supabase.from("users").select("*").eq("id", userId).single(),
     supabase
       .from("body_measurements")
       .select("value")
@@ -31,7 +32,7 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
       .order("measured_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase.from("v_full_exercises").select("id, name, exercise_type, source_type").eq("id", exerciseId).single(),
+    supabase.from("v_full_exercises").select("*").eq("id", exerciseId).single(),
     supabase
       .from("user_exercise_prs")
       .select("exercise_id, custom_exercise_id, pr_type, estimated_1rm, reps, swr")
@@ -46,8 +47,10 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
     supabase.from("user_ranks").select("*").eq("user_id", userId).single(),
     supabase.from("muscle_group_ranks").select("*").eq("user_id", userId),
     supabase.from("muscle_ranks").select("*").eq("user_id", userId),
-    supabase.from("user_exercise_ranks").select("*").eq("user_id", userId).eq("exercise_id", exerciseId),
+    supabase.from("user_exercise_ranks").select("*").eq("user_id", userId),
   ]);
+
+  fastify.log.info({ userId, exerciseId }, "[RankCalculator] Finished fetching data");
 
   if (userData.error || !userData.data) throw new Error("User not found.");
   if (bodyweightData.error || !bodyweightData.data?.value) throw new Error("User bodyweight not found.");
@@ -61,6 +64,7 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
   const userGender = userData.data.gender as Enums<"gender">;
 
   return {
+    user: userData.data,
     userGender,
     userBodyweight: bodyweightData.data.value,
     exerciseDetails: exerciseDetails.data,
