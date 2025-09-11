@@ -137,7 +137,7 @@ export const finishWorkoutSession = async (
     }));
     let persistedSessionSets: (Tables<"workout_session_sets"> & {
       exercise_name?: string | null;
-      source_type?: "standard" | "custom" | null;
+      source?: "standard" | "custom" | null;
     })[] = [];
     if (finalSetInsertPayloads.length > 0) {
       const { data: insertedSetsRaw, error: setsInsertError } = await supabase
@@ -158,7 +158,7 @@ export const finishWorkoutSession = async (
         return {
           ...s,
           exercise_name: exerciseDetail?.name ?? "Unknown Exercise",
-          source_type: exerciseDetail?.source_type ?? null,
+          source: exerciseDetail?.source ?? null,
         };
       });
     }

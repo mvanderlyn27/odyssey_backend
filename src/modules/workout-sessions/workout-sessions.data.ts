@@ -9,6 +9,7 @@ import {
   MuscleIntensity,
 } from "../../schemas/workoutSessionsSchemas";
 import { calculate_1RM, calculate_SWR } from "./workout-sessions.helpers";
+import { CACHE_KEYS } from "../../services/cache.service";
 
 export type SetProgressionInput = {
   exercise_id: string;
@@ -61,7 +62,7 @@ export type PreparedWorkoutData = {
       id: string;
       name: string;
       exercise_type: Enums<"exercise_type"> | null;
-      source_type: "standard" | "custom" | null;
+      source: "standard" | "custom" | null;
     }
   >;
   exerciseMuscleMappings: (Tables<"exercise_muscles"> & {
@@ -135,9 +136,30 @@ export async function _gatherAndPrepareWorkoutData(
       .order("measured_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    sessionExerciseIds.length > 0
-      ? supabase.from("v_full_exercises").select("id, name, exercise_type, source_type").in("id", sessionExerciseIds)
-      : Promise.resolve({ data: [], error: null }),
+    (async () => {
+      if (sessionExerciseIds.length === 0) return { data: [], error: null };
+      const [standardExercises, customExercisesRes] = await Promise.all([
+        fastify.appCache.get<Tables<"exercises">[]>(CACHE_KEYS.EXERCISES, async () => {
+          const { data, error } = await supabase.from("exercises").select("*");
+          if (error) throw error;
+          return data || [];
+        }),
+        supabase.from("custom_exercises").select("*").in("id", sessionExerciseIds).eq("user_id", userId),
+      ]);
+
+      if (customExercisesRes.error) {
+        fastify.log.error(customExercisesRes.error, "Error fetching custom exercises");
+        return { data: [], error: customExercisesRes.error };
+      }
+      const customExercises = customExercisesRes.data || [];
+
+      const allExercises = [
+        ...standardExercises.map((e) => ({ ...e, source: "standard" as const })),
+        ...customExercises.map((e) => ({ ...e, source: "custom" as const })),
+      ];
+      const exercises = allExercises.filter((e) => sessionExerciseIds.includes(e.id));
+      return { data: exercises, error: null };
+    })(),
     sessionExerciseIds.length > 0
       ? supabase
           .from("exercise_muscles")
@@ -153,37 +175,37 @@ export async function _gatherAndPrepareWorkoutData(
     sessionExerciseIds.length > 0
       ? supabase.from("user_exercise_prs").select("*").eq("user_id", userId).in("exercise_key", sessionExerciseIds)
       : Promise.resolve({ data: [], error: null }),
-    fastify.appCache.get("exercises", async () => {
+    fastify.appCache.get(CACHE_KEYS.EXERCISES, async () => {
       const { data, error } = await supabase.from("exercises").select("*");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("exercise_muscles", async () => {
+    fastify.appCache.get(CACHE_KEYS.EXERCISE_MUSCLES, async () => {
       const { data, error } = await supabase.from("exercise_muscles").select("*");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("muscles", async () => {
+    fastify.appCache.get(CACHE_KEYS.MUSCLES, async () => {
       const { data, error } = await supabase.from("muscles").select("*");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("muscle_groups", async () => {
+    fastify.appCache.get(CACHE_KEYS.MUSCLE_GROUPS, async () => {
       const { data, error } = await supabase.from("muscle_groups").select("*");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("ranks_id_name", async () => {
+    fastify.appCache.get(CACHE_KEYS.RANKS, async () => {
       const { data, error } = await supabase.from("ranks").select("id, rank_name");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("allInterRanks", async () => {
+    fastify.appCache.get(CACHE_KEYS.INTER_RANKS, async () => {
       const { data, error } = await supabase.from("inter_ranks").select("*");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("allLevelDefinitions", async () => {
+    fastify.appCache.get(CACHE_KEYS.LEVEL_DEFINITIONS, async () => {
       const { data, error } = await supabase.from("level_definitions").select("*");
       if (error) throw error;
       return data || [];
@@ -234,7 +256,7 @@ export async function _gatherAndPrepareWorkoutData(
       id: string;
       name: string;
       exercise_type: Enums<"exercise_type"> | null;
-      source_type: "standard" | "custom" | null;
+      source: "standard" | "custom" | null;
     }
   >();
   if (exercisesDataResult.error) {
@@ -246,7 +268,7 @@ export async function _gatherAndPrepareWorkoutData(
           id: ex.id,
           name: ex.name,
           exercise_type: ex.exercise_type,
-          source_type: ex.source_type as "standard" | "custom" | null,
+          source: ex.source as "standard" | "custom" | null,
         });
       }
     });
@@ -383,7 +405,7 @@ export async function _gatherAndPrepareWorkoutData(
           calculatedTotalVolumeKg += setVolume;
         }
 
-        const isCustom = exerciseDetail?.source_type === "custom";
+        const isCustom = exerciseDetail?.source === "custom";
         const setPayload: SetPayloadPreamble = {
           exercise_id: isCustom ? null : exercise.exercise_id,
           custom_exercise_id: isCustom ? exercise.exercise_id : null,

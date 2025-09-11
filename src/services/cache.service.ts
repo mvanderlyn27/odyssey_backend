@@ -2,14 +2,14 @@ import { FastifyInstance } from "fastify";
 import fp from "fastify-plugin";
 
 export enum CACHE_KEYS {
-  ALL_RANKS = "allRanks",
-  ALL_INTER_RANKS = "allInterRanks",
-  ALL_MUSCLES = "allMuscles",
-  ALL_EXERCISE_MUSCLES = "allExerciseMuscles",
-  ALL_MUSCLE_GROUPS = "allMuscleGroups",
-  ALL_CUSTOM_EXERCISE_MUSCLES = "allCustomExerciseMuscles",
-  ALL_EXERCISES = "allExercises",
-  ALL_LEVEL_DEFINITIONS = "allLevelDefinitions",
+  RANKS = "ranks",
+  INTER_RANKS = "interRanks",
+  MUSCLES = "muscles",
+  EXERCISE_MUSCLES = "exerciseMuscles",
+  MUSCLE_GROUPS = "muscleGroups",
+  CUSTOM_EXERCISE_MUSCLES = "customExerciseMuscles",
+  EXERCISES = "exercises",
+  LEVEL_DEFINITIONS = "levelDefinitions",
 }
 
 // A simple in-memory cache store
@@ -71,46 +71,46 @@ export class CacheService {
     }
 
     const cacheJobs = [
-      this.get(CACHE_KEYS.ALL_RANKS, async () => {
+      this.get(CACHE_KEYS.RANKS, async () => {
         const { data, error } = await supabase.from("ranks").select("id, rank_name, min_score").neq("id", 0);
         if (error) throw error;
         return data || [];
       }),
-      this.get(CACHE_KEYS.ALL_INTER_RANKS, async () => {
+      this.get(CACHE_KEYS.INTER_RANKS, async () => {
         const { data, error } = await supabase.from("inter_ranks").select("*");
         if (error) throw error;
         return data || [];
       }),
-      this.get(CACHE_KEYS.ALL_MUSCLES, async () => {
+      this.get(CACHE_KEYS.MUSCLES, async () => {
         const { data, error } = await supabase.from("muscles").select("id, name, muscle_group_id, muscle_group_weight");
         if (error) throw error;
         return data || [];
       }),
-      this.get(CACHE_KEYS.ALL_EXERCISE_MUSCLES, async () => {
+      this.get(CACHE_KEYS.EXERCISE_MUSCLES, async () => {
         const { data, error } = await supabase
           .from("exercise_muscles")
           .select("exercise_id, muscle_id, muscle_intensity, exercise_muscle_weight");
         if (error) throw error;
         return data || [];
       }),
-      this.get(CACHE_KEYS.ALL_MUSCLE_GROUPS, async () => {
+      this.get(CACHE_KEYS.MUSCLE_GROUPS, async () => {
         const { data, error } = await supabase.from("muscle_groups").select("id, name, overall_weight");
         if (error) throw error;
         return data || [];
       }),
-      this.get(CACHE_KEYS.ALL_CUSTOM_EXERCISE_MUSCLES, async () => {
+      this.get(CACHE_KEYS.CUSTOM_EXERCISE_MUSCLES, async () => {
         const { data, error } = await supabase
           .from("custom_exercise_muscles")
           .select("custom_exercise_id, muscle_id, muscle_intensity");
         if (error) throw error;
         return data || [];
       }),
-      this.get(CACHE_KEYS.ALL_EXERCISES, async () => {
-        const { data, error } = await supabase.from("v_full_exercises").select("*");
+      this.get(CACHE_KEYS.EXERCISES, async () => {
+        const { data, error } = await supabase.from("exercises").select("*");
         if (error) throw error;
-        return data || [];
+        return (data || []).map((e) => ({ ...e, source: "standard" }));
       }),
-      this.get(CACHE_KEYS.ALL_LEVEL_DEFINITIONS, async () => {
+      this.get(CACHE_KEYS.LEVEL_DEFINITIONS, async () => {
         const { data, error } = await supabase.from("level_definitions").select("*");
         if (error) throw error;
         return data || [];

@@ -59,8 +59,8 @@ export async function calculateRankForEntry(
   const inMemorySet: Tables<"workout_session_sets"> = {
     id: "synthetic-set-id",
     workout_session_id: "synthetic-session-id",
-    exercise_id: exerciseDetails.source_type === "custom" ? null : entry.exercise_id,
-    custom_exercise_id: exerciseDetails.source_type === "custom" ? entry.exercise_id : null,
+    exercise_id: exerciseDetails.source === "custom" ? null : entry.exercise_id,
+    custom_exercise_id: exerciseDetails.source === "custom" ? entry.exercise_id : null,
     set_order: 1,
     actual_reps: entry.reps,
     actual_weight_kg: entry.weight,

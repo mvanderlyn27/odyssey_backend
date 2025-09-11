@@ -47,7 +47,7 @@ export async function _handleOnboardingRanking(
         userGenderForRanking as Enums<"gender">,
         userBodyweight,
         calculationInput,
-        preparedData.exercises,
+        preparedData.exercises.filter((e) => e.source === "standard") as Tables<"exercises">[],
         preparedData.mcw,
         preparedData.allMuscles,
         preparedData.allMuscleGroups,

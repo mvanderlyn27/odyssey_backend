@@ -28,7 +28,7 @@ export class PrService {
         id: string;
         name: string;
         exercise_type: Enums<"exercise_type"> | null;
-        source_type: "standard" | "custom" | null;
+        source: "standard" | "custom" | null;
       }
     >
   ): Promise<NewPr[]> {
@@ -85,7 +85,7 @@ export class PrService {
         set: Tables<"workout_session_sets">,
         pr_type: Enums<"pr_type">
       ): TablesInsert<"user_exercise_prs"> => {
-        const isCustom = exerciseInfo.source_type === "custom";
+        const isCustom = exerciseInfo.source === "custom";
         return {
           user_id: user.id,
           exercise_key: exerciseId,
@@ -177,7 +177,9 @@ export class PrService {
 
     if (newPrsToUpsert.length > 0) {
       this.log.info({ userId: user.id, count: newPrsToUpsert.length }, "[PrService] Upserting new PRs");
-      const { error } = await this.supabase.from("user_exercise_prs").upsert(newPrsToUpsert);
+      const { error } = await this.supabase
+        .from("user_exercise_prs")
+        .upsert(newPrsToUpsert, { onConflict: "user_id,exercise_key,pr_type" });
       if (error) {
         this.log.error({ error }, "[PrService] Error upserting new PRs");
         return []; // Return empty on failure

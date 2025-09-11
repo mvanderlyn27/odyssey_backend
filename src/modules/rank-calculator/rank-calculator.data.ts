@@ -3,6 +3,8 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Enums, Tables } from "../../types/database";
 import { CACHE_KEYS } from "../../services/cache.service";
 
+type FullExercise = (Tables<"exercises"> | Tables<"custom_exercises">) & { source: "standard" | "custom" };
+
 export async function getRankCalculationData(fastify: FastifyInstance, userId: string, exerciseId: string) {
   fastify.log.info({ userId, exerciseId }, "[RankCalculator] Starting data fetch");
   const supabase = fastify.supabase as SupabaseClient<Database>;
@@ -32,18 +34,51 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
       .order("measured_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
-    supabase.from("v_full_exercises").select("*").eq("id", exerciseId).single(),
+    (async () => {
+      const standardExercises = await fastify.appCache.get<Tables<"exercises">[]>(CACHE_KEYS.EXERCISES, async () => {
+        const { data, error } = await supabase.from("exercises").select("*");
+        if (error) throw error;
+        return data || [];
+      });
+      const exercise = standardExercises.find((e) => e.id === exerciseId);
+      if (!exercise) return { data: null, error: new Error("Exercise not found or is a custom exercise") };
+      return { data: { ...exercise, source: "standard" }, error: null };
+    })(),
     supabase
       .from("user_exercise_prs")
       .select("exercise_id, custom_exercise_id, pr_type, estimated_1rm, reps, swr")
       .eq("user_id", userId)
       .eq("exercise_key", exerciseId),
-    fastify.appCache.get<Tables<"exercises">[]>(CACHE_KEYS.ALL_EXERCISES, async () => []),
-    fastify.appCache.get<Tables<"exercise_muscles">[]>(CACHE_KEYS.ALL_EXERCISE_MUSCLES, async () => []),
-    fastify.appCache.get<Tables<"muscles">[]>(CACHE_KEYS.ALL_MUSCLES, async () => []),
-    fastify.appCache.get<Tables<"muscle_groups">[]>(CACHE_KEYS.ALL_MUSCLE_GROUPS, async () => []),
-    fastify.appCache.get<Pick<Tables<"ranks">, "id" | "rank_name">[]>(CACHE_KEYS.ALL_RANKS, async () => []),
-    fastify.appCache.get<Tables<"inter_ranks">[]>(CACHE_KEYS.ALL_INTER_RANKS, async () => []),
+    fastify.appCache.get(CACHE_KEYS.EXERCISES, async () => {
+      const { data, error } = await supabase.from("exercises").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
+    fastify.appCache.get(CACHE_KEYS.EXERCISE_MUSCLES, async () => {
+      const { data, error } = await supabase.from("exercise_muscles").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
+    fastify.appCache.get<Tables<"muscles">[]>(CACHE_KEYS.MUSCLES, async () => {
+      const { data, error } = await supabase.from("muscles").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
+    fastify.appCache.get<Tables<"muscle_groups">[]>(CACHE_KEYS.MUSCLE_GROUPS, async () => {
+      const { data, error } = await supabase.from("muscle_groups").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
+    fastify.appCache.get<Pick<Tables<"ranks">, "id" | "rank_name">[]>(CACHE_KEYS.RANKS, async () => {
+      const { data, error } = await supabase.from("ranks").select("id, rank_name");
+      if (error) throw error;
+      return data || [];
+    }),
+    fastify.appCache.get<Tables<"inter_ranks">[]>(CACHE_KEYS.INTER_RANKS, async () => {
+      const { data, error } = await supabase.from("inter_ranks").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
     supabase.from("user_ranks").select("*").eq("user_id", userId).single(),
     supabase.from("muscle_group_ranks").select("*").eq("user_id", userId),
     supabase.from("muscle_ranks").select("*").eq("user_id", userId),

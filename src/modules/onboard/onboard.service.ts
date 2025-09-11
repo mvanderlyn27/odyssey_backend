@@ -49,7 +49,7 @@ export const handleOnboarding = async (
     preparedData.userData = newlyCreatedUser;
 
     const { rankingExercise } = preparedData;
-    const isCustom = rankingExercise.source_type === "custom";
+    const isCustom = rankingExercise.source === "custom";
     const exerciseId = rankingExercise.id;
 
     if (data.rank_exercise_reps === undefined || data.rank_exercise_weight_kg === undefined) {

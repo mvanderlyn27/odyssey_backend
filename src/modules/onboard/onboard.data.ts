@@ -2,22 +2,25 @@ import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Tables, Enums } from "../../types/database";
 import { OnboardBody } from "../../schemas/onboardSchemas";
+import { CACHE_KEYS } from "../../services/cache.service";
+
+type FullExercise = (Tables<"exercises"> | Tables<"custom_exercises">) & { source: "standard" | "custom" };
 
 export type PreparedOnboardingData = {
   userProfile: Tables<"profiles"> | null;
   userData: Tables<"users"> | null;
   rankingExercise: {
     id: string;
-    source_type: "standard" | "custom";
+    source: "standard" | "custom";
   };
-  exercises: Tables<"exercises">[];
+  exercises: FullExercise[];
   rankingExerciseMap: Map<
     string,
     {
       id: string;
       name: string;
       exercise_type: Enums<"exercise_type"> | null;
-      source_type: "standard" | "custom" | null;
+      source: "standard" | "custom" | null;
     }
   >;
   mcw: Tables<"exercise_muscles">[];
@@ -44,11 +47,35 @@ export async function _gatherAndPrepareOnboardingData(
     throw new Error("selected_exercise_id is required for onboarding.");
   }
 
+  const [standardExercises, customExercisesRes] = await Promise.all([
+    fastify.appCache.get<Tables<"exercises">[]>(CACHE_KEYS.EXERCISES, async () => {
+      const { data, error } = await supabase.from("exercises").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
+    supabase.from("custom_exercises").select("*").eq("user_id", userId),
+  ]);
+
+  if (customExercisesRes.error) throw customExercisesRes.error;
+  const customExercises = customExercisesRes.data || [];
+
+  const allExercisesFromCache: FullExercise[] = [
+    ...standardExercises.map((e) => ({ ...e, source: "standard" as const })),
+    ...customExercises.map((e) => ({ ...e, source: "custom" as const })),
+  ];
+  const rankingExercise = allExercisesFromCache.find((e) => e.id === data.selected_exercise_id);
+
+  if (!rankingExercise) {
+    throw new Error(`Ranking exercise with id ${data.selected_exercise_id} not found.`);
+  }
+
+  if (rankingExercise.source === "custom") {
+    throw new Error("Custom exercises cannot be used for ranking.");
+  }
+
   const [
     profileResult,
     userResult,
-    rankingExerciseResult,
-    allExercises,
     allMcw,
     allMuscles,
     allMuscleGroups,
@@ -61,42 +88,32 @@ export async function _gatherAndPrepareOnboardingData(
   ] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
     supabase.from("users").select("*").eq("id", userId).maybeSingle(),
-    supabase
-      .from("v_full_exercises")
-      .select("id, name, exercise_type, source_type")
-      .eq("id", data.selected_exercise_id)
-      .single(),
-    fastify.appCache.get("exercises", async () => {
-      const { data, error } = await supabase.from("exercises").select("*");
-      if (error) throw error;
-      return data || [];
-    }),
-    fastify.appCache.get("exercise_muscles", async () => {
+    fastify.appCache.get(CACHE_KEYS.EXERCISE_MUSCLES, async () => {
       const { data, error } = await supabase.from("exercise_muscles").select("*");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("muscles", async () => {
+    fastify.appCache.get(CACHE_KEYS.MUSCLES, async () => {
       const { data, error } = await supabase.from("muscles").select("*");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("muscle_groups", async () => {
+    fastify.appCache.get(CACHE_KEYS.MUSCLE_GROUPS, async () => {
       const { data, error } = await supabase.from("muscle_groups").select("*");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("ranks_id_name", async () => {
+    fastify.appCache.get(CACHE_KEYS.RANKS, async () => {
       const { data, error } = await supabase.from("ranks").select("id, rank_name");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("inter_ranks", async () => {
+    fastify.appCache.get(CACHE_KEYS.INTER_RANKS, async () => {
       const { data, error } = await supabase.from("inter_ranks").select("*");
       if (error) throw error;
       return data || [];
     }),
-    fastify.appCache.get("allLevelDefinitions", async () => {
+    fastify.appCache.get(CACHE_KEYS.LEVEL_DEFINITIONS, async () => {
       const { data, error } = await supabase.from("level_definitions").select("*");
       if (error) throw error;
       return data || [];
@@ -111,16 +128,6 @@ export async function _gatherAndPrepareOnboardingData(
   }
   if (userResult.error) {
     throw new Error(`Failed to fetch user data: ${userResult.error.message}`);
-  }
-  if (rankingExerciseResult.error || !rankingExerciseResult.data) {
-    throw new Error(
-      `Failed to fetch ranking exercise details: ${rankingExerciseResult.error?.message || "No exercise data"}`
-    );
-  }
-
-  const sourceType = rankingExerciseResult.data.source_type;
-  if (sourceType !== "standard" && sourceType !== "custom") {
-    throw new Error(`Invalid source_type for ranking exercise: ${sourceType}`);
   }
 
   if (initialUserRankResult.error || initialMuscleGroupRanksResult.error || initialMuscleRanksResult.error) {
@@ -140,16 +147,15 @@ export async function _gatherAndPrepareOnboardingData(
       id: string;
       name: string;
       exercise_type: Enums<"exercise_type"> | null;
-      source_type: "standard" | "custom" | null;
+      source: "standard" | "custom" | null;
     }
   >();
-  const ex = rankingExerciseResult?.data;
-  if (ex && ex.id && ex.name && ex.source_type) {
-    exerciseDetailsMap.set(ex.id, {
-      id: ex.id,
-      name: ex.name,
-      exercise_type: ex.exercise_type,
-      source_type: ex.source_type as "standard" | "custom",
+  if (rankingExercise && rankingExercise.id && rankingExercise.name && rankingExercise.source) {
+    exerciseDetailsMap.set(rankingExercise.id, {
+      id: rankingExercise.id,
+      name: rankingExercise.name,
+      exercise_type: rankingExercise.exercise_type,
+      source: rankingExercise.source as "standard" | "custom",
     });
   }
 
@@ -157,10 +163,10 @@ export async function _gatherAndPrepareOnboardingData(
     userProfile: profileResult.data,
     userData: userResult.data,
     rankingExercise: {
-      id: rankingExerciseResult.data.id || "",
-      source_type: sourceType,
+      id: rankingExercise.id || "",
+      source: rankingExercise.source as "standard" | "custom",
     },
-    exercises: allExercises,
+    exercises: allExercisesFromCache,
     rankingExerciseMap: exerciseDetailsMap,
     mcw: allMcw,
     allMuscles: allMuscles,

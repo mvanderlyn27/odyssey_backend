@@ -28,7 +28,7 @@ export async function _updateUserExercisePRs(
       id: string;
       name: string;
       exercise_type: Enums<"exercise_type"> | null;
-      source_type: "standard" | "custom" | null;
+      source: "standard" | "custom" | null;
     }
   >
 ): Promise<NewPr[]> {
