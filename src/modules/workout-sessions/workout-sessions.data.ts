@@ -219,9 +219,7 @@ export async function _gatherAndPrepareWorkoutData(
       .select("*")
       .or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
       .eq("status", "accepted"),
-    sessionExerciseIds.length > 0
-      ? supabase.from("user_exercise_ranks").select("*").eq("user_id", userId).in("exercise_id", sessionExerciseIds)
-      : Promise.resolve({ data: [], error: null }),
+    supabase.from("user_exercise_ranks").select("*").eq("user_id", userId),
   ]);
 
   if (profileResult.error || !profileResult.data) {

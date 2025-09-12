@@ -99,7 +99,13 @@ export class RankingService {
     );
 
     this.log.debug(
-      { userId, exerciseScores, muscleScores, muscleGroupScores, overallScore },
+      {
+        userId,
+        allExerciseScores: Object.fromEntries(allExerciseScores),
+        muscleScores: Object.fromEntries(muscleScores),
+        muscleGroupScores: Object.fromEntries(muscleGroupScores),
+        overallScore,
+      },
       "[RankingService] Calculated scores"
     );
 
@@ -168,7 +174,7 @@ export class RankingService {
       if (!affectedMuscleGroupIds.has(muscleGroupId)) continue;
       const initialRank = muscleGroupRanksMap.get(muscleGroupId);
 
-      if (newScore > (initialRank?.leaderboard_score ?? 0)) {
+      if (!initialRank || newScore > (initialRank?.leaderboard_score ?? 0)) {
         const newPermanentScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
         const newPermanentInterRank = findRankAndInterRank(newPermanentScore, allInterRanks);
         const newLeaderboardInterRank = findRankAndInterRank(newScore, allInterRanks);
@@ -184,6 +190,18 @@ export class RankingService {
               !initialRank ||
               initialRank.permanent_score !== newPermanentScore ||
               initialRank.permanent_inter_rank_id !== newPermanentInterRank.id;
+
+            this.log.debug(
+              {
+                muscleGroupId,
+                hasChanged,
+                initialScore: initialRank?.permanent_score,
+                newScore: newPermanentScore,
+                initialInterRankId: initialRank?.permanent_inter_rank_id,
+                newInterRankId: newPermanentInterRank.id,
+              },
+              "[RankingService] hasChanged check for muscle group"
+            );
             if (hasChanged) {
               rankUpData.muscleGroupRankChanges?.push({
                 muscle_group_id: muscleGroupId,
@@ -230,7 +248,7 @@ export class RankingService {
       if (!affectedMuscleIds.has(muscleId)) continue;
       const initialRank = muscleRanksMap.get(muscleId);
 
-      if (newScore > (initialRank?.leaderboard_score ?? 0)) {
+      if (!initialRank || newScore > (initialRank?.leaderboard_score ?? 0)) {
         const newPermanentScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
         const newPermanentInterRank = findRankAndInterRank(newPermanentScore, allInterRanks);
         const newLeaderboardInterRank = findRankAndInterRank(newScore, allInterRanks);
@@ -243,6 +261,18 @@ export class RankingService {
               !initialRank ||
               initialRank.permanent_score !== newPermanentScore ||
               initialRank.permanent_inter_rank_id !== newPermanentInterRank.id;
+
+            this.log.debug(
+              {
+                muscleId,
+                hasChanged,
+                initialScore: initialRank?.permanent_score,
+                newScore: newPermanentScore,
+                initialInterRankId: initialRank?.permanent_inter_rank_id,
+                newInterRankId: newPermanentInterRank.id,
+              },
+              "[RankingService] hasChanged check for muscle"
+            );
             if (hasChanged) {
               rankUpData.muscleRankChanges?.push({
                 muscle_id: muscleId,
@@ -307,10 +337,7 @@ export class RankingService {
         continue;
       }
 
-      // For the calculator, we always want to show a "change" to the user.
-      // For other sources, it's only a change if the permanent score is higher.
-      const hasChanged =
-        source === "calculator" || !initialRank || newPermanentScore > (initialRank?.permanent_score ?? 0);
+      const hasChanged = !initialRank || newPermanentScore > (initialRank?.permanent_score ?? 0);
 
       if (hasChanged) {
         rankUpData.exerciseRankChanges?.push({
@@ -333,12 +360,15 @@ export class RankingService {
       }
 
       // We only want to save the rank to the DB if it's a real improvement.
-      if (newScore > (initialRank?.leaderboard_score ?? 0)) {
-        const input = calculationInputMap.get(exerciseId);
-        if (input) {
-          const estimated_1rm = calculate_1RM(input.weight_kg, input.reps);
-          const swr = calculate_SWR(estimated_1rm, userBodyweight);
+      const input = calculationInputMap.get(exerciseId);
+      if (input) {
+        const estimated_1rm = calculate_1RM(input.weight_kg, input.reps);
+        const swr = calculate_SWR(estimated_1rm, userBodyweight);
 
+        const hasImproved =
+          !initialRank || newScore > (initialRank?.leaderboard_score ?? 0) || (swr ?? 0) > (initialRank?.swr ?? 0);
+
+        if (hasImproved) {
           rankUpdatePayload.exerciseRanks?.push({
             user_id: userId,
             exercise_id: exerciseId,
@@ -522,28 +552,29 @@ export class RankingService {
 
     for (const item of mcw) {
       const score = exerciseScores.get(item.exercise_id);
-      if (score) {
+      if (score !== undefined && score !== null && item.muscle_intensity === "primary") {
         muscleToExerciseMap
           .get(item.muscle_id)
           ?.push({ exerciseId: item.exercise_id, score, weight: item.exercise_muscle_weight ?? 0 });
       }
     }
 
+    this.log.debug(
+      {
+        muscleToExerciseMap: Object.fromEntries(Array.from(muscleToExerciseMap.entries()).map(([k, v]) => [k, v])),
+      },
+      "[RankingService] muscleToExerciseMap populated"
+    );
+
     for (const [muscleId, exercises] of muscleToExerciseMap.entries()) {
-      const top3Exercises = exercises.sort((a, b) => b.score - a.score).slice(0, 3);
-      let weightedSum = 0;
-      let weightSum = 0;
-      for (const ex of top3Exercises) {
-        weightedSum += ex.score * ex.weight;
-        weightSum += ex.weight;
+      const weightedScores = exercises.map((ex) => ex.score * ex.weight);
+      const top3Scores = weightedScores.sort((a, b) => b - a).slice(0, 3);
+      while (top3Scores.length < 3) {
+        top3Scores.push(0);
       }
-
-      const numExercises = top3Exercises.length;
-      if (numExercises > 0 && numExercises < 3) {
-        weightSum += 3 - numExercises;
-      }
-
-      const finalScore = weightSum > 0 ? weightedSum / weightSum : 0;
+      const scoreSum = top3Scores.reduce((sum, current) => sum + current, 0);
+      const finalScore = scoreSum / 3;
+      this.log.debug({ muscleId, top3Scores, finalScore }, "[RankingService] Calculated single muscle score");
       muscleScores.set(muscleId, Math.round(finalScore));
     }
 
@@ -559,14 +590,11 @@ export class RankingService {
     for (const group of allMuscleGroups) {
       const musclesInGroup = allMuscles.filter((m) => m.muscle_group_id === group.id);
       let weightedSum = 0;
-      let weightSum = 0;
       for (const muscle of musclesInGroup) {
         const score = muscleScores.get(muscle.id) ?? 0;
         weightedSum += score * muscle.muscle_group_weight;
-        weightSum += muscle.muscle_group_weight;
       }
-      const finalScore = weightSum > 0 ? weightedSum / weightSum : 0;
-      muscleGroupScores.set(group.id, Math.round(finalScore));
+      muscleGroupScores.set(group.id, Math.round(weightedSum));
     }
     return muscleGroupScores;
   }
@@ -576,12 +604,10 @@ export class RankingService {
     allMuscleGroups: Tables<"muscle_groups">[]
   ): number {
     let weightedSum = 0;
-    let weightSum = 0;
     for (const group of allMuscleGroups) {
       const score = muscleGroupScores.get(group.id) ?? 0;
       weightedSum += score * group.overall_weight;
-      weightSum += group.overall_weight;
     }
-    return Math.round(weightSum > 0 ? weightedSum / weightSum : 0);
+    return Math.round(weightedSum);
   }
 }

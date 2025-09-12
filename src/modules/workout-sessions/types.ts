@@ -1,10 +1,12 @@
 import { Enums } from "../../types/database";
 
 export type RankUp = {
-  type: "user" | "muscle_group";
+  type: "user" | "muscle_group" | "muscle" | "exercise";
   rank_name: string;
   rank_level: number;
   group_name?: string;
+  muscle_name?: string;
+  exercise_name?: string;
 };
 
 export type WorkoutFeedMetadata = {

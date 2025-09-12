@@ -64,7 +64,7 @@ export function calculateRankPoints(
   const score = Math.round(maxScore * (numerator / denominator));
   log?.debug({ alpha, eliteRatio, userRatio, score }, "[calculateRankPoints] Calculation");
 
-  return score;
+  return Math.min(score, maxScore);
 }
 
 export function buildRankProgression(

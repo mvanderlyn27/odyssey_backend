@@ -29,13 +29,17 @@ export interface FeedItemCreationData {
   rankUpData: RankUpData;
   allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[];
   allMuscleGroups: Tables<"muscle_groups">[];
+  allMuscles: Tables<"muscles">[];
+  allExercises: Tables<"exercises">[];
 }
 
 function _transformRankUpdateResultsToRankUps(
   rankUpData: RankUpData | undefined,
   isPremium: boolean,
   allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[],
-  allMuscleGroups: Tables<"muscle_groups">[]
+  allMuscleGroups: Tables<"muscle_groups">[],
+  allMuscles: Tables<"muscles">[],
+  allExercises: Tables<"exercises">[]
 ): RankUp[] {
   if (!rankUpData) {
     return [];
@@ -45,16 +49,15 @@ function _transformRankUpdateResultsToRankUps(
   if (
     rankUpData.userRankChange &&
     rankUpData.userRankChange.new_permanent_rank_id &&
-    rankUpData.userRankChange.old_permanent_rank_id
+    rankUpData.userRankChange.old_permanent_rank_id &&
+    rankUpData.userRankChange.new_permanent_rank_id > rankUpData.userRankChange.old_permanent_rank_id
   ) {
-    if (rankUpData.userRankChange.new_permanent_rank_id > rankUpData.userRankChange.old_permanent_rank_id) {
-      const rank = allRanks.find((r) => r.id === rankUpData.userRankChange?.new_permanent_rank_id);
-      rankUps.push({
-        type: "user",
-        rank_name: rank?.rank_name || "Unknown Rank",
-        rank_level: rankUpData.userRankChange.new_permanent_rank_id,
-      });
-    }
+    const rank = allRanks.find((r) => r.id === rankUpData.userRankChange?.new_permanent_rank_id);
+    rankUps.push({
+      type: "user",
+      rank_name: rank?.rank_name || "Unknown Rank",
+      rank_level: rankUpData.userRankChange.new_permanent_rank_id,
+    });
   }
 
   if (isPremium) {
@@ -74,7 +77,41 @@ function _transformRankUpdateResultsToRankUps(
         });
       }
     });
+
+    rankUpData.muscleRankChanges?.forEach((change) => {
+      if (
+        change.new_permanent_rank_id &&
+        change.old_permanent_rank_id &&
+        change.new_permanent_rank_id > change.old_permanent_rank_id
+      ) {
+        const rank = allRanks.find((r) => r.id === change.new_permanent_rank_id);
+        const muscle = allMuscles.find((m) => m.id === change.muscle_id);
+        rankUps.push({
+          type: "muscle",
+          rank_name: rank?.rank_name || "Unknown Rank",
+          rank_level: change.new_permanent_rank_id,
+          muscle_name: muscle?.name || "Unknown Muscle",
+        });
+      }
+    });
   }
+
+  rankUpData.exerciseRankChanges?.forEach((change) => {
+    if (
+      change.new_permanent_rank_id &&
+      change.old_permanent_rank_id &&
+      change.new_permanent_rank_id > change.old_permanent_rank_id
+    ) {
+      const rank = allRanks.find((r) => r.id === change.new_permanent_rank_id);
+      const exercise = allExercises.find((e) => e.id === change.exercise_id);
+      rankUps.push({
+        type: "exercise",
+        rank_name: rank?.rank_name || "Unknown Rank",
+        rank_level: change.new_permanent_rank_id,
+        exercise_name: exercise?.name || "Unknown Exercise",
+      });
+    }
+  });
 
   return rankUps;
 }
@@ -112,7 +149,9 @@ export async function createWorkoutFeedItem(fastify: FastifyInstance, inputData:
     inputData.rankUpData,
     inputData.userData.is_premium || false,
     inputData.allRanks,
-    inputData.allMuscleGroups
+    inputData.allMuscleGroups,
+    inputData.allMuscles,
+    inputData.allExercises
   );
   if (rankUps.length > 0) {
     metadata.rank_ups = rankUps;

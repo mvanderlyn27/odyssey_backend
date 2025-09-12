@@ -91,6 +91,7 @@ export const finishWorkoutSession = async (
       friends,
       workoutContext,
       bestSet,
+      userExerciseRanks,
     } = await _gatherAndPrepareWorkoutData(fastify, userId, finishData);
 
     // Handle existing_session_id: If provided, this is an update (finalize), otherwise new insert.
@@ -199,7 +200,7 @@ export const finishWorkoutSession = async (
           initialUserRank,
           initialMuscleGroupRanks,
           initialMuscleRanks,
-          [], // This is existingUserExerciseRanks, which is not needed here.
+          userExerciseRanks,
           isLocked
         );
       })(),
@@ -259,6 +260,8 @@ export const finishWorkoutSession = async (
         rankUpData: rankUpdateResults.rankUpData,
         allRanks,
         allMuscleGroups,
+        allMuscles,
+        allExercises: exercises,
       }).catch((err) => {
         fastify.log.error(err, `[FEED] Failed to create feed item for session ${newlyCreatedOrFetchedSession.id}`);
       });
