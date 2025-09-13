@@ -121,6 +121,7 @@ export const FailedSetInfoSchema = Type.Object(
     reps_achieved: Type.Union([Type.Number(), Type.Null()]),
     target_reps: Type.Union([Type.Number(), Type.Null()], { description: "Typically planned_min_reps" }),
     achieved_weight: Type.Union([Type.Number(), Type.Null()]),
+    target_weight: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     exercise_type: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   },
   { $id: "FailedSetInfoSchema", description: "Information about a failed set." }
@@ -133,6 +134,7 @@ export const SuccessfulSetInfoSchema = Type.Object(
     reps_achieved: Type.Union([Type.Number(), Type.Null()]),
     target_reps: Type.Union([Type.Number(), Type.Null()]),
     achieved_weight: Type.Union([Type.Number(), Type.Null()]),
+    target_weight: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     exercise_type: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   },
   { $id: "SuccessfulSetInfoSchema", description: "Information about a successful set." }

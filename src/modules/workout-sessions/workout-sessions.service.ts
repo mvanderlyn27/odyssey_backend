@@ -344,6 +344,7 @@ export const finishWorkoutSession = async (
                 reps_achieved: set.actual_reps,
                 target_reps: set.planned_min_reps,
                 achieved_weight: set.actual_weight_kg,
+                target_weight: set.planned_weight_kg,
                 exercise_type: exerciseDetail?.exercise_type,
               });
             } else if (set.is_success === true) {
@@ -352,6 +353,7 @@ export const finishWorkoutSession = async (
                 reps_achieved: set.actual_reps,
                 target_reps: set.planned_min_reps,
                 achieved_weight: set.actual_weight_kg,
+                target_weight: set.planned_weight_kg,
                 exercise_type: exerciseDetail?.exercise_type,
               });
             }
