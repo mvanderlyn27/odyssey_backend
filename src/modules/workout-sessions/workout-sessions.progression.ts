@@ -38,15 +38,15 @@ export async function _updateWorkoutPlanProgression(
   setsProgressionData: SetProgressionInput[]
 ): Promise<PlanProgressionResults> {
   const results: PlanProgressionResults = { weightIncreases: [], repIncreases: [] };
-  fastify.log.info(`[PROGRESSION_REFACTOR_V2] Starting for workoutPlanDayId: ${workoutPlanDayId}`, {
-    numProgressionSets: setsProgressionData.length,
-  });
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   if (!workoutPlanDayId || setsProgressionData.length === 0) {
-    fastify.log.info("[PROGRESSION_REFACTOR_V2] Skipping: No plan day ID or no sets for progression.");
+    fastify.log.debug({ workoutPlanDayId }, "[PROGRESSION] Skipping: No plan day ID or no sets for progression.");
     return results;
   }
+
+  fastify.log.info({ workoutPlanDayId }, `[PROGRESSION] Starting workout plan progression update`);
+  fastify.log.debug({ workoutPlanDayId, setsProgressionData }, `[PROGRESSION] Full progression data`);
 
   // Group progression data by exercise_id
   const progressionDataByExercise = setsProgressionData.reduce((acc, setData) => {
@@ -71,7 +71,7 @@ export async function _updateWorkoutPlanProgression(
     const currentPlanExerciseName = firstSet.exercise_name ?? "Unknown Exercise";
     const exerciseType = firstSet.exercise_type;
     const autoProgressionEnabled = firstSet.auto_progression_enabled;
-    const planDayExerciseId = firstSet.workout_plan_day_exercise_id;
+    const planDayExerciseId = firstSet.workout_plan_exercise_id;
 
     let progressionAppliedForExercise = false;
 
@@ -80,28 +80,35 @@ export async function _updateWorkoutPlanProgression(
     }
 
     if (!autoProgressionEnabled) {
-      fastify.log.info(
-        `[PROGRESSION_REFACTOR_V2] Auto-progression disabled for exercise '${currentPlanExerciseName}' (Exercise ID: ${exerciseId}). Skipping progression.`
+      fastify.log.debug(
+        { workoutPlanDayId, exerciseId },
+        `[PROGRESSION] Auto-progression disabled for exercise '${currentPlanExerciseName}'. Skipping.`
       );
       continue;
     }
 
     const wasOverallExerciseSuccessful = progressionSetsForThisExercise.every((ps) => ps.is_success === true);
 
-    fastify.log.info(
-      `[PROGRESSION_REFACTOR_V2] Overall success for exercise '${currentPlanExerciseName}': ${wasOverallExerciseSuccessful}.`
+    fastify.log.debug(
+      { workoutPlanDayId, exerciseId, success: wasOverallExerciseSuccessful },
+      `[PROGRESSION] Overall success for exercise '${currentPlanExerciseName}'`
     );
 
     if (!wasOverallExerciseSuccessful) {
-      fastify.log.info(
-        { sets: progressionSetsForThisExercise.map((s) => ({ ...s, is_success: s.is_success })) },
-        `[PROGRESSION_REFACTOR_V2] Not all relevant sets were successful for exercise '${currentPlanExerciseName}' (Exercise ID: ${exerciseId}). Skipping progression.`
+      fastify.log.debug(
+        {
+          workoutPlanDayId,
+          exerciseId,
+          sets: progressionSetsForThisExercise.map((s) => ({ ...s, is_success: s.is_success })),
+        },
+        `[PROGRESSION] Not all sets were successful for exercise '${currentPlanExerciseName}'. Skipping.`
       );
       continue;
     }
 
     fastify.log.info(
-      `[PROGRESSION_REFACTOR_V2] Processing progression for exercise '${currentPlanExerciseName}' (Exercise ID: ${exerciseId}).`
+      { workoutPlanDayId, exerciseId },
+      `[PROGRESSION] Processing progression for exercise '${currentPlanExerciseName}'`
     );
 
     if (exerciseType === "calisthenics") {
@@ -124,7 +131,8 @@ export async function _updateWorkoutPlanProgression(
           const newMaxReps = oldMaxReps + repIncrement;
 
           fastify.log.info(
-            `[PROGRESSION_REFACTOR_V2] Rep Progression for ${currentPlanExerciseName}: old=${oldMinReps}-${oldMaxReps}, new=${newMinReps}-${newMaxReps}`
+            { workoutPlanDayId, exerciseId, oldMinReps, oldMaxReps, newMinReps, newMaxReps },
+            `[PROGRESSION] Rep Progression for ${currentPlanExerciseName}`
           );
 
           planSetUpdates.push({
@@ -168,7 +176,8 @@ export async function _updateWorkoutPlanProgression(
           }
 
           fastify.log.info(
-            `[PROGRESSION_REFACTOR_V2] Weight Progression for ${currentPlanExerciseName}: old=${oldTargetWeightForCalc}, new=${newTargetWeight}`
+            { workoutPlanDayId, exerciseId, oldTargetWeight: oldTargetWeightForCalc, newTargetWeight },
+            `[PROGRESSION] Weight Progression for ${currentPlanExerciseName}`
           );
 
           planSetUpdates.push({
@@ -193,7 +202,8 @@ export async function _updateWorkoutPlanProgression(
 
   if (planSetUpdates.length > 0) {
     fastify.log.info(
-      `[PROGRESSION_REFACTOR_V2] Attempting to parallel update ${planSetUpdates.length} plan sets in 'workout_plan_day_exercise_sets'.`
+      { workoutPlanDayId, count: planSetUpdates.length },
+      `[PROGRESSION] Attempting to parallel update plan sets`
     );
 
     const updatePromises = planSetUpdates.map((update) => {
@@ -206,7 +216,7 @@ export async function _updateWorkoutPlanProgression(
           if (error) {
             fastify.log.error(
               { error, setIdToUpdate: id, updateData },
-              "[PROGRESSION_REFACTOR_V2] Failed to update a plan set during parallel operation."
+              "[PROGRESSION] Failed to update a plan set during parallel operation."
             );
           }
         });
@@ -215,10 +225,11 @@ export async function _updateWorkoutPlanProgression(
     await Promise.all(updatePromises);
 
     fastify.log.info(
-      `[PROGRESSION_REFACTOR_V2] Parallel update process completed for ${planSetUpdates.length} plan sets.`
+      { workoutPlanDayId, count: planSetUpdates.length },
+      `[PROGRESSION] Parallel update process completed`
     );
   } else {
-    fastify.log.info("[PROGRESSION_REFACTOR_V2] No plan set updates to perform.");
+    fastify.log.info({ workoutPlanDayId }, "[PROGRESSION] No plan set updates to perform.");
   }
 
   return results;

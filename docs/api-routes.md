@@ -44,7 +44,7 @@ interface SessionExercise {
   id: string; // UUID
   workout_session_id: string; // UUID
   exercise_id: string; // UUID
-  workout_plan_day_exercise_id: string | null; // UUID (from workout_plan_day_exercises)
+  workout_plan_exercise_id: string | null; // UUID (from workout_plan_day_exercises)
   set_order: number;
   target_sets?: number | null;
   target_reps_min?: number | null;
@@ -131,7 +131,7 @@ interface UpdateSetBody {
 // Represents data for a single set logged by the client before saving
 interface LoggedSetInput {
   exercise_id: string; // UUID
-  workout_plan_day_exercise_id?: string | null; // UUID (Optional link to plan)
+  workout_plan_exercise_id?: string | null; // UUID (Optional link to plan)
   set_order: number; // Order of the set for this exercise in the session (>= 1)
   logged_reps: number; // Reps logged for this set (>= 0)
   logged_weight_kg: number; // Weight logged for this set (>= 0)

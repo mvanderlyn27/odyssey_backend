@@ -1,7 +1,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[];
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.3 (519615d)";
@@ -11,28 +11,28 @@ export type Database = {
       active_workout_plans: {
         Row: {
           active_workout_plan_id: string | null;
+          cur_cycle_start_date: string | null;
           deleted: boolean;
           id: string;
-          last_completed_day_id: string | null;
-          started_at: string | null;
+          prev_cycle_start_date: string | null;
           updated_at: string;
           user_id: string;
         };
         Insert: {
           active_workout_plan_id?: string | null;
+          cur_cycle_start_date?: string | null;
           deleted?: boolean;
           id?: string;
-          last_completed_day_id?: string | null;
-          started_at?: string | null;
+          prev_cycle_start_date?: string | null;
           updated_at?: string;
           user_id: string;
         };
         Update: {
           active_workout_plan_id?: string | null;
+          cur_cycle_start_date?: string | null;
           deleted?: boolean;
           id?: string;
-          last_completed_day_id?: string | null;
-          started_at?: string | null;
+          prev_cycle_start_date?: string | null;
           updated_at?: string;
           user_id?: string;
         };
@@ -45,17 +45,10 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "active_workout_plans_last_completed_day_id_fkey";
-            columns: ["last_completed_day_id"];
-            isOneToOne: false;
-            referencedRelation: "workout_plan_days";
-            referencedColumns: ["id"];
-          },
-          {
             foreignKeyName: "active_workout_plans_user_id_fkey";
             columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "user_profiles";
+            isOneToOne: true;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];
@@ -86,8 +79,8 @@ export type Database = {
           {
             foreignKeyName: "active_workout_sessions_user_id_fkey";
             columns: ["user_id"];
-            isOneToOne: false;
-            referencedRelation: "user_profiles";
+            isOneToOne: true;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           },
           {
@@ -99,6 +92,215 @@ export type Database = {
           }
         ];
       };
+      body_measurements: {
+        Row: {
+          created_at: string;
+          id: string;
+          measured_at: string;
+          measurement_type: Database["public"]["Enums"]["body_measurement_type"];
+          user_id: string;
+          value: number;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          measured_at?: string;
+          measurement_type: Database["public"]["Enums"]["body_measurement_type"];
+          user_id: string;
+          value: number;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          measured_at?: string;
+          measurement_type?: Database["public"]["Enums"]["body_measurement_type"];
+          user_id?: string;
+          value?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "body_measurements_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      custom_exercise_equipment_requirements: {
+        Row: {
+          created_at: string;
+          custom_exercise_id: string;
+          equipment_id: string;
+          id: string;
+          priority: number;
+          updated_at: string;
+        };
+        Insert: {
+          created_at?: string;
+          custom_exercise_id: string;
+          equipment_id: string;
+          id?: string;
+          priority?: number;
+          updated_at?: string;
+        };
+        Update: {
+          created_at?: string;
+          custom_exercise_id?: string;
+          equipment_id?: string;
+          id?: string;
+          priority?: number;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "custom_exercise_equipment_requirements_custom_exercise_id_fkey";
+            columns: ["custom_exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "custom_exercises";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "custom_exercise_equipment_requirements_equipment_id_fkey";
+            columns: ["equipment_id"];
+            isOneToOne: false;
+            referencedRelation: "equipment";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      custom_exercise_muscles: {
+        Row: {
+          created_at: string | null;
+          custom_exercise_id: string;
+          exercise_muscle_weight: number | null;
+          id: string;
+          muscle_id: string;
+          muscle_intensity: Database["public"]["Enums"]["muscle_intensity"];
+          updated_at: string | null;
+        };
+        Insert: {
+          created_at?: string | null;
+          custom_exercise_id: string;
+          exercise_muscle_weight?: number | null;
+          id?: string;
+          muscle_id: string;
+          muscle_intensity: Database["public"]["Enums"]["muscle_intensity"];
+          updated_at?: string | null;
+        };
+        Update: {
+          created_at?: string | null;
+          custom_exercise_id?: string;
+          exercise_muscle_weight?: number | null;
+          id?: string;
+          muscle_id?: string;
+          muscle_intensity?: Database["public"]["Enums"]["muscle_intensity"];
+          updated_at?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "custom_exercise_muscles_custom_exercise_id_fkey";
+            columns: ["custom_exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "custom_exercises";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "custom_exercise_muscles_muscle_id_fkey";
+            columns: ["muscle_id"];
+            isOneToOne: false;
+            referencedRelation: "muscles";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      custom_exercises: {
+        Row: {
+          created_at: string;
+          deleted: boolean;
+          description: string | null;
+          difficulty: string | null;
+          exercise_type: Database["public"]["Enums"]["exercise_type"] | null;
+          id: string;
+          instructions: string | null;
+          is_bilateral: boolean | null;
+          name: string;
+          popularity: number;
+          source_custom_exercise_id: string | null;
+          updated_at: string;
+          user_id: string;
+          video_url: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          deleted?: boolean;
+          description?: string | null;
+          difficulty?: string | null;
+          exercise_type?: Database["public"]["Enums"]["exercise_type"] | null;
+          id?: string;
+          instructions?: string | null;
+          is_bilateral?: boolean | null;
+          name: string;
+          popularity?: number;
+          source_custom_exercise_id?: string | null;
+          updated_at?: string;
+          user_id: string;
+          video_url?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          deleted?: boolean;
+          description?: string | null;
+          difficulty?: string | null;
+          exercise_type?: Database["public"]["Enums"]["exercise_type"] | null;
+          id?: string;
+          instructions?: string | null;
+          is_bilateral?: boolean | null;
+          name?: string;
+          popularity?: number;
+          source_custom_exercise_id?: string | null;
+          updated_at?: string;
+          user_id?: string;
+          video_url?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "custom_exercises_source_custom_exercise_id_fkey";
+            columns: ["source_custom_exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "custom_exercises";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "custom_exercises_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "global_leaderboard";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "custom_exercises_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "custom_exercises_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_global_leaderboard_with_change";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "custom_exercises_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_user_profile_full";
+            referencedColumns: ["user_id"];
+          }
+        ];
+      };
       equipment: {
         Row: {
           created_at: string;
@@ -107,6 +309,7 @@ export type Database = {
           id: string;
           image_url: string | null;
           name: string;
+          type: Database["public"]["Enums"]["equipment_type"] | null;
           updated_at: string;
         };
         Insert: {
@@ -116,6 +319,7 @@ export type Database = {
           id?: string;
           image_url?: string | null;
           name: string;
+          type?: Database["public"]["Enums"]["equipment_type"] | null;
           updated_at?: string;
         };
         Update: {
@@ -125,9 +329,36 @@ export type Database = {
           id?: string;
           image_url?: string | null;
           name?: string;
+          type?: Database["public"]["Enums"]["equipment_type"] | null;
           updated_at?: string;
         };
         Relationships: [];
+      };
+      exercise_alternate_names: {
+        Row: {
+          exercise_id: string;
+          id: string;
+          name: string;
+        };
+        Insert: {
+          exercise_id: string;
+          id?: string;
+          name: string;
+        };
+        Update: {
+          exercise_id?: string;
+          id?: string;
+          name?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "exercise_alternate_names_exercise_id_fkey";
+            columns: ["exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "exercises";
+            referencedColumns: ["id"];
+          }
+        ];
       };
       exercise_equipment_requirements: {
         Row: {
@@ -136,6 +367,7 @@ export type Database = {
           equipment_id: string | null;
           exercise_id: string;
           id: string;
+          priority: number;
           updated_at: string;
         };
         Insert: {
@@ -144,6 +376,7 @@ export type Database = {
           equipment_id?: string | null;
           exercise_id: string;
           id?: string;
+          priority?: number;
           updated_at?: string;
         };
         Update: {
@@ -152,6 +385,7 @@ export type Database = {
           equipment_id?: string | null;
           exercise_id?: string;
           id?: string;
+          priority?: number;
           updated_at?: string;
         };
         Relationships: [
@@ -213,101 +447,205 @@ export type Database = {
           }
         ];
       };
-      exercise_rank_benchmarks: {
-        Row: {
-          created_at: string | null;
-          exercise_id: string;
-          gender: Database["public"]["Enums"]["gender"];
-          id: string;
-          min_threshold: number;
-          rank_id: number | null;
-          updated_at: string | null;
-        };
-        Insert: {
-          created_at?: string | null;
-          exercise_id: string;
-          gender: Database["public"]["Enums"]["gender"];
-          id?: string;
-          min_threshold: number;
-          rank_id?: number | null;
-          updated_at?: string | null;
-        };
-        Update: {
-          created_at?: string | null;
-          exercise_id?: string;
-          gender?: Database["public"]["Enums"]["gender"];
-          id?: string;
-          min_threshold?: number;
-          rank_id?: number | null;
-          updated_at?: string | null;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "exercise_swr_benchmarks_exercise_id_fkey";
-            columns: ["exercise_id"];
-            isOneToOne: false;
-            referencedRelation: "exercises";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "fk_rank_id";
-            columns: ["rank_id"];
-            isOneToOne: false;
-            referencedRelation: "ranks";
-            referencedColumns: ["id"];
-          }
-        ];
-      };
       exercises: {
         Row: {
-          bodyweight_percentage: number | null;
+          alpha_value: number | null;
           created_at: string;
-          created_by_user_id: string | null;
           deleted: boolean;
           description: string | null;
           difficulty: string | null;
+          elite_duration_female: number | null;
+          elite_duration_male: number | null;
+          elite_reps_female: number | null;
+          elite_reps_male: number | null;
+          elite_swr_female: number | null;
+          elite_swr_male: number | null;
           exercise_type: Database["public"]["Enums"]["exercise_type"] | null;
           id: string;
           instructions: string | null;
           is_bilateral: boolean | null;
-          is_public: boolean | null;
+          movement_type: Database["public"]["Enums"]["movement_types"] | null;
           name: string;
+          popularity: number;
           updated_at: string;
           video_url: string | null;
         };
         Insert: {
-          bodyweight_percentage?: number | null;
+          alpha_value?: number | null;
           created_at?: string;
-          created_by_user_id?: string | null;
           deleted?: boolean;
           description?: string | null;
           difficulty?: string | null;
+          elite_duration_female?: number | null;
+          elite_duration_male?: number | null;
+          elite_reps_female?: number | null;
+          elite_reps_male?: number | null;
+          elite_swr_female?: number | null;
+          elite_swr_male?: number | null;
           exercise_type?: Database["public"]["Enums"]["exercise_type"] | null;
           id?: string;
           instructions?: string | null;
           is_bilateral?: boolean | null;
-          is_public?: boolean | null;
+          movement_type?: Database["public"]["Enums"]["movement_types"] | null;
           name: string;
+          popularity?: number;
           updated_at?: string;
           video_url?: string | null;
         };
         Update: {
-          bodyweight_percentage?: number | null;
+          alpha_value?: number | null;
           created_at?: string;
-          created_by_user_id?: string | null;
           deleted?: boolean;
           description?: string | null;
           difficulty?: string | null;
+          elite_duration_female?: number | null;
+          elite_duration_male?: number | null;
+          elite_reps_female?: number | null;
+          elite_reps_male?: number | null;
+          elite_swr_female?: number | null;
+          elite_swr_male?: number | null;
           exercise_type?: Database["public"]["Enums"]["exercise_type"] | null;
           id?: string;
           instructions?: string | null;
           is_bilateral?: boolean | null;
-          is_public?: boolean | null;
+          movement_type?: Database["public"]["Enums"]["movement_types"] | null;
           name?: string;
+          popularity?: number;
           updated_at?: string;
           video_url?: string | null;
         };
         Relationships: [];
+      };
+      feed_items: {
+        Row: {
+          comments_count: number;
+          created_at: string;
+          id: string;
+          is_public: boolean;
+          likes_count: number;
+          metadata: Json;
+          post_type: Database["public"]["Enums"]["feed_post_type"];
+          status: Database["public"]["Enums"]["processing_status"];
+          user_id: string;
+          workout_session_id: string | null;
+        };
+        Insert: {
+          comments_count?: number;
+          created_at?: string;
+          id?: string;
+          is_public?: boolean;
+          likes_count?: number;
+          metadata?: Json;
+          post_type: Database["public"]["Enums"]["feed_post_type"];
+          status?: Database["public"]["Enums"]["processing_status"];
+          user_id: string;
+          workout_session_id?: string | null;
+        };
+        Update: {
+          comments_count?: number;
+          created_at?: string;
+          id?: string;
+          is_public?: boolean;
+          likes_count?: number;
+          metadata?: Json;
+          post_type?: Database["public"]["Enums"]["feed_post_type"];
+          status?: Database["public"]["Enums"]["processing_status"];
+          user_id?: string;
+          workout_session_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "feed_items_workout_session_id_fkey";
+            columns: ["workout_session_id"];
+            isOneToOne: false;
+            referencedRelation: "workout_sessions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      friendships: {
+        Row: {
+          addressee_id: string;
+          created_at: string;
+          id: string;
+          requester_id: string;
+          status: Database["public"]["Enums"]["friendship_status"];
+          updated_at: string;
+        };
+        Insert: {
+          addressee_id: string;
+          created_at?: string;
+          id?: string;
+          requester_id: string;
+          status?: Database["public"]["Enums"]["friendship_status"];
+          updated_at?: string;
+        };
+        Update: {
+          addressee_id?: string;
+          created_at?: string;
+          id?: string;
+          requester_id?: string;
+          status?: Database["public"]["Enums"]["friendship_status"];
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "friendships_addressee_id_fkey";
+            columns: ["addressee_id"];
+            isOneToOne: false;
+            referencedRelation: "global_leaderboard";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "friendships_addressee_id_fkey";
+            columns: ["addressee_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "friendships_addressee_id_fkey";
+            columns: ["addressee_id"];
+            isOneToOne: false;
+            referencedRelation: "v_global_leaderboard_with_change";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "friendships_addressee_id_fkey";
+            columns: ["addressee_id"];
+            isOneToOne: false;
+            referencedRelation: "v_user_profile_full";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "friendships_requester_id_fkey";
+            columns: ["requester_id"];
+            isOneToOne: false;
+            referencedRelation: "global_leaderboard";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "friendships_requester_id_fkey";
+            columns: ["requester_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "friendships_requester_id_fkey";
+            columns: ["requester_id"];
+            isOneToOne: false;
+            referencedRelation: "v_global_leaderboard_with_change";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "friendships_requester_id_fkey";
+            columns: ["requester_id"];
+            isOneToOne: false;
+            referencedRelation: "v_user_profile_full";
+            referencedColumns: ["user_id"];
+          }
+        ];
       };
       inspirational_quotes: {
         Row: {
@@ -333,6 +671,41 @@ export type Database = {
         };
         Relationships: [];
       };
+      inter_ranks: {
+        Row: {
+          id: number;
+          max_score: number;
+          min_score: number;
+          name: string;
+          rank_id: number;
+          sort_order: number;
+        };
+        Insert: {
+          id?: number;
+          max_score: number;
+          min_score: number;
+          name: string;
+          rank_id: number;
+          sort_order: number;
+        };
+        Update: {
+          id?: number;
+          max_score?: number;
+          min_score?: number;
+          name?: string;
+          rank_id?: number;
+          sort_order?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "inter_ranks_rank_id_fkey";
+            columns: ["rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
       level_definitions: {
         Row: {
           created_at: string;
@@ -357,47 +730,72 @@ export type Database = {
         };
         Relationships: [];
       };
-      muscle_group_rank_benchmarks: {
+      muscle_group_rank_history: {
         Row: {
-          created_at: string;
-          gender: Database["public"]["Enums"]["gender"];
+          achieved_at: string;
           id: string;
-          min_threshold: number;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          locked: boolean;
           muscle_group_id: string;
-          rank_id: number;
-          updated_at: string;
+          permanent_inter_rank_id: number | null;
+          permanent_rank_id: number | null;
+          permanent_score: number | null;
+          user_id: string;
         };
         Insert: {
-          created_at?: string;
-          gender: Database["public"]["Enums"]["gender"];
+          achieved_at: string;
           id?: string;
-          min_threshold: number;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          locked?: boolean;
           muscle_group_id: string;
-          rank_id: number;
-          updated_at?: string;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
+          user_id: string;
         };
         Update: {
-          created_at?: string;
-          gender?: Database["public"]["Enums"]["gender"];
+          achieved_at?: string;
           id?: string;
-          min_threshold?: number;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          locked?: boolean;
           muscle_group_id?: string;
-          rank_id?: number;
-          updated_at?: string;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
+          user_id?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "fk_muscle_group";
-            columns: ["muscle_group_id"];
+            foreignKeyName: "muscle_group_rank_history_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
             isOneToOne: false;
-            referencedRelation: "muscle_groups";
+            referencedRelation: "inter_ranks";
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "fk_rank";
-            columns: ["rank_id"];
+            foreignKeyName: "muscle_group_rank_history_permanent_inter_rank_id_fkey";
+            columns: ["permanent_inter_rank_id"];
             isOneToOne: false;
-            referencedRelation: "ranks";
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_group_rank_history_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];
@@ -407,9 +805,16 @@ export type Database = {
           created_at: string;
           id: string;
           last_calculated_at: string | null;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          locked: boolean;
           muscle_group_id: string;
-          rank_id: number | null;
-          strength_score: number | null;
+          permanent_inter_rank_id: number | null;
+          permanent_rank_id: number | null;
+          permanent_score: number | null;
           updated_at: string;
           user_id: string;
         };
@@ -417,9 +822,16 @@ export type Database = {
           created_at?: string;
           id?: string;
           last_calculated_at?: string | null;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          locked?: boolean;
           muscle_group_id: string;
-          rank_id?: number | null;
-          strength_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
           updated_at?: string;
           user_id: string;
         };
@@ -427,9 +839,16 @@ export type Database = {
           created_at?: string;
           id?: string;
           last_calculated_at?: string | null;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          locked?: boolean;
           muscle_group_id?: string;
-          rank_id?: number | null;
-          strength_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
           updated_at?: string;
           user_id?: string;
         };
@@ -442,6 +861,20 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "muscle_group_ranks_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_leaderboard_rank_id_fkey";
+            columns: ["leaderboard_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "muscle_group_ranks_muscle_group_id_fkey";
             columns: ["muscle_group_id"];
             isOneToOne: false;
@@ -449,8 +882,15 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "muscle_group_ranks_permanent_inter_rank_id_fkey";
+            columns: ["permanent_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "muscle_group_ranks_rank_id_fkey";
-            columns: ["rank_id"];
+            columns: ["permanent_rank_id"];
             isOneToOne: false;
             referencedRelation: "ranks";
             referencedColumns: ["id"];
@@ -459,8 +899,29 @@ export type Database = {
             foreignKeyName: "muscle_group_ranks_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "user_profiles";
+            referencedRelation: "global_leaderboard";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_global_leaderboard_with_change";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_user_profile_full";
+            referencedColumns: ["user_id"];
           }
         ];
       };
@@ -488,47 +949,72 @@ export type Database = {
         };
         Relationships: [];
       };
-      muscle_rank_benchmarks: {
+      muscle_rank_history: {
         Row: {
-          created_at: string;
-          gender: Database["public"]["Enums"]["gender"];
+          achieved_at: string;
           id: string;
-          min_threshold: number;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          locked: boolean;
           muscle_id: string;
-          rank_id: number;
-          updated_at: string;
+          permanent_inter_rank_id: number | null;
+          permanent_rank_id: number | null;
+          permanent_score: number | null;
+          user_id: string;
         };
         Insert: {
-          created_at?: string;
-          gender: Database["public"]["Enums"]["gender"];
+          achieved_at: string;
           id?: string;
-          min_threshold: number;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          locked?: boolean;
           muscle_id: string;
-          rank_id: number;
-          updated_at?: string;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
+          user_id: string;
         };
         Update: {
-          created_at?: string;
-          gender?: Database["public"]["Enums"]["gender"];
+          achieved_at?: string;
           id?: string;
-          min_threshold?: number;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          locked?: boolean;
           muscle_id?: string;
-          rank_id?: number;
-          updated_at?: string;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
+          user_id?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "fk_muscle";
-            columns: ["muscle_id"];
+            foreignKeyName: "muscle_rank_history_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
             isOneToOne: false;
-            referencedRelation: "muscles";
+            referencedRelation: "inter_ranks";
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "fk_rank";
-            columns: ["rank_id"];
+            foreignKeyName: "muscle_rank_history_permanent_inter_rank_id_fkey";
+            columns: ["permanent_inter_rank_id"];
             isOneToOne: false;
-            referencedRelation: "ranks";
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_rank_history_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];
@@ -538,9 +1024,16 @@ export type Database = {
           created_at: string;
           id: string;
           last_calculated_at: string | null;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          locked: boolean;
           muscle_id: string;
-          rank_id: number | null;
-          strength_score: number | null;
+          permanent_inter_rank_id: number | null;
+          permanent_rank_id: number | null;
+          permanent_score: number | null;
           updated_at: string;
           user_id: string;
         };
@@ -548,9 +1041,16 @@ export type Database = {
           created_at?: string;
           id?: string;
           last_calculated_at?: string | null;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          locked?: boolean;
           muscle_id: string;
-          rank_id?: number | null;
-          strength_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
           updated_at?: string;
           user_id: string;
         };
@@ -558,9 +1058,16 @@ export type Database = {
           created_at?: string;
           id?: string;
           last_calculated_at?: string | null;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          locked?: boolean;
           muscle_id?: string;
-          rank_id?: number | null;
-          strength_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
           updated_at?: string;
           user_id?: string;
         };
@@ -573,6 +1080,20 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "muscle_ranks_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_leaderboard_rank_id_fkey";
+            columns: ["leaderboard_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "muscle_ranks_muscle_id_fkey";
             columns: ["muscle_id"];
             isOneToOne: false;
@@ -580,8 +1101,15 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "muscle_ranks_permanent_inter_rank_id_fkey";
+            columns: ["permanent_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "muscle_ranks_rank_id_fkey";
-            columns: ["rank_id"];
+            columns: ["permanent_rank_id"];
             isOneToOne: false;
             referencedRelation: "ranks";
             referencedColumns: ["id"];
@@ -590,8 +1118,29 @@ export type Database = {
             foreignKeyName: "muscle_ranks_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "user_profiles";
+            referencedRelation: "global_leaderboard";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_global_leaderboard_with_change";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_user_profile_full";
+            referencedColumns: ["user_id"];
           }
         ];
       };
@@ -630,37 +1179,171 @@ export type Database = {
           }
         ];
       };
-      overall_rank_benchmarks: {
+      notifications: {
         Row: {
           created_at: string;
-          gender: Database["public"]["Enums"]["gender"];
+          error_message: string | null;
           id: string;
-          min_threshold: number;
-          rank_id: number;
-          updated_at: string;
+          is_read: boolean;
+          is_silent: boolean;
+          link: string | null;
+          message: string | null;
+          metadata: Json | null;
+          recipient_user_id: string;
+          sender_avatar_url: string | null;
+          sent_at: string | null;
+          status: Database["public"]["Enums"]["notification_status"];
+          title: string | null;
+          type: Database["public"]["Enums"]["notification_type"];
         };
         Insert: {
           created_at?: string;
-          gender: Database["public"]["Enums"]["gender"];
+          error_message?: string | null;
           id?: string;
-          min_threshold: number;
-          rank_id: number;
-          updated_at?: string;
+          is_read?: boolean;
+          is_silent?: boolean;
+          link?: string | null;
+          message?: string | null;
+          metadata?: Json | null;
+          recipient_user_id: string;
+          sender_avatar_url?: string | null;
+          sent_at?: string | null;
+          status?: Database["public"]["Enums"]["notification_status"];
+          title?: string | null;
+          type: Database["public"]["Enums"]["notification_type"];
         };
         Update: {
           created_at?: string;
-          gender?: Database["public"]["Enums"]["gender"];
+          error_message?: string | null;
           id?: string;
-          min_threshold?: number;
-          rank_id?: number;
-          updated_at?: string;
+          is_read?: boolean;
+          is_silent?: boolean;
+          link?: string | null;
+          message?: string | null;
+          metadata?: Json | null;
+          recipient_user_id?: string;
+          sender_avatar_url?: string | null;
+          sent_at?: string | null;
+          status?: Database["public"]["Enums"]["notification_status"];
+          title?: string | null;
+          type?: Database["public"]["Enums"]["notification_type"];
         };
         Relationships: [
           {
-            foreignKeyName: "fk_rank";
-            columns: ["rank_id"];
+            foreignKeyName: "notifications_recipient_user_id_fkey";
+            columns: ["recipient_user_id"];
             isOneToOne: false;
-            referencedRelation: "ranks";
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      profiles: {
+        Row: {
+          avatar_blurhash: string | null;
+          avatar_url: string | null;
+          bio: string | null;
+          created_at: string;
+          current_level_id: string | null;
+          display_name: string | null;
+          experience_points: number;
+          id: string;
+          is_premium: boolean | null;
+          updated_at: string;
+          username: string | null;
+        };
+        Insert: {
+          avatar_blurhash?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string;
+          current_level_id?: string | null;
+          display_name?: string | null;
+          experience_points?: number;
+          id: string;
+          is_premium?: boolean | null;
+          updated_at?: string;
+          username?: string | null;
+        };
+        Update: {
+          avatar_blurhash?: string | null;
+          avatar_url?: string | null;
+          bio?: string | null;
+          created_at?: string;
+          current_level_id?: string | null;
+          display_name?: string | null;
+          experience_points?: number;
+          id?: string;
+          is_premium?: boolean | null;
+          updated_at?: string;
+          username?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "profiles_current_level_id_fkey";
+            columns: ["current_level_id"];
+            isOneToOne: false;
+            referencedRelation: "level_definitions";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      rank_calculations: {
+        Row: {
+          achieved_at: string | null;
+          bodyweight_kg: number | null;
+          created_at: string | null;
+          exercise_id: string | null;
+          id: string;
+          new_calculator_balance: number | null;
+          old_calculator_balance: number | null;
+          rank_up_data: Json | null;
+          reps: number | null;
+          status: Database["public"]["Enums"]["processing_status"];
+          user_id: string;
+          weight_kg: number | null;
+        };
+        Insert: {
+          achieved_at?: string | null;
+          bodyweight_kg?: number | null;
+          created_at?: string | null;
+          exercise_id?: string | null;
+          id?: string;
+          new_calculator_balance?: number | null;
+          old_calculator_balance?: number | null;
+          rank_up_data?: Json | null;
+          reps?: number | null;
+          status?: Database["public"]["Enums"]["processing_status"];
+          user_id: string;
+          weight_kg?: number | null;
+        };
+        Update: {
+          achieved_at?: string | null;
+          bodyweight_kg?: number | null;
+          created_at?: string | null;
+          exercise_id?: string | null;
+          id?: string;
+          new_calculator_balance?: number | null;
+          old_calculator_balance?: number | null;
+          rank_up_data?: Json | null;
+          reps?: number | null;
+          status?: Database["public"]["Enums"]["processing_status"];
+          user_id?: string;
+          weight_kg?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "rank_calculations_exercise_id_fkey";
+            columns: ["exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "exercises";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "rank_calculations_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];
@@ -669,48 +1352,148 @@ export type Database = {
         Row: {
           description: string | null;
           id: number;
+          max_score: number | null;
           min_score: number | null;
           rank_name: string;
         };
         Insert: {
           description?: string | null;
           id?: number;
+          max_score?: number | null;
           min_score?: number | null;
           rank_name: string;
         };
         Update: {
           description?: string | null;
           id?: number;
+          max_score?: number | null;
           min_score?: number | null;
           rank_name?: string;
         };
         Relationships: [];
       };
-      user_body_measurements: {
+      system_banners: {
         Row: {
-          body_weight: number | null;
-          created_at: string;
+          cta_link: string | null;
+          end_date: string | null;
+          id: string;
+          message: string;
+          start_date: string;
+          title: string;
+        };
+        Insert: {
+          cta_link?: string | null;
+          end_date?: string | null;
+          id?: string;
+          message: string;
+          start_date?: string;
+          title: string;
+        };
+        Update: {
+          cta_link?: string | null;
+          end_date?: string | null;
+          id?: string;
+          message?: string;
+          start_date?: string;
+          title?: string;
+        };
+        Relationships: [];
+      };
+      user_dismissed_banners: {
+        Row: {
+          banner_id: string;
+          dismissed_at: string;
           id: string;
           user_id: string;
         };
         Insert: {
-          body_weight?: number | null;
-          created_at?: string;
+          banner_id: string;
+          dismissed_at?: string;
           id?: string;
           user_id: string;
         };
         Update: {
-          body_weight?: number | null;
-          created_at?: string;
+          banner_id?: string;
+          dismissed_at?: string;
           id?: string;
           user_id?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "user_body_measurements_user_id_fkey";
+            foreignKeyName: "user_dismissed_banners_banner_id_fkey";
+            columns: ["banner_id"];
+            isOneToOne: false;
+            referencedRelation: "system_banners";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_dismissed_banners_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "user_profiles";
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      user_exercise_pr_history: {
+        Row: {
+          achieved_at: string;
+          bodyweight_kg: number | null;
+          custom_exercise_id: string | null;
+          estimated_1rm: number | null;
+          exercise_id: string | null;
+          exercise_key: string;
+          id: string;
+          pr_type: Database["public"]["Enums"]["pr_type"] | null;
+          reps: number | null;
+          source_set_id: string | null;
+          swr: number | null;
+          user_id: string;
+          weight_kg: number | null;
+        };
+        Insert: {
+          achieved_at: string;
+          bodyweight_kg?: number | null;
+          custom_exercise_id?: string | null;
+          estimated_1rm?: number | null;
+          exercise_id?: string | null;
+          exercise_key: string;
+          id?: string;
+          pr_type?: Database["public"]["Enums"]["pr_type"] | null;
+          reps?: number | null;
+          source_set_id?: string | null;
+          swr?: number | null;
+          user_id: string;
+          weight_kg?: number | null;
+        };
+        Update: {
+          achieved_at?: string;
+          bodyweight_kg?: number | null;
+          custom_exercise_id?: string | null;
+          estimated_1rm?: number | null;
+          exercise_id?: string | null;
+          exercise_key?: string;
+          id?: string;
+          pr_type?: Database["public"]["Enums"]["pr_type"] | null;
+          reps?: number | null;
+          source_set_id?: string | null;
+          swr?: number | null;
+          user_id?: string;
+          weight_kg?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_exercise_pr_history_custom_exercise_id_fkey";
+            columns: ["custom_exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "custom_exercises";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_pr_history_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];
@@ -718,49 +1501,61 @@ export type Database = {
       user_exercise_prs: {
         Row: {
           achieved_at: string | null;
-          best_1rm: number | null;
-          best_reps: number | null;
-          best_swr: number | null;
+          bodyweight_kg: number | null;
           created_at: string | null;
-          exercise_id: string;
+          custom_exercise_id: string | null;
+          estimated_1rm: number | null;
+          exercise_id: string | null;
+          exercise_key: string;
           id: string;
-          rank_id: number | null;
+          pr_type: Database["public"]["Enums"]["pr_type"];
+          reps: number | null;
           source_set_id: string | null;
+          swr: number | null;
           updated_at: string | null;
           user_id: string;
+          weight_kg: number | null;
         };
         Insert: {
           achieved_at?: string | null;
-          best_1rm?: number | null;
-          best_reps?: number | null;
-          best_swr?: number | null;
+          bodyweight_kg?: number | null;
           created_at?: string | null;
-          exercise_id: string;
+          custom_exercise_id?: string | null;
+          estimated_1rm?: number | null;
+          exercise_id?: string | null;
+          exercise_key: string;
           id?: string;
-          rank_id?: number | null;
+          pr_type: Database["public"]["Enums"]["pr_type"];
+          reps?: number | null;
           source_set_id?: string | null;
+          swr?: number | null;
           updated_at?: string | null;
           user_id: string;
+          weight_kg?: number | null;
         };
         Update: {
           achieved_at?: string | null;
-          best_1rm?: number | null;
-          best_reps?: number | null;
-          best_swr?: number | null;
+          bodyweight_kg?: number | null;
           created_at?: string | null;
-          exercise_id?: string;
+          custom_exercise_id?: string | null;
+          estimated_1rm?: number | null;
+          exercise_id?: string | null;
+          exercise_key?: string;
           id?: string;
-          rank_id?: number | null;
+          pr_type?: Database["public"]["Enums"]["pr_type"];
+          reps?: number | null;
           source_set_id?: string | null;
+          swr?: number | null;
           updated_at?: string | null;
           user_id?: string;
+          weight_kg?: number | null;
         };
         Relationships: [
           {
-            foreignKeyName: "fk_rank_id";
-            columns: ["rank_id"];
+            foreignKeyName: "user_exercise_prs_custom_exercise_id_fkey";
+            columns: ["custom_exercise_id"];
             isOneToOne: false;
-            referencedRelation: "ranks";
+            referencedRelation: "custom_exercises";
             referencedColumns: ["id"];
           },
           {
@@ -771,7 +1566,7 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
-            foreignKeyName: "user_exercise_prs_source_set_id_fkey";
+            foreignKeyName: "user_exercise_prs_new_source_set_id_fkey";
             columns: ["source_set_id"];
             isOneToOne: false;
             referencedRelation: "workout_session_sets";
@@ -781,13 +1576,278 @@ export type Database = {
             foreignKeyName: "user_exercise_prs_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "user_profiles";
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      user_exercise_rank_history: {
+        Row: {
+          achieved_at: string;
+          bodyweight_kg: number | null;
+          estimated_1rm: number | null;
+          exercise_id: string;
+          id: string;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          permanent_inter_rank_id: number | null;
+          permanent_rank_id: number | null;
+          permanent_score: number | null;
+          reps: number | null;
+          session_set_id: string | null;
+          swr: number | null;
+          user_id: string;
+          weight_kg: number | null;
+        };
+        Insert: {
+          achieved_at: string;
+          bodyweight_kg?: number | null;
+          estimated_1rm?: number | null;
+          exercise_id: string;
+          id?: string;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
+          reps?: number | null;
+          session_set_id?: string | null;
+          swr?: number | null;
+          user_id: string;
+          weight_kg?: number | null;
+        };
+        Update: {
+          achieved_at?: string;
+          bodyweight_kg?: number | null;
+          estimated_1rm?: number | null;
+          exercise_id?: string;
+          id?: string;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
+          reps?: number | null;
+          session_set_id?: string | null;
+          swr?: number | null;
+          user_id?: string;
+          weight_kg?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_exercise_rank_history_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_rank_history_leaderboard_rank_id_fkey";
+            columns: ["leaderboard_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_rank_history_permanent_inter_rank_id_fkey";
+            columns: ["permanent_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_rank_history_permanent_rank_id_fkey";
+            columns: ["permanent_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_rank_history_session_set_id_fkey";
+            columns: ["session_set_id"];
+            isOneToOne: false;
+            referencedRelation: "workout_session_sets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_rank_history_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      user_exercise_ranks: {
+        Row: {
+          bodyweight_kg: number | null;
+          created_at: string | null;
+          estimated_1rm: number | null;
+          exercise_id: string;
+          id: string;
+          last_calculated_at: string | null;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          permanent_inter_rank_id: number | null;
+          permanent_rank_id: number | null;
+          permanent_score: number | null;
+          reps: number | null;
+          session_set_id: string | null;
+          swr: number | null;
+          updated_at: string | null;
+          user_id: string;
+          weight_kg: number | null;
+        };
+        Insert: {
+          bodyweight_kg?: number | null;
+          created_at?: string | null;
+          estimated_1rm?: number | null;
+          exercise_id: string;
+          id?: string;
+          last_calculated_at?: string | null;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
+          reps?: number | null;
+          session_set_id?: string | null;
+          swr?: number | null;
+          updated_at?: string | null;
+          user_id: string;
+          weight_kg?: number | null;
+        };
+        Update: {
+          bodyweight_kg?: number | null;
+          created_at?: string | null;
+          estimated_1rm?: number | null;
+          exercise_id?: string;
+          id?: string;
+          last_calculated_at?: string | null;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
+          reps?: number | null;
+          session_set_id?: string | null;
+          swr?: number | null;
+          updated_at?: string | null;
+          user_id?: string;
+          weight_kg?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_exercise_ranks_exercise_id_fkey";
+            columns: ["exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "exercises";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_leaderboard_rank_id_fkey";
+            columns: ["leaderboard_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_permanent_inter_rank_id_fkey";
+            columns: ["permanent_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_permanent_rank_id_fkey";
+            columns: ["permanent_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_session_set_id_fkey";
+            columns: ["session_set_id"];
+            isOneToOne: false;
+            referencedRelation: "workout_session_sets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      user_favorite_exercises: {
+        Row: {
+          created_at: string | null;
+          custom_exercise_id: string | null;
+          exercise_id: string | null;
+          id: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string | null;
+          custom_exercise_id?: string | null;
+          exercise_id?: string | null;
+          id?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string | null;
+          custom_exercise_id?: string | null;
+          exercise_id?: string | null;
+          id?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_favorite_exercises_custom_exercise_id_fkey";
+            columns: ["custom_exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "custom_exercises";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_favorite_exercises_exercise_id_fkey";
+            columns: ["exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "exercises";
             referencedColumns: ["id"];
           }
         ];
       };
       user_feedback: {
         Row: {
+          completed: boolean;
           created_at: string;
           id: string;
           requested_response: boolean;
@@ -795,6 +1855,7 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          completed?: boolean;
           created_at?: string;
           id?: string;
           requested_response?: boolean;
@@ -802,6 +1863,7 @@ export type Database = {
           user_id: string;
         };
         Update: {
+          completed?: boolean;
           created_at?: string;
           id?: string;
           requested_response?: boolean;
@@ -813,7 +1875,36 @@ export type Database = {
             foreignKeyName: "user_feedback_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "user_profiles";
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      user_feeds: {
+        Row: {
+          created_at: string;
+          feed_item_id: string;
+          seen: boolean;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          feed_item_id: string;
+          seen?: boolean;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          feed_item_id?: string;
+          seen?: boolean;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_feeds_feed_item_id_fkey";
+            columns: ["feed_item_id"];
+            isOneToOne: false;
+            referencedRelation: "feed_items";
             referencedColumns: ["id"];
           }
         ];
@@ -863,67 +1954,66 @@ export type Database = {
           }
         ];
       };
-      user_profiles: {
+      user_rank_history: {
         Row: {
-          age: number | null;
-          avatar_url: string | null;
-          created_at: string;
-          current_level_id: string | null;
-          deleted: boolean;
-          experience_points: number;
-          full_name: string | null;
-          funnel: string | null;
-          gender: Database["public"]["Enums"]["gender"] | null;
+          achieved_at: string;
           id: string;
-          onboard_complete: boolean;
-          reset_persist: boolean;
-          theme_preference: string | null;
-          updated_at: string;
-          username: string | null;
-          weight_preference: Database["public"]["Enums"]["unit_type"];
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          permanent_inter_rank_id: number | null;
+          permanent_rank_id: number | null;
+          permanent_score: number | null;
+          user_id: string;
         };
         Insert: {
-          age?: number | null;
-          avatar_url?: string | null;
-          created_at?: string;
-          current_level_id?: string | null;
-          deleted?: boolean;
-          experience_points?: number;
-          full_name?: string | null;
-          funnel?: string | null;
-          gender?: Database["public"]["Enums"]["gender"] | null;
-          id: string;
-          onboard_complete?: boolean;
-          reset_persist?: boolean;
-          theme_preference?: string | null;
-          updated_at?: string;
-          username?: string | null;
-          weight_preference?: Database["public"]["Enums"]["unit_type"];
+          achieved_at: string;
+          id?: string;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
+          user_id: string;
         };
         Update: {
-          age?: number | null;
-          avatar_url?: string | null;
-          created_at?: string;
-          current_level_id?: string | null;
-          deleted?: boolean;
-          experience_points?: number;
-          full_name?: string | null;
-          funnel?: string | null;
-          gender?: Database["public"]["Enums"]["gender"] | null;
+          achieved_at?: string;
           id?: string;
-          onboard_complete?: boolean;
-          reset_persist?: boolean;
-          theme_preference?: string | null;
-          updated_at?: string;
-          username?: string | null;
-          weight_preference?: Database["public"]["Enums"]["unit_type"];
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
+          user_id?: string;
         };
         Relationships: [
           {
-            foreignKeyName: "fk_user_profiles_current_level";
-            columns: ["current_level_id"];
+            foreignKeyName: "user_rank_history_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
             isOneToOne: false;
-            referencedRelation: "level_definitions";
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_rank_history_permanent_inter_rank_id_fkey";
+            columns: ["permanent_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_rank_history_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];
@@ -933,8 +2023,14 @@ export type Database = {
           created_at: string;
           id: string;
           last_calculated_at: string | null;
-          rank_id: number | null;
-          strength_score: number | null;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          permanent_inter_rank_id: number | null;
+          permanent_rank_id: number | null;
+          permanent_score: number | null;
           updated_at: string;
           user_id: string;
         };
@@ -942,8 +2038,14 @@ export type Database = {
           created_at?: string;
           id?: string;
           last_calculated_at?: string | null;
-          rank_id?: number | null;
-          strength_score?: number | null;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
           updated_at?: string;
           user_id: string;
         };
@@ -951,15 +2053,42 @@ export type Database = {
           created_at?: string;
           id?: string;
           last_calculated_at?: string | null;
-          rank_id?: number | null;
-          strength_score?: number | null;
+          leaderboard_inter_rank_id?: number | null;
+          leaderboard_position?: number | null;
+          leaderboard_position_change?: number | null;
+          leaderboard_rank_id?: number | null;
+          leaderboard_score?: number | null;
+          permanent_inter_rank_id?: number | null;
+          permanent_rank_id?: number | null;
+          permanent_score?: number | null;
           updated_at?: string;
           user_id?: string;
         };
         Relationships: [
           {
+            foreignKeyName: "user_ranks_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_ranks_leaderboard_rank_id_fkey";
+            columns: ["leaderboard_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_ranks_permanent_inter_rank_id_fkey";
+            columns: ["permanent_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "user_ranks_rank_id_fkey";
-            columns: ["rank_id"];
+            columns: ["permanent_rank_id"];
             isOneToOne: false;
             referencedRelation: "ranks";
             referencedColumns: ["id"];
@@ -968,8 +2097,29 @@ export type Database = {
             foreignKeyName: "user_ranks_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: true;
-            referencedRelation: "user_profiles";
+            referencedRelation: "global_leaderboard";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "user_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "profiles";
             referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "v_global_leaderboard_with_change";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "user_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "v_user_profile_full";
+            referencedColumns: ["user_id"];
           }
         ];
       };
@@ -1021,10 +2171,73 @@ export type Database = {
             foreignKeyName: "user_streaks_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "user_profiles";
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];
+      };
+      users: {
+        Row: {
+          age: number | null;
+          deleted: boolean;
+          funnel: string | null;
+          gender: Database["public"]["Enums"]["gender"] | null;
+          id: string;
+          is_premium: boolean | null;
+          last_workout_timestamp: string | null;
+          notification_enabled: boolean | null;
+          onboard_complete: boolean;
+          plan_type: string | null;
+          premium_expires_at: string | null;
+          profile_privacy: Database["public"]["Enums"]["visibility_level"];
+          push_notification_token: string | null;
+          rank_calculator_balance: number;
+          reset_persist: boolean;
+          theme_preference: string | null;
+          updated_at: string;
+          weight_preference: Database["public"]["Enums"]["unit_type"] | null;
+        };
+        Insert: {
+          age?: number | null;
+          deleted?: boolean;
+          funnel?: string | null;
+          gender?: Database["public"]["Enums"]["gender"] | null;
+          id: string;
+          is_premium?: boolean | null;
+          last_workout_timestamp?: string | null;
+          notification_enabled?: boolean | null;
+          onboard_complete?: boolean;
+          plan_type?: string | null;
+          premium_expires_at?: string | null;
+          profile_privacy?: Database["public"]["Enums"]["visibility_level"];
+          push_notification_token?: string | null;
+          rank_calculator_balance?: number;
+          reset_persist?: boolean;
+          theme_preference?: string | null;
+          updated_at?: string;
+          weight_preference?: Database["public"]["Enums"]["unit_type"] | null;
+        };
+        Update: {
+          age?: number | null;
+          deleted?: boolean;
+          funnel?: string | null;
+          gender?: Database["public"]["Enums"]["gender"] | null;
+          id?: string;
+          is_premium?: boolean | null;
+          last_workout_timestamp?: string | null;
+          notification_enabled?: boolean | null;
+          onboard_complete?: boolean;
+          plan_type?: string | null;
+          premium_expires_at?: string | null;
+          profile_privacy?: Database["public"]["Enums"]["visibility_level"];
+          push_notification_token?: string | null;
+          rank_calculator_balance?: number;
+          reset_persist?: boolean;
+          theme_preference?: string | null;
+          updated_at?: string;
+          weight_preference?: Database["public"]["Enums"]["unit_type"] | null;
+        };
+        Relationships: [];
       };
       workout_plan_day_exercise_sets: {
         Row: {
@@ -1086,9 +2299,10 @@ export type Database = {
         Row: {
           auto_progression_enabled: boolean | null;
           created_at: string;
+          custom_exercise_id: string | null;
           deleted: boolean;
           edit_sets_individually: boolean | null;
-          exercise_id: string;
+          exercise_id: string | null;
           exercise_order: number;
           id: string;
           notes: string | null;
@@ -1102,9 +2316,10 @@ export type Database = {
         Insert: {
           auto_progression_enabled?: boolean | null;
           created_at?: string;
+          custom_exercise_id?: string | null;
           deleted?: boolean;
           edit_sets_individually?: boolean | null;
-          exercise_id: string;
+          exercise_id?: string | null;
           exercise_order: number;
           id?: string;
           notes?: string | null;
@@ -1118,9 +2333,10 @@ export type Database = {
         Update: {
           auto_progression_enabled?: boolean | null;
           created_at?: string;
+          custom_exercise_id?: string | null;
           deleted?: boolean;
           edit_sets_individually?: boolean | null;
-          exercise_id?: string;
+          exercise_id?: string | null;
           exercise_order?: number;
           id?: string;
           notes?: string | null;
@@ -1132,6 +2348,13 @@ export type Database = {
           workout_plan_day_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "workout_plan_day_exercises_custom_exercise_id_fkey";
+            columns: ["custom_exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "custom_exercises";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "workout_plan_day_exercises_exercise_id_fkey";
             columns: ["exercise_id"];
@@ -1202,12 +2425,15 @@ export type Database = {
           id: string;
           is_active: boolean | null;
           name: string;
+          parent_plan_id: string | null;
           plan_type: string | null;
+          public: boolean;
           recommended_week_duration: number | null;
           source_description: string | null;
           start_date: string | null;
           updated_at: string;
           user_id: string | null;
+          visibility_setting: Database["public"]["Enums"]["visibility_level"];
         };
         Insert: {
           admin_plan?: boolean;
@@ -1221,12 +2447,15 @@ export type Database = {
           id?: string;
           is_active?: boolean | null;
           name: string;
+          parent_plan_id?: string | null;
           plan_type?: string | null;
+          public?: boolean;
           recommended_week_duration?: number | null;
           source_description?: string | null;
           start_date?: string | null;
           updated_at?: string;
           user_id?: string | null;
+          visibility_setting?: Database["public"]["Enums"]["visibility_level"];
         };
         Update: {
           admin_plan?: boolean;
@@ -1240,19 +2469,29 @@ export type Database = {
           id?: string;
           is_active?: boolean | null;
           name?: string;
+          parent_plan_id?: string | null;
           plan_type?: string | null;
+          public?: boolean;
           recommended_week_duration?: number | null;
           source_description?: string | null;
           start_date?: string | null;
           updated_at?: string;
           user_id?: string | null;
+          visibility_setting?: Database["public"]["Enums"]["visibility_level"];
         };
         Relationships: [
           {
-            foreignKeyName: "workout_plans_user_id_fkey1";
+            foreignKeyName: "workout_plans_parent_plan_id_fkey";
+            columns: ["parent_plan_id"];
+            isOneToOne: false;
+            referencedRelation: "workout_plans";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "workout_plans_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "user_profiles";
+            referencedRelation: "users";
             referencedColumns: ["id"];
           }
         ];
@@ -1263,8 +2502,9 @@ export type Database = {
           actual_weight_kg: number | null;
           calculated_1rm: number | null;
           calculated_swr: number | null;
+          custom_exercise_id: string | null;
           deleted: boolean;
-          exercise_id: string;
+          exercise_id: string | null;
           id: string;
           is_success: boolean | null;
           is_warmup: boolean | null;
@@ -1284,8 +2524,9 @@ export type Database = {
           actual_weight_kg?: number | null;
           calculated_1rm?: number | null;
           calculated_swr?: number | null;
+          custom_exercise_id?: string | null;
           deleted?: boolean;
-          exercise_id: string;
+          exercise_id?: string | null;
           id?: string;
           is_success?: boolean | null;
           is_warmup?: boolean | null;
@@ -1305,8 +2546,9 @@ export type Database = {
           actual_weight_kg?: number | null;
           calculated_1rm?: number | null;
           calculated_swr?: number | null;
+          custom_exercise_id?: string | null;
           deleted?: boolean;
-          exercise_id?: string;
+          exercise_id?: string | null;
           id?: string;
           is_success?: boolean | null;
           is_warmup?: boolean | null;
@@ -1322,6 +2564,13 @@ export type Database = {
           workout_session_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "workout_session_sets_custom_exercise_id_fkey";
+            columns: ["custom_exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "custom_exercises";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "workout_session_sets_exercise_id_fkey";
             columns: ["exercise_id"];
@@ -1353,10 +2602,8 @@ export type Database = {
           duration_seconds: number | null;
           exercises_performed_summary: string | null;
           id: string;
-          muscle_group_rank_ups_count: number;
-          muscle_rank_ups_count: number;
           notes: string | null;
-          overall_rank_up_count: number;
+          public: boolean;
           session_name: string | null;
           started_at: string;
           status: string;
@@ -1367,6 +2614,7 @@ export type Database = {
           user_id: string;
           workout_plan_day_id: string | null;
           workout_plan_id: string | null;
+          workout_summary_data: Json | null;
         };
         Insert: {
           completed_at?: string | null;
@@ -1375,10 +2623,8 @@ export type Database = {
           duration_seconds?: number | null;
           exercises_performed_summary?: string | null;
           id?: string;
-          muscle_group_rank_ups_count?: number;
-          muscle_rank_ups_count?: number;
           notes?: string | null;
-          overall_rank_up_count?: number;
+          public?: boolean;
           session_name?: string | null;
           started_at?: string;
           status?: string;
@@ -1389,6 +2635,7 @@ export type Database = {
           user_id: string;
           workout_plan_day_id?: string | null;
           workout_plan_id?: string | null;
+          workout_summary_data?: Json | null;
         };
         Update: {
           completed_at?: string | null;
@@ -1397,10 +2644,8 @@ export type Database = {
           duration_seconds?: number | null;
           exercises_performed_summary?: string | null;
           id?: string;
-          muscle_group_rank_ups_count?: number;
-          muscle_rank_ups_count?: number;
           notes?: string | null;
-          overall_rank_up_count?: number;
+          public?: boolean;
           session_name?: string | null;
           started_at?: string;
           status?: string;
@@ -1411,13 +2656,14 @@ export type Database = {
           user_id?: string;
           workout_plan_day_id?: string | null;
           workout_plan_id?: string | null;
+          workout_summary_data?: Json | null;
         };
         Relationships: [
           {
-            foreignKeyName: "workout_sessions_user_id_fkey1";
+            foreignKeyName: "workout_sessions_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: false;
-            referencedRelation: "user_profiles";
+            referencedRelation: "users";
             referencedColumns: ["id"];
           },
           {
@@ -1438,24 +2684,544 @@ export type Database = {
       };
     };
     Views: {
-      [_ in never]: never;
+      global_exercise_leaderboard: {
+        Row: {
+          avatar_url: string | null;
+          bodyweight_kg: number | null;
+          display_name: string | null;
+          estimated_1rm: number | null;
+          exercise_id: string | null;
+          leaderboard_position: number | null;
+          leaderboard_score: number | null;
+          reps: number | null;
+          swr: number | null;
+          user_id: string | null;
+          username: string | null;
+          weight_kg: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_exercise_ranks_exercise_id_fkey";
+            columns: ["exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "exercises";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      global_leaderboard: {
+        Row: {
+          avatar_url: string | null;
+          display_name: string | null;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          user_id: string | null;
+          username: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_ranks_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_ranks_leaderboard_rank_id_fkey";
+            columns: ["leaderboard_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      global_muscle_group_leaderboard: {
+        Row: {
+          avatar_url: string | null;
+          display_name: string | null;
+          leaderboard_position: number | null;
+          leaderboard_score: number | null;
+          muscle_group_id: string | null;
+          user_id: string | null;
+          username: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fk_muscle_group";
+            columns: ["muscle_group_id"];
+            isOneToOne: false;
+            referencedRelation: "muscle_groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_muscle_group_id_fkey";
+            columns: ["muscle_group_id"];
+            isOneToOne: false;
+            referencedRelation: "muscle_groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "global_leaderboard";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_global_leaderboard_with_change";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_user_profile_full";
+            referencedColumns: ["user_id"];
+          }
+        ];
+      };
+      global_muscle_leaderboard: {
+        Row: {
+          avatar_url: string | null;
+          display_name: string | null;
+          leaderboard_position: number | null;
+          leaderboard_score: number | null;
+          muscle_id: string | null;
+          user_id: string | null;
+          username: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fk_muscle";
+            columns: ["muscle_id"];
+            isOneToOne: false;
+            referencedRelation: "muscles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_muscle_id_fkey";
+            columns: ["muscle_id"];
+            isOneToOne: false;
+            referencedRelation: "muscles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "global_leaderboard";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_global_leaderboard_with_change";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_user_profile_full";
+            referencedColumns: ["user_id"];
+          }
+        ];
+      };
+      v_global_exercise_leaderboard_with_change: {
+        Row: {
+          avatar_url: string | null;
+          bodyweight_kg: number | null;
+          display_name: string | null;
+          estimated_1rm: number | null;
+          exercise_id: string | null;
+          inter_rank_name: string | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_score: number | null;
+          rank_name: string | null;
+          reps: number | null;
+          swr: number | null;
+          user_id: string | null;
+          username: string | null;
+          weight_kg: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_exercise_ranks_exercise_id_fkey";
+            columns: ["exercise_id"];
+            isOneToOne: false;
+            referencedRelation: "exercises";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_exercise_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      v_global_leaderboard_with_change: {
+        Row: {
+          avatar_url: string | null;
+          display_name: string | null;
+          inter_rank_name: string | null;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          rank_name: string | null;
+          user_id: string | null;
+          username: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_ranks_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_ranks_leaderboard_rank_id_fkey";
+            columns: ["leaderboard_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
+      v_global_muscle_group_leaderboard_with_change: {
+        Row: {
+          avatar_url: string | null;
+          display_name: string | null;
+          inter_rank_name: string | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_score: number | null;
+          muscle_group_id: string | null;
+          muscle_group_name: string | null;
+          rank_name: string | null;
+          user_id: string | null;
+          username: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fk_muscle_group";
+            columns: ["muscle_group_id"];
+            isOneToOne: false;
+            referencedRelation: "muscle_groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_muscle_group_id_fkey";
+            columns: ["muscle_group_id"];
+            isOneToOne: false;
+            referencedRelation: "muscle_groups";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "global_leaderboard";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_global_leaderboard_with_change";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_group_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_user_profile_full";
+            referencedColumns: ["user_id"];
+          }
+        ];
+      };
+      v_global_muscle_leaderboard_with_change: {
+        Row: {
+          avatar_url: string | null;
+          display_name: string | null;
+          inter_rank_name: string | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_score: number | null;
+          muscle_id: string | null;
+          muscle_name: string | null;
+          rank_name: string | null;
+          user_id: string | null;
+          username: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "fk_muscle";
+            columns: ["muscle_id"];
+            isOneToOne: false;
+            referencedRelation: "muscles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_muscle_id_fkey";
+            columns: ["muscle_id"];
+            isOneToOne: false;
+            referencedRelation: "muscles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "global_leaderboard";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_global_leaderboard_with_change";
+            referencedColumns: ["user_id"];
+          },
+          {
+            foreignKeyName: "muscle_ranks_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "v_user_profile_full";
+            referencedColumns: ["user_id"];
+          }
+        ];
+      };
+      v_user_profile_full: {
+        Row: {
+          avatar_blurhash: string | null;
+          avatar_url: string | null;
+          bio: string | null;
+          created_at: string | null;
+          display_name: string | null;
+          is_premium: boolean | null;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_inter_rank_name: string | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_name: string | null;
+          leaderboard_score: number | null;
+          permanent_inter_rank_id: number | null;
+          permanent_inter_rank_name: string | null;
+          permanent_rank_name: string | null;
+          permanent_score: number | null;
+          user_id: string | null;
+          user_leaderboard_rank_id: number | null;
+          user_permanent_rank_id: number | null;
+          username: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_ranks_leaderboard_inter_rank_id_fkey";
+            columns: ["leaderboard_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_ranks_leaderboard_rank_id_fkey";
+            columns: ["user_leaderboard_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_ranks_permanent_inter_rank_id_fkey";
+            columns: ["permanent_inter_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "inter_ranks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "user_ranks_rank_id_fkey";
+            columns: ["user_permanent_rank_id"];
+            isOneToOne: false;
+            referencedRelation: "ranks";
+            referencedColumns: ["id"];
+          }
+        ];
+      };
     };
     Functions: {
       activate_workout_plan: {
-        Args: { user_id_input: string; plan_id_input: string };
+        Args: { p_plan_id: string; p_user_id: string };
+        Returns: string;
+      };
+      bulk_update_ranks: {
+        Args: {
+          p_muscle_group_rank_updates?: Database["public"]["CompositeTypes"]["muscle_group_rank_update"][];
+          p_muscle_rank_updates?: Database["public"]["CompositeTypes"]["muscle_rank_update"][];
+          p_user_exercise_rank_updates?: Database["public"]["CompositeTypes"]["user_exercise_rank_update"][];
+          p_user_rank_update?: Database["public"]["CompositeTypes"]["user_rank_update"];
+        };
         Returns: undefined;
+      };
+      can_view_user_info: {
+        Args: { p_user_id: string };
+        Returns: boolean;
+      };
+      can_view_workout_plan: {
+        Args: { p_plan_id: string };
+        Returns: boolean;
       };
       check_and_break_streaks: {
         Args: Record<PropertyKey, never>;
         Returns: undefined;
       };
+      check_cycle_completion: {
+        Args: { p_plan_id: string; p_user_id: string };
+        Returns: boolean;
+      };
+      clone_custom_exercise: {
+        Args: { source_exercise_id: string; target_user_id: string };
+        Returns: undefined;
+      };
+      clone_custom_exercises_from_plan: {
+        Args: { p_user_id: string; source_plan_id: string };
+        Returns: undefined;
+      };
       clone_user_workout_plan: {
-        Args: { template_plan_id_input: string; target_user_id_input: string };
+        Args: { target_user_id_input: string; template_plan_id_input: string };
         Returns: string;
+      };
+      clone_workout_plan: {
+        Args: { p_source_plan_id: string; p_user_id: string };
+        Returns: string;
+      };
+      create_custom_exercise: {
+        Args: { exercise_data: Json };
+        Returns: Json;
+      };
+      create_workout_plan: {
+        Args: Record<PropertyKey, never>;
+        Returns: string;
+      };
+      filter_user_exercise_ranks: {
+        Args: {
+          p_exercise_types?: string[];
+          p_muscle_ids?: string[];
+          p_rank_ids?: string[];
+          p_search_term?: string;
+          p_sort_by?: string;
+          p_user_id: string;
+        };
+        Returns: {
+          bodyweight_kg: number | null;
+          created_at: string | null;
+          estimated_1rm: number | null;
+          exercise_id: string;
+          id: string;
+          last_calculated_at: string | null;
+          leaderboard_inter_rank_id: number | null;
+          leaderboard_position: number | null;
+          leaderboard_position_change: number | null;
+          leaderboard_rank_id: number | null;
+          leaderboard_score: number | null;
+          permanent_inter_rank_id: number | null;
+          permanent_rank_id: number | null;
+          permanent_score: number | null;
+          reps: number | null;
+          session_set_id: string | null;
+          swr: number | null;
+          updated_at: string | null;
+          user_id: string;
+          weight_kg: number | null;
+        }[];
+      };
+      get_exercises_full: {
+        Args: { exercise_ids?: string[]; user_id_param: string };
+        Returns: {
+          exercise: Json;
+        }[];
+      };
+      get_workout_plans_full: {
+        Args: {
+          p_plan_ids?: string[];
+          p_plan_type?: string;
+          p_user_id?: string;
+        };
+        Returns: {
+          plan: Json;
+        }[];
+      };
+      gtrgm_compress: {
+        Args: { "": unknown };
+        Returns: unknown;
+      };
+      gtrgm_decompress: {
+        Args: { "": unknown };
+        Returns: unknown;
+      };
+      gtrgm_in: {
+        Args: { "": unknown };
+        Returns: unknown;
+      };
+      gtrgm_options: {
+        Args: { "": unknown };
+        Returns: undefined;
+      };
+      gtrgm_out: {
+        Args: { "": unknown };
+        Returns: unknown;
       };
       initialize_user_muscle_groups: {
         Args: { new_user_id: string };
         Returns: undefined;
+      };
+      is_friend: {
+        Args: { user1_id: string; user2_id: string };
+        Returns: boolean;
       };
       is_plan_day_owner: {
         Args: { plan_day_id: string };
@@ -1473,9 +3239,87 @@ export type Database = {
         Args: { target_user_id: string };
         Returns: undefined;
       };
+      save_workout_plan_changes: {
+        Args: { p_changes: Json };
+        Returns: string;
+      };
+      search_exercises: {
+        Args: {
+          equipment_ids_param: string[];
+          exercise_types_param: string[];
+          limit_param: number;
+          muscle_ids_param: string[];
+          name_param: string;
+          offset_param: number;
+          user_id_param: string;
+        };
+        Returns: {
+          exercise: Json;
+        }[];
+      };
+      search_workout_plans: {
+        Args: {
+          p_days_per_week_param?: number;
+          p_limit_param?: number;
+          p_name_param: string;
+          p_offset_param?: number;
+        };
+        Returns: {
+          plan: Json;
+        }[];
+      };
+      set_limit: {
+        Args: { "": number };
+        Returns: number;
+      };
+      show_limit: {
+        Args: Record<PropertyKey, never>;
+        Returns: number;
+      };
+      show_trgm: {
+        Args: { "": string };
+        Returns: string[];
+      };
+      update_leaderboard_data_and_refresh_views: {
+        Args: Record<PropertyKey, never>;
+        Returns: undefined;
+      };
+      upsert_user_with_id: {
+        Args: {
+          p_email: string;
+          p_password: string;
+          p_user_id: string;
+          p_user_metadata: Json;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
+      body_measurement_type:
+        | "body_weight"
+        | "body_fat_percentage"
+        | "neck"
+        | "chest"
+        | "waist"
+        | "hips"
+        | "bicep_left"
+        | "bicep_right"
+        | "thigh_left"
+        | "thigh_right"
+        | "calf_left"
+        | "calf_right";
       enum_body_side: "left" | "right" | "center" | "front" | "back";
+      equipment_type:
+        | "FreeWeights"
+        | "Machines"
+        | "BenchesAndRacks"
+        | "BarsAndAttachments"
+        | "BandsAndTubes"
+        | "BodyweightAssistTools"
+        | "Cardio"
+        | "RehabAndMobility"
+        | "SpecialtyStrength"
+        | "Other";
       exercise_type:
         | "cardio"
         | "N/A"
@@ -1486,8 +3330,18 @@ export type Database = {
         | "machine"
         | "assisted_body_weight"
         | "weighted_body_weight";
-      gender: "male" | "female";
+      feed_post_type: "workout" | "workout_with_pr" | "workout_with_rankup";
+      friendship_status: "pending" | "accepted" | "blocked";
+      gender: "male" | "female" | "other";
       meal_type: "breakfast" | "lunch" | "dinner" | "snack";
+      movement_types:
+        | "horizontal_push"
+        | "vertical_push"
+        | "horizontal_pull"
+        | "vertical_pull"
+        | "squat"
+        | "hinge"
+        | "core";
       muscle_group_type:
         | "BackLeftHead"
         | "BackLeftNeck"
@@ -1676,7 +3530,16 @@ export type Database = {
         | "FrontLeftTrapezius"
         | "FrontLeftNeck"
         | "FrontLeftHead";
+      notification_status: "pending" | "sent" | "failed";
+      notification_type:
+        | "friend_request_received"
+        | "friend_request_accepted"
+        | "friendship_removed"
+        | "new_feed_item"
+        | "new_workout_session";
+      pr_type: "one_rep_max" | "max_reps" | "max_swr";
       primary_group_enum: "arms" | "legs" | "back" | "chest" | "abs";
+      processing_status: "processing" | "success" | "failed";
       rank_label: "F" | "E" | "D" | "C" | "B" | "A" | "S" | "Elite";
       session_status:
         | "active"
@@ -1689,9 +3552,60 @@ export type Database = {
         | "no_plan"
         | "no_workouts";
       unit_type: "metric" | "imperial";
+      visibility_level: "public" | "friends_only" | "private";
     };
     CompositeTypes: {
-      [_ in never]: never;
+      muscle_group_rank_update: {
+        user_id: string | null;
+        muscle_group_id: string | null;
+        permanent_rank_id: number | null;
+        permanent_inter_rank_id: number | null;
+        permanent_score: number | null;
+        leaderboard_score: number | null;
+        locked: boolean | null;
+        leaderboard_rank_id: number | null;
+        leaderboard_inter_rank_id: number | null;
+        last_calculated_at: string | null;
+      };
+      muscle_rank_update: {
+        user_id: string | null;
+        muscle_id: string | null;
+        permanent_rank_id: number | null;
+        permanent_inter_rank_id: number | null;
+        permanent_score: number | null;
+        leaderboard_score: number | null;
+        locked: boolean | null;
+        leaderboard_rank_id: number | null;
+        leaderboard_inter_rank_id: number | null;
+        last_calculated_at: string | null;
+      };
+      user_exercise_rank_update: {
+        user_id: string | null;
+        exercise_id: string | null;
+        permanent_rank_id: number | null;
+        permanent_inter_rank_id: number | null;
+        permanent_score: number | null;
+        leaderboard_score: number | null;
+        leaderboard_rank_id: number | null;
+        leaderboard_inter_rank_id: number | null;
+        weight_kg: number | null;
+        reps: number | null;
+        bodyweight_kg: number | null;
+        estimated_1rm: number | null;
+        swr: number | null;
+        session_set_id: string | null;
+        last_calculated_at: string | null;
+      };
+      user_rank_update: {
+        user_id: string | null;
+        permanent_rank_id: number | null;
+        permanent_inter_rank_id: number | null;
+        permanent_score: number | null;
+        leaderboard_score: number | null;
+        leaderboard_rank_id: number | null;
+        leaderboard_inter_rank_id: number | null;
+        last_calculated_at: string | null;
+      };
     };
   };
 };
@@ -1808,7 +3722,33 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      body_measurement_type: [
+        "body_weight",
+        "body_fat_percentage",
+        "neck",
+        "chest",
+        "waist",
+        "hips",
+        "bicep_left",
+        "bicep_right",
+        "thigh_left",
+        "thigh_right",
+        "calf_left",
+        "calf_right",
+      ],
       enum_body_side: ["left", "right", "center", "front", "back"],
+      equipment_type: [
+        "FreeWeights",
+        "Machines",
+        "BenchesAndRacks",
+        "BarsAndAttachments",
+        "BandsAndTubes",
+        "BodyweightAssistTools",
+        "Cardio",
+        "RehabAndMobility",
+        "SpecialtyStrength",
+        "Other",
+      ],
       exercise_type: [
         "cardio",
         "N/A",
@@ -1820,8 +3760,19 @@ export const Constants = {
         "assisted_body_weight",
         "weighted_body_weight",
       ],
-      gender: ["male", "female"],
+      feed_post_type: ["workout", "workout_with_pr", "workout_with_rankup"],
+      friendship_status: ["pending", "accepted", "blocked"],
+      gender: ["male", "female", "other"],
       meal_type: ["breakfast", "lunch", "dinner", "snack"],
+      movement_types: [
+        "horizontal_push",
+        "vertical_push",
+        "horizontal_pull",
+        "vertical_pull",
+        "squat",
+        "hinge",
+        "core",
+      ],
       muscle_group_type: [
         "BackLeftHead",
         "BackLeftNeck",
@@ -2012,7 +3963,17 @@ export const Constants = {
         "FrontLeftNeck",
         "FrontLeftHead",
       ],
+      notification_status: ["pending", "sent", "failed"],
+      notification_type: [
+        "friend_request_received",
+        "friend_request_accepted",
+        "friendship_removed",
+        "new_feed_item",
+        "new_workout_session",
+      ],
+      pr_type: ["one_rep_max", "max_reps", "max_swr"],
       primary_group_enum: ["arms", "legs", "back", "chest", "abs"],
+      processing_status: ["processing", "success", "failed"],
       rank_label: ["F", "E", "D", "C", "B", "A", "S", "Elite"],
       session_status: [
         "active",
@@ -2026,6 +3987,7 @@ export const Constants = {
         "no_workouts",
       ],
       unit_type: ["metric", "imperial"],
+      visibility_level: ["public", "friends_only", "private"],
     },
   },
 } as const;

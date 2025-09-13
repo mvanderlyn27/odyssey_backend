@@ -2,7 +2,8 @@ import { Type } from "@sinclair/typebox";
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
 import { handleOnboarding } from "./onboard.service"; // Corrected path
-import { type OnboardingData } from "./onboard.service"; // Renamed type and corrected path
+import { rerollUsername } from "./onboard.helpers";
+import { type OnboardingData } from "./onboard.types"; // Renamed type and corrected path
 import { ProfileSchema, type Profile } from "../../schemas/profileSchemas";
 import { InitialRankBodySchema } from "../../schemas/onboardSchemas"; // Corrected path
 // Assuming ErrorResponseSchema is globally available or added via fastify.addSchema
@@ -46,18 +47,8 @@ async function onboardRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
       }
       const userId = user.id;
 
-      let derivedUsername: string | null = null;
-      // Attempt to get display name from user_metadata
-      if (user.user_metadata?.display_name) {
-        derivedUsername = user.user_metadata.display_name;
-      } else if (user.user_metadata?.name) {
-        derivedUsername = user.user_metadata.name;
-      } else if (user.email) {
-        derivedUsername = user.email.split("@")[0];
-      }
-
       try {
-        const updatedProfile = await handleOnboarding(fastify, userId, request.body, derivedUsername);
+        const updatedProfile = await handleOnboarding(fastify, userId, request.body);
         return reply.send(updatedProfile);
       } catch (error: any) {
         fastify.log.error(error, "Failed saving initial rank");
@@ -77,6 +68,45 @@ async function onboardRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
       }
     }
   );
+
+  // --- POST /reroll-username ---
+  fastify.post(
+    "/reroll-username",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: "Generate a new unique username and display name for the user.",
+        tags: ["Onboard"],
+        summary: "Reroll username and display name",
+        security: [{ bearerAuth: [] }],
+        response: {
+          200: Type.Object({
+            username: Type.String(),
+            displayName: Type.String(),
+          }),
+          401: { $ref: "ErrorResponseSchema#" },
+          500: { $ref: "ErrorResponseSchema#" },
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      const user = request.user;
+      if (!user || !user.id) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
+      const userId = user.id;
+
+      try {
+        const { username, displayName } = await rerollUsername(fastify, userId);
+        return reply.send({ username, displayName });
+      } catch (error: any) {
+        fastify.log.error(error, "Failed to reroll username");
+        return reply
+          .code(500)
+          .send({ error: "Internal Server Error", message: error.message || "Failed to reroll username." });
+      }
+    }
+  );
 }
 
-export default fp(onboardRoutes); // Renamed function
+export default fp(onboardRoutes);

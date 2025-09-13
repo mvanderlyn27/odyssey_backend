@@ -102,6 +102,17 @@ export const MuscleGroupProgressionSchema = Type.Object(
 );
 export type MuscleGroupProgression = Static<typeof MuscleGroupProgressionSchema>;
 
+export const RankChangeSchema = Type.Object(
+  {
+    type: Type.String(),
+    old_rank_name: Type.String(),
+    new_rank_name: Type.String(),
+    muscle_group_name: Type.Optional(Type.String()),
+  },
+  { $id: "RankChangeSchema", description: "Details of a rank change event." }
+);
+export type RankChange = Static<typeof RankChangeSchema>;
+
 // --- Schemas for Page 3 of Detailed Finish Session Response ---
 
 export const FailedSetInfoSchema = Type.Object(
@@ -110,18 +121,46 @@ export const FailedSetInfoSchema = Type.Object(
     reps_achieved: Type.Union([Type.Number(), Type.Null()]),
     target_reps: Type.Union([Type.Number(), Type.Null()], { description: "Typically planned_min_reps" }),
     achieved_weight: Type.Union([Type.Number(), Type.Null()]),
+    target_weight: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     exercise_type: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   },
   { $id: "FailedSetInfoSchema", description: "Information about a failed set." }
 );
 export type FailedSetInfo = Static<typeof FailedSetInfoSchema>;
 
+export const SuccessfulSetInfoSchema = Type.Object(
+  {
+    set_number: Type.Integer(),
+    reps_achieved: Type.Union([Type.Number(), Type.Null()]),
+    target_reps: Type.Union([Type.Number(), Type.Null()]),
+    achieved_weight: Type.Union([Type.Number(), Type.Null()]),
+    target_weight: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+    exercise_type: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  },
+  { $id: "SuccessfulSetInfoSchema", description: "Information about a successful set." }
+);
+export type SuccessfulSetInfo = Static<typeof SuccessfulSetInfoSchema>;
+
+export const HighestWeightInfoSchema = Type.Object(
+  {
+    weight: Type.Number(),
+    reps: Type.Number(),
+  },
+  { $id: "HighestWeightInfoSchema", description: "Information about the highest weight lifted for an exercise." }
+);
+export type HighestWeightInfo = Static<typeof HighestWeightInfoSchema>;
+
 export const LoggedSetOverviewItemSchema = Type.Object(
   {
     exercise_name: Type.String(),
     failed_set_info: Type.Array(Type.Ref(FailedSetInfoSchema)),
+    successful_set_info: Type.Array(Type.Ref(SuccessfulSetInfoSchema)),
+    highest_weight_info: Type.Optional(Type.Ref(HighestWeightInfoSchema)),
   },
-  { $id: "LoggedSetOverviewItemSchema", description: "Overview of logged sets for an exercise, focusing on failures." }
+  {
+    $id: "LoggedSetOverviewItemSchema",
+    description: "Overview of logged sets for an exercise, including failures, successes, and highest weight.",
+  }
 );
 export type LoggedSetOverviewItem = Static<typeof LoggedSetOverviewItemSchema>;
 
@@ -165,7 +204,7 @@ export const SessionExerciseSchema = Type.Object(
     id: Type.String({ format: "uuid" }),
     workout_session_id: Type.String({ format: "uuid" }),
     exercise_id: Type.String({ format: "uuid" }),
-    workout_plan_day_exercise_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]), // Renamed from workout_plan_day_exercise_id based on service
+    workout_plan_exercise_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]), // Renamed from workout_plan_exercise_id based on service
     set_order: Type.Integer(), // Added based on LogSetBody
     planned_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])), // Added to store planned weight
     planned_min_reps: Type.Optional(Type.Integer()), // Renamed from target_reps_min
@@ -216,7 +255,7 @@ export type SessionSetInput = Static<typeof SessionSetInputSchema>;
 export const SessionExerciseInputSchema = Type.Object(
   {
     exercise_id: Type.String({ format: "uuid" }),
-    workout_plan_day_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
+    workout_plan_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
     order_index: Type.Integer({ minimum: 0 }),
     user_notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     auto_progression_enabled: Type.Optional(Type.Boolean()),
@@ -240,6 +279,7 @@ export const NewFinishSessionBodySchema = Type.Object(
     started_at: Type.String({ format: "date-time" }), // Remains mandatory: needed for new session creation
     ended_at: Type.String({ format: "date-time" }),
     duration_seconds: Type.Integer({ minimum: 0 }),
+    public: Type.Optional(Type.Boolean()),
     notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     overall_feeling: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Allow any string or null, aligning with service/response
     exercises: Type.Array(Type.Ref(SessionExerciseInputSchema)),
@@ -346,6 +386,112 @@ export const PlanWeightIncreaseItemSchema = Type.Object(
 );
 
 // Schema for the new detailed finish session response based on user feedback
+
+const RankChangeProperties = {
+  old_leaderboard_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  old_permanent_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  new_leaderboard_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  new_permanent_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  old_permanent_inter_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  old_leaderboard_inter_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  new_permanent_inter_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  new_leaderboard_inter_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  old_leaderboard_score: Type.Union([Type.Number(), Type.Null()]),
+  new_leaderboard_score: Type.Union([Type.Number(), Type.Null()]),
+  old_permanent_score: Type.Union([Type.Number(), Type.Null()]),
+  new_permanent_score: Type.Union([Type.Number(), Type.Null()]),
+};
+
+export const UserRankChangeSchema = Type.Object(
+  {
+    ...RankChangeProperties,
+    user_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "UserRankChangeSchema" }
+);
+
+export const MuscleGroupRankChangeSchema = Type.Object(
+  {
+    ...RankChangeProperties,
+    muscle_group_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "MuscleGroupRankChangeSchema" }
+);
+
+export const MuscleRankChangeSchema = Type.Object(
+  {
+    ...RankChangeProperties,
+    muscle_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "MuscleRankChangeSchema" }
+);
+
+export const ExerciseRankChangeSchema = Type.Object(
+  {
+    ...RankChangeProperties,
+    exercise_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "ExerciseRankChangeSchema" }
+);
+
+const UnchangedRankProperties = {
+  leaderboard_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  permanent_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  permanent_inter_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  leaderboard_inter_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  leaderboard_score: Type.Union([Type.Number(), Type.Null()]),
+  permanent_score: Type.Union([Type.Number(), Type.Null()]),
+};
+
+export const UnchangedMuscleGroupRankSchema = Type.Object(
+  {
+    ...UnchangedRankProperties,
+    muscle_group_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "UnchangedMuscleGroupRankSchema" }
+);
+export type UnchangedMuscleGroupRank = Static<typeof UnchangedMuscleGroupRankSchema>;
+
+export const UnchangedMuscleRankSchema = Type.Object(
+  {
+    ...UnchangedRankProperties,
+    muscle_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "UnchangedMuscleRankSchema" }
+);
+export type UnchangedMuscleRank = Static<typeof UnchangedMuscleRankSchema>;
+
+export const UnchangedExerciseRankSchema = Type.Object(
+  {
+    ...UnchangedRankProperties,
+    exercise_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "UnchangedExerciseRankSchema" }
+);
+
+export const UnchangedUserRankSchema = Type.Object(
+  {
+    ...UnchangedRankProperties,
+    user_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "UnchangedUserRankSchema" }
+);
+
+export const RankUpDataSchema = Type.Object(
+  {
+    userRankChange: Type.Optional(Type.Ref(UserRankChangeSchema)),
+    unchangedUserRank: Type.Optional(Type.Ref(UnchangedUserRankSchema)),
+    muscleGroupRankChanges: Type.Optional(Type.Array(Type.Ref(MuscleGroupRankChangeSchema))),
+    unchangedMuscleGroupRanks: Type.Optional(Type.Array(Type.Ref(UnchangedMuscleGroupRankSchema))),
+    muscleRankChanges: Type.Optional(Type.Array(Type.Ref(MuscleRankChangeSchema))),
+    unchangedMuscleRanks: Type.Optional(Type.Array(Type.Ref(UnchangedMuscleRankSchema))),
+    exerciseRankChanges: Type.Optional(Type.Array(Type.Ref(ExerciseRankChangeSchema))),
+    unchangedExerciseRanks: Type.Optional(Type.Array(Type.Ref(UnchangedExerciseRankSchema))),
+    leaderboardScoresRestored: Type.Optional(Type.Boolean()),
+  },
+  { $id: "RankUpDataSchema" }
+);
+
 export const DetailedFinishSessionResponseSchema = Type.Object(
   {
     // Core Session Info & XP
@@ -387,8 +533,7 @@ export const DetailedFinishSessionResponseSchema = Type.Object(
       // Renamed and type changed
       description: "Array of individual muscles worked in this session, including their intensity.",
     }),
-    overall_user_rank_progression: Type.Optional(Type.Ref(RankProgressionDetailsSchema)),
-    muscle_group_progressions: Type.Array(Type.Ref(MuscleGroupProgressionSchema)),
+    rank_up_data: Type.Ref(RankUpDataSchema),
 
     // Page 3: Logged Set Overview & Plan Progression
     logged_set_overview: Type.Array(Type.Ref(LoggedSetOverviewItemSchema)),
