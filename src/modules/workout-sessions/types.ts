@@ -31,32 +31,65 @@ export type WorkoutFeedMetadata = {
   rank_ups?: RankUp[];
 };
 
+type RankChangeProperties = {
+  old_leaderboard_rank_id: number | null;
+  old_permanent_rank_id: number | null;
+  new_leaderboard_rank_id: number | null;
+  new_permanent_rank_id: number | null;
+  old_permanent_inter_rank_id: number | null;
+  old_leaderboard_inter_rank_id: number | null;
+  new_permanent_inter_rank_id: number | null;
+  new_leaderboard_inter_rank_id: number | null;
+  old_leaderboard_score: number | null;
+  new_leaderboard_score: number | null;
+  old_permanent_score: number | null;
+  new_permanent_score: number | null;
+};
+
+type UserRankChange = RankChangeProperties & {
+  user_id: string;
+};
+
+type MuscleGroupRankChange = RankChangeProperties & {
+  muscle_group_id: string;
+};
+
+type MuscleRankChange = RankChangeProperties & {
+  muscle_id: string;
+};
+
+type ExerciseRankChange = RankChangeProperties & {
+  exercise_id: string;
+};
+
+type UnchangedRankProperties = {
+  leaderboard_rank_id: number | null;
+  permanent_rank_id: number | null;
+  permanent_inter_rank_id: number | null;
+  leaderboard_inter_rank_id: number | null;
+  leaderboard_score: number | null;
+  permanent_score: number | null;
+};
+
+type UnchangedMuscleGroupRank = UnchangedRankProperties & {
+  muscle_group_id: string;
+};
+
+type UnchangedMuscleRank = UnchangedRankProperties & {
+  muscle_id: string;
+};
+
+type UnchangedExerciseRank = UnchangedRankProperties & {
+  exercise_id: string;
+};
+
 export interface RankUpData {
-  overall_rank_up: {
-    old_rank_id: number;
-    new_rank_id: number;
-    old_strength_score: number;
-    new_strength_score: number;
-  };
-  muscle_group_rank_ups: {
-    muscle_group_id: string;
-    old_rank_id: number;
-    new_rank_id: number;
-    old_strength_score: number;
-    new_strength_score: number;
-  }[];
-  muscle_rank_ups: {
-    muscle_id: string;
-    old_rank_id: number;
-    new_rank_id: number;
-    old_strength_score: number;
-    new_strength_score: number;
-  }[];
-  exercise_rank_ups: {
-    exercise_id: string;
-    old_rank_id: number;
-    new_rank_id: number;
-    old_strength_score: number;
-    new_strength_score: number;
-  }[];
+  userRankChange?: UserRankChange;
+  muscleGroupRankChanges?: MuscleGroupRankChange[];
+  unchangedMuscleGroupRanks?: UnchangedMuscleGroupRank[];
+  muscleRankChanges?: MuscleRankChange[];
+  unchangedMuscleRanks?: UnchangedMuscleRank[];
+  exerciseRankChanges?: ExerciseRankChange[];
+  unchangedExerciseRanks?: UnchangedExerciseRank[];
+  leaderboardScoresRestored?: boolean;
 }

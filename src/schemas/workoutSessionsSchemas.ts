@@ -406,12 +406,50 @@ export const ExerciseRankChangeSchema = Type.Object(
   { $id: "ExerciseRankChangeSchema" }
 );
 
+const UnchangedRankProperties = {
+  leaderboard_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  permanent_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  permanent_inter_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  leaderboard_inter_rank_id: Type.Union([Type.Number(), Type.Null()]),
+  leaderboard_score: Type.Union([Type.Number(), Type.Null()]),
+  permanent_score: Type.Union([Type.Number(), Type.Null()]),
+};
+
+export const UnchangedMuscleGroupRankSchema = Type.Object(
+  {
+    ...UnchangedRankProperties,
+    muscle_group_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "UnchangedMuscleGroupRankSchema" }
+);
+export type UnchangedMuscleGroupRank = Static<typeof UnchangedMuscleGroupRankSchema>;
+
+export const UnchangedMuscleRankSchema = Type.Object(
+  {
+    ...UnchangedRankProperties,
+    muscle_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "UnchangedMuscleRankSchema" }
+);
+export type UnchangedMuscleRank = Static<typeof UnchangedMuscleRankSchema>;
+
+export const UnchangedExerciseRankSchema = Type.Object(
+  {
+    ...UnchangedRankProperties,
+    exercise_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "UnchangedExerciseRankSchema" }
+);
+
 export const RankUpDataSchema = Type.Object(
   {
     userRankChange: Type.Optional(Type.Ref(UserRankChangeSchema)),
     muscleGroupRankChanges: Type.Optional(Type.Array(Type.Ref(MuscleGroupRankChangeSchema))),
+    unchangedMuscleGroupRanks: Type.Optional(Type.Array(Type.Ref(UnchangedMuscleGroupRankSchema))),
     muscleRankChanges: Type.Optional(Type.Array(Type.Ref(MuscleRankChangeSchema))),
+    unchangedMuscleRanks: Type.Optional(Type.Array(Type.Ref(UnchangedMuscleRankSchema))),
     exerciseRankChanges: Type.Optional(Type.Array(Type.Ref(ExerciseRankChangeSchema))),
+    unchangedExerciseRanks: Type.Optional(Type.Array(Type.Ref(UnchangedExerciseRankSchema))),
     leaderboardScoresRestored: Type.Optional(Type.Boolean()),
   },
   { $id: "RankUpDataSchema" }

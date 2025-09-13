@@ -21,7 +21,6 @@ export async function calculateRankForEntry(
   entry: RankEntryType
 ): Promise<RankingResults> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
-  let calculationLog: { id: string } | null = null;
 
   fastify.log.info({ userId }, "[RankCalculator] Starting rank calculation for entry");
   fastify.log.debug({ userId, entry }, "[RankCalculator] Full entry data");
@@ -80,17 +79,16 @@ export async function calculateRankForEntry(
   };
 
   let rankUpdateResults: RankingResults | null = null;
-  try {
-    if (!user.is_premium) {
-      const { data: log, error: logError } = await supabase
-        .from("rank_calculations")
-        .insert({ user_id: userId, exercise_id: entry.exercise_id })
-        .select("id")
-        .single();
-      if (logError || !log) throw new Error("Failed to create rank calculation log");
-      calculationLog = log;
-    }
 
+  const { data: log, error: logError } = await supabase
+    .from("rank_calculations")
+    .insert({ user_id: userId, exercise_id: entry.exercise_id })
+    .select("id")
+    .single();
+  if (logError || !log) throw new Error("Failed to create rank calculation log");
+  const calculationLog = log;
+
+  try {
     fastify.log.info({ userId }, "[RankCalculator] Handling PR and Rank calculations");
     const [results] = await Promise.all([
       _handleRankCalculation(fastify, userData, userGender, userBodyweight, inMemorySet, entry, rankCalculationData),
@@ -104,9 +102,7 @@ export async function calculateRankForEntry(
     fastify.log.info({ userId }, "[RankCalculator] Returning rank calculation result");
     return rankUpdateResults;
   } finally {
-    if (calculationLog) {
-      await _updateRankCalculationLog(fastify, calculationLog.id, user, entry, userBodyweight, rankUpdateResults);
-    }
+    await _updateRankCalculationLog(fastify, calculationLog.id, user, entry, userBodyweight, rankUpdateResults);
     fastify.log.info({ userId }, "[RankCalculator] Finished calculating ranks");
   }
 }
@@ -122,13 +118,16 @@ async function _updateRankCalculationLog(
   const supabase = fastify.supabase as SupabaseClient<Database>;
   const status = rankUpdateResults ? "success" : "failed";
   const updatePayload: Partial<Tables<"rank_calculations">> = {
-    new_calculator_balance: user.rank_calculator_balance - 1,
-    old_calculator_balance: user.rank_calculator_balance,
     weight_kg: entry.weight,
     reps: entry.reps,
     bodyweight_kg: userBodyweight,
     status,
   };
+
+  if (!user.is_premium) {
+    updatePayload.new_calculator_balance = user.rank_calculator_balance - 1;
+    updatePayload.old_calculator_balance = user.rank_calculator_balance;
+  }
 
   if (rankUpdateResults) {
     updatePayload.rank_up_data = rankUpdateResults.rankUpData as any;
