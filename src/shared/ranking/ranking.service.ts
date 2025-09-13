@@ -110,6 +110,8 @@ export class RankingService {
     );
 
     const rankUpData: RankUpData = {
+      userRankChange: undefined,
+      unchangedUserRank: undefined,
       muscleGroupRankChanges: [],
       muscleRankChanges: [],
       exerciseRankChanges: [],
@@ -153,6 +155,8 @@ export class RankingService {
             old_leaderboard_score: initialUserRank?.leaderboard_score ?? 0,
             new_leaderboard_score: overallScore,
           };
+        } else if (initialUserRank) {
+          rankUpData.unchangedUserRank = initialUserRank;
         }
         const userRankUpdate: UserRankUpdate = {
           user_id: userId,
@@ -166,6 +170,8 @@ export class RankingService {
         };
         rankUpdatePayload.userRank = userRankUpdate;
       }
+    } else if (initialUserRank) {
+      rankUpData.unchangedUserRank = initialUserRank;
     }
 
     // --- Process Muscle Group Ranks ---
@@ -337,7 +343,7 @@ export class RankingService {
         continue;
       }
 
-      const hasChanged = !initialRank || newPermanentScore > (initialRank?.permanent_score ?? 0);
+      const hasChanged = newScore > 0 && (!initialRank || newPermanentScore > (initialRank?.permanent_score ?? 0));
 
       if (hasChanged) {
         rankUpData.exerciseRankChanges?.push({

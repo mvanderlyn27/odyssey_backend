@@ -103,6 +103,8 @@ import {
   RankProgressionDetailsSchema,
   MuscleGroupProgressionSchema,
   FailedSetInfoSchema,
+  SuccessfulSetInfoSchema,
+  HighestWeightInfoSchema,
   LoggedSetOverviewItemSchema,
   NewPlanProgressionItemSchema,
   // New schemas for richer response
@@ -115,6 +117,7 @@ import {
   MuscleGroupRankChangeSchema,
   MuscleRankChangeSchema,
   ExerciseRankChangeSchema,
+  UnchangedUserRankSchema,
   UnchangedMuscleGroupRankSchema,
   UnchangedMuscleRankSchema,
   UnchangedExerciseRankSchema,
@@ -292,6 +295,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(RankProgressionDetailsSchema);
   app.addSchema(MuscleGroupProgressionSchema);
   app.addSchema(FailedSetInfoSchema);
+  app.addSchema(SuccessfulSetInfoSchema);
+  app.addSchema(HighestWeightInfoSchema);
   app.addSchema(LoggedSetOverviewItemSchema);
   app.addSchema(NewPlanProgressionItemSchema);
 
@@ -301,6 +306,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(PlanWeightIncreaseItemSchema);
 
   app.addSchema(UserRankChangeSchema);
+  app.addSchema(UnchangedUserRankSchema);
   app.addSchema(MuscleGroupRankChangeSchema);
   app.addSchema(MuscleRankChangeSchema);
   app.addSchema(ExerciseRankChangeSchema);

@@ -127,12 +127,38 @@ export const FailedSetInfoSchema = Type.Object(
 );
 export type FailedSetInfo = Static<typeof FailedSetInfoSchema>;
 
+export const SuccessfulSetInfoSchema = Type.Object(
+  {
+    set_number: Type.Integer(),
+    reps_achieved: Type.Union([Type.Number(), Type.Null()]),
+    target_reps: Type.Union([Type.Number(), Type.Null()]),
+    achieved_weight: Type.Union([Type.Number(), Type.Null()]),
+    exercise_type: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+  },
+  { $id: "SuccessfulSetInfoSchema", description: "Information about a successful set." }
+);
+export type SuccessfulSetInfo = Static<typeof SuccessfulSetInfoSchema>;
+
+export const HighestWeightInfoSchema = Type.Object(
+  {
+    weight: Type.Number(),
+    reps: Type.Number(),
+  },
+  { $id: "HighestWeightInfoSchema", description: "Information about the highest weight lifted for an exercise." }
+);
+export type HighestWeightInfo = Static<typeof HighestWeightInfoSchema>;
+
 export const LoggedSetOverviewItemSchema = Type.Object(
   {
     exercise_name: Type.String(),
     failed_set_info: Type.Array(Type.Ref(FailedSetInfoSchema)),
+    successful_set_info: Type.Array(Type.Ref(SuccessfulSetInfoSchema)),
+    highest_weight_info: Type.Optional(Type.Ref(HighestWeightInfoSchema)),
   },
-  { $id: "LoggedSetOverviewItemSchema", description: "Overview of logged sets for an exercise, focusing on failures." }
+  {
+    $id: "LoggedSetOverviewItemSchema",
+    description: "Overview of logged sets for an exercise, including failures, successes, and highest weight.",
+  }
 );
 export type LoggedSetOverviewItem = Static<typeof LoggedSetOverviewItemSchema>;
 
@@ -441,9 +467,18 @@ export const UnchangedExerciseRankSchema = Type.Object(
   { $id: "UnchangedExerciseRankSchema" }
 );
 
+export const UnchangedUserRankSchema = Type.Object(
+  {
+    ...UnchangedRankProperties,
+    user_id: Type.String({ format: "uuid" }),
+  },
+  { $id: "UnchangedUserRankSchema" }
+);
+
 export const RankUpDataSchema = Type.Object(
   {
     userRankChange: Type.Optional(Type.Ref(UserRankChangeSchema)),
+    unchangedUserRank: Type.Optional(Type.Ref(UnchangedUserRankSchema)),
     muscleGroupRankChanges: Type.Optional(Type.Array(Type.Ref(MuscleGroupRankChangeSchema))),
     unchangedMuscleGroupRanks: Type.Optional(Type.Array(Type.Ref(UnchangedMuscleGroupRankSchema))),
     muscleRankChanges: Type.Optional(Type.Array(Type.Ref(MuscleRankChangeSchema))),

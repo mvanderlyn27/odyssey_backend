@@ -326,14 +326,28 @@ export const finishWorkoutSession = async (
             const exerciseId = set.exercise_id || set.custom_exercise_id;
             const exerciseName = set.exercise_name || "Unknown Exercise";
             const exerciseDetail = exerciseId ? exerciseDetailsMap.get(exerciseId) : undefined;
+
             if (!acc.has(exerciseName)) {
               acc.set(exerciseName, {
                 exercise_name: exerciseName,
                 failed_set_info: [],
+                successful_set_info: [],
+                highest_weight_info: undefined,
               });
             }
+
+            const overview = acc.get(exerciseName)!;
+
             if (set.is_success === false) {
-              acc.get(exerciseName)!.failed_set_info.push({
+              overview.failed_set_info.push({
+                set_number: set.set_order,
+                reps_achieved: set.actual_reps,
+                target_reps: set.planned_min_reps,
+                achieved_weight: set.actual_weight_kg,
+                exercise_type: exerciseDetail?.exercise_type,
+              });
+            } else if (set.is_success === true) {
+              overview.successful_set_info.push({
                 set_number: set.set_order,
                 reps_achieved: set.actual_reps,
                 target_reps: set.planned_min_reps,
@@ -341,8 +355,19 @@ export const finishWorkoutSession = async (
                 exercise_type: exerciseDetail?.exercise_type,
               });
             }
+
+            if (
+              set.actual_weight_kg &&
+              (!overview.highest_weight_info || set.actual_weight_kg > overview.highest_weight_info.weight)
+            ) {
+              overview.highest_weight_info = {
+                weight: set.actual_weight_kg,
+                reps: set.actual_reps || 0,
+              };
+            }
+
             return acc;
-          }, new Map<string, { exercise_name: string; failed_set_info: any[] }>())
+          }, new Map<string, { exercise_name: string; failed_set_info: any[]; successful_set_info: any[]; highest_weight_info: any | undefined }>())
           .values()
       ),
       plan_progression: [

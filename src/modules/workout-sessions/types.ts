@@ -83,8 +83,13 @@ type UnchangedExerciseRank = UnchangedRankProperties & {
   exercise_id: string;
 };
 
+type UnchangedUserRank = UnchangedRankProperties & {
+  user_id: string;
+};
+
 export interface RankUpData {
   userRankChange?: UserRankChange;
+  unchangedUserRank?: UnchangedUserRank;
   muscleGroupRankChanges?: MuscleGroupRankChange[];
   unchangedMuscleGroupRanks?: UnchangedMuscleGroupRank[];
   muscleRankChanges?: MuscleRankChange[];

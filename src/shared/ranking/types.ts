@@ -88,6 +88,7 @@ export interface ExerciseRankChange extends RankChange {
 
 export interface RankUpData {
   userRankChange?: UserRankChange;
+  unchangedUserRank?: Tables<"user_ranks">;
   muscleGroupRankChanges?: MuscleGroupRankChange[];
   muscleRankChanges?: MuscleRankChange[];
   exerciseRankChanges?: ExerciseRankChange[];
