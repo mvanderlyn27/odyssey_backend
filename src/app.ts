@@ -119,6 +119,7 @@ import {
   ExerciseRankChangeSchema,
   UnchangedUserRankSchema,
   UnchangedMuscleGroupRankSchema,
+  NoteSchema,
   UnchangedMuscleRankSchema,
   UnchangedExerciseRankSchema,
   // Schemas for Workout Session List & Summary (Phase 2)
@@ -261,6 +262,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(ExerciseSchema);
   app.addSchema(ProfileSchema);
   app.addSchema(UserGoalSchema);
+  app.addSchema(NoteSchema);
   // Removed WorkoutPlanSchema, WorkoutPlanDaySchema, WorkoutPlanDayExerciseSchema
   app.addSchema(WorkoutSessionSchema);
   app.addSchema(OverallUserRankUpSchema);

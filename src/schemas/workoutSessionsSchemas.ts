@@ -149,6 +149,28 @@ export const HighestWeightInfoSchema = Type.Object(
   { $id: "HighestWeightInfoSchema", description: "Information about the highest weight lifted for an exercise." }
 );
 export type HighestWeightInfo = Static<typeof HighestWeightInfoSchema>;
+export const NoteSchema = Type.Object(
+  {
+    id: Type.String({ format: "uuid" }),
+    created_at: Type.String({ format: "date-time" }),
+    note: Type.String(),
+    exercise_key: Type.String(),
+    workout_session_id: Type.String(),
+    note_order: Type.Integer(),
+    user_id: Type.String({ format: "uuid" }),
+    workout_sessions: Type.Union([
+      Type.Object({
+        workout_plans: Type.Union([Type.Object({ name: Type.String() }), Type.Null()]),
+        workout_plan_days: Type.Union([Type.Object({ name: Type.String() }), Type.Null()]),
+      }),
+      Type.Null(),
+    ]),
+    exercises: Type.Union([Type.Object({ name: Type.String() }), Type.Null()]),
+    custom_exercises: Type.Union([Type.Object({ name: Type.String() }), Type.Null()]),
+    source: Type.Union([Type.Literal("standard"), Type.Literal("custom")]),
+  },
+  { $id: "NoteSchema" }
+);
 
 export const LoggedSetOverviewItemSchema = Type.Object(
   {
@@ -156,6 +178,7 @@ export const LoggedSetOverviewItemSchema = Type.Object(
     failed_set_info: Type.Array(Type.Ref(FailedSetInfoSchema)),
     successful_set_info: Type.Array(Type.Ref(SuccessfulSetInfoSchema)),
     highest_weight_info: Type.Optional(Type.Ref(HighestWeightInfoSchema)),
+    user_notes: Type.Array(Type.Ref(NoteSchema)),
   },
   {
     $id: "LoggedSetOverviewItemSchema",
@@ -239,7 +262,6 @@ export const SessionSetInputSchema = Type.Object(
     is_success: Type.Optional(Type.Boolean()), // Replaces is_failure, matches DB
     is_warmup: Type.Optional(Type.Boolean()),
     rest_time_seconds: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
-    user_notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     planned_weight_increase_kg: Type.Optional(
       Type.Number({ description: "The planned weight increase for this set, if applicable, in kg." })
     ),
@@ -257,7 +279,6 @@ export const SessionExerciseInputSchema = Type.Object(
     exercise_id: Type.String({ format: "uuid" }),
     workout_plan_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
     order_index: Type.Integer({ minimum: 0 }),
-    user_notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     auto_progression_enabled: Type.Optional(Type.Boolean()),
     sets: Type.Array(Type.Ref(SessionSetInputSchema)),
   },
@@ -280,9 +301,9 @@ export const NewFinishSessionBodySchema = Type.Object(
     ended_at: Type.String({ format: "date-time" }),
     duration_seconds: Type.Integer({ minimum: 0 }),
     public: Type.Optional(Type.Boolean()),
-    notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     overall_feeling: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Allow any string or null, aligning with service/response
     exercises: Type.Array(Type.Ref(SessionExerciseInputSchema)),
+    notes: Type.Array(Type.Ref(NoteSchema)),
   },
   {
     $id: "NewFinishSessionBodySchema",
@@ -648,7 +669,6 @@ export const WorkoutSessionSetSummarySchema = Type.Object(
     is_success: Type.Optional(Type.Boolean()),
     is_warmup: Type.Optional(Type.Boolean()),
     rest_time_seconds: Type.Optional(Type.Integer()),
-    user_notes: Type.Optional(Type.String()),
     calculated_1rm: Type.Optional(Type.Number()),
     calculated_swr: Type.Optional(Type.Number()),
     new_pr_achieved_1rm: Type.Optional(Type.Boolean()), // Indicates if this set resulted in a new 1RM PR for this exercise
@@ -684,7 +704,6 @@ export const WorkoutSessionSummaryResponseSchema = Type.Object(
     ended_at: Type.Optional(Type.String({ format: "date-time" })),
     duration_seconds: Type.Optional(Type.Integer()),
     status: SessionStatusEnum,
-    notes: Type.Optional(Type.String()), // Overall session notes
     overall_feeling: Type.Optional(OverallFeelingEnum),
     workout_plan_id: Type.Optional(Type.String({ format: "uuid" })),
     workout_plan_name: Type.Optional(Type.String()),

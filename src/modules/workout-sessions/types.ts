@@ -1,4 +1,5 @@
 import { Enums } from "../../types/database";
+import { Tables } from "../../types/database";
 
 export type RankUp = {
   type: "user" | "muscle_group" | "muscle" | "exercise";
@@ -98,3 +99,14 @@ export interface RankUpData {
   unchangedExerciseRanks?: UnchangedExerciseRank[];
   leaderboardScoresRestored?: boolean;
 }
+
+export type Note = Tables<"workout_notes">;
+export type NoteFull = Note & {
+  workout_sessions: {
+    workout_plans: { name: string } | null;
+    workout_plan_days: { name: string } | null;
+  } | null;
+  exercises: { name: string } | null;
+  custom_exercises: { name: string } | null;
+  source: "standard" | "custom";
+};

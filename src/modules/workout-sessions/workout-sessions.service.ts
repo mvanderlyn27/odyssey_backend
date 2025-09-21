@@ -21,6 +21,7 @@ import { _updateUserMuscleLastWorked } from "./workout-sessions.lastWorked";
 import { _updateUserExercisePRs } from "./workout-sessions.prs";
 import { _handleWorkoutCompletionNotifications } from "./workout-sessions.notifications";
 import { createWorkoutFeedItem } from "./workout-sessions.feed";
+import { _saveWorkoutNotes } from "./workout-sessions.notes";
 
 async function _updateSessionSummary(
   fastify: FastifyInstance,
@@ -173,6 +174,7 @@ export const finishWorkoutSession = async (
       _activePlanUpdateResult,
       newPrs,
       previousSessionDataResult,
+      _saveWorkoutNotesResult,
     ] = await Promise.all([
       _updateWorkoutPlanProgression(
         fastify,
@@ -243,6 +245,7 @@ export const finishWorkoutSession = async (
         }
         return Promise.resolve({ data: null, error: null });
       })(),
+      _saveWorkoutNotes(fastify, newlyCreatedOrFetchedSession.id, finishData.notes),
     ]);
 
     // ASYNCHRONOUSLY create a feed item. Do not block the response for this.
@@ -333,6 +336,7 @@ export const finishWorkoutSession = async (
                 failed_set_info: [],
                 successful_set_info: [],
                 highest_weight_info: undefined,
+                user_notes: finishData.notes.filter((note) => note.exercise_key === exerciseId),
               });
             }
 
@@ -369,7 +373,7 @@ export const finishWorkoutSession = async (
             }
 
             return acc;
-          }, new Map<string, { exercise_name: string; failed_set_info: any[]; successful_set_info: any[]; highest_weight_info: any | undefined }>())
+          }, new Map<string, { exercise_name: string; failed_set_info: any[]; successful_set_info: any[]; highest_weight_info: any | undefined; user_notes: any[] }>())
           .values()
       ),
       plan_progression: [
