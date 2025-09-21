@@ -68,7 +68,6 @@ export async function calculateRankForEntry(
     rest_seconds_taken: 0,
     planned_min_reps: null,
     planned_max_reps: null,
-    notes: null,
     performed_at: new Date().toISOString(),
     calculated_1rm,
     calculated_swr,
