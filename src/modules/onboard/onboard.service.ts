@@ -69,6 +69,7 @@ export const handleOnboarding = async (
         actual_weight_kg: data.rank_exercise_weight_kg,
         is_warmup: false,
         is_success: true,
+        is_min_success: true,
         rest_seconds_taken: 0,
         planned_min_reps: null,
         planned_max_reps: null,

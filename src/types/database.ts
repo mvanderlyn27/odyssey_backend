@@ -2310,7 +2310,6 @@ export type Database = {
           is_amrap: boolean | null
           max_reps: number | null
           min_reps: number | null
-          notes: string | null
           rest_seconds: number | null
           set_order: number
           target_rep_increase: number | null
@@ -2325,7 +2324,6 @@ export type Database = {
           is_amrap?: boolean | null
           max_reps?: number | null
           min_reps?: number | null
-          notes?: string | null
           rest_seconds?: number | null
           set_order: number
           target_rep_increase?: number | null
@@ -2340,7 +2338,6 @@ export type Database = {
           is_amrap?: boolean | null
           max_reps?: number | null
           min_reps?: number | null
-          notes?: string | null
           rest_seconds?: number | null
           set_order?: number
           target_rep_increase?: number | null
@@ -2369,7 +2366,6 @@ export type Database = {
           exercise_id: string | null
           exercise_order: number
           id: string
-          notes: string | null
           post_exercise_rest_seconds: number | null
           rest_timer_enabled: boolean | null
           rest_timer_seconds: number | null
@@ -2386,7 +2382,6 @@ export type Database = {
           exercise_id?: string | null
           exercise_order: number
           id?: string
-          notes?: string | null
           post_exercise_rest_seconds?: number | null
           rest_timer_enabled?: boolean | null
           rest_timer_seconds?: number | null
@@ -2403,7 +2398,6 @@ export type Database = {
           exercise_id?: string | null
           exercise_order?: number
           id?: string
-          notes?: string | null
           post_exercise_rest_seconds?: number | null
           rest_timer_enabled?: boolean | null
           rest_timer_seconds?: number | null
@@ -2570,6 +2564,7 @@ export type Database = {
           deleted: boolean
           exercise_id: string | null
           id: string
+          is_min_success: boolean | null
           is_success: boolean | null
           is_warmup: boolean | null
           performed_at: string
@@ -2591,6 +2586,7 @@ export type Database = {
           deleted?: boolean
           exercise_id?: string | null
           id?: string
+          is_min_success?: boolean | null
           is_success?: boolean | null
           is_warmup?: boolean | null
           performed_at?: string
@@ -2612,6 +2608,7 @@ export type Database = {
           deleted?: boolean
           exercise_id?: string | null
           id?: string
+          is_min_success?: boolean | null
           is_success?: boolean | null
           is_warmup?: boolean | null
           performed_at?: string

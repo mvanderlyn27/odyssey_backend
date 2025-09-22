@@ -123,6 +123,8 @@ export const FailedSetInfoSchema = Type.Object(
     achieved_weight: Type.Union([Type.Number(), Type.Null()]),
     target_weight: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     exercise_type: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    is_min_success: Type.Optional(Type.Boolean()),
+    is_success: Type.Optional(Type.Boolean()),
   },
   { $id: "FailedSetInfoSchema", description: "Information about a failed set." }
 );
@@ -136,6 +138,8 @@ export const SuccessfulSetInfoSchema = Type.Object(
     achieved_weight: Type.Union([Type.Number(), Type.Null()]),
     target_weight: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     exercise_type: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    is_min_success: Type.Optional(Type.Boolean()),
+    is_success: Type.Optional(Type.Boolean()),
   },
   { $id: "SuccessfulSetInfoSchema", description: "Information about a successful set." }
 );
@@ -175,6 +179,7 @@ export const NoteSchema = Type.Object(
 export const LoggedSetOverviewItemSchema = Type.Object(
   {
     exercise_name: Type.String(),
+    progression_status: Type.Union([Type.Literal("progressed"), Type.Literal("minimum_met"), Type.Literal("failed")]),
     failed_set_info: Type.Array(Type.Ref(FailedSetInfoSchema)),
     successful_set_info: Type.Array(Type.Ref(SuccessfulSetInfoSchema)),
     highest_weight_info: Type.Optional(Type.Ref(HighestWeightInfoSchema)),
@@ -260,6 +265,7 @@ export const SessionSetInputSchema = Type.Object(
     actual_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     is_completed: Type.Boolean(),
     is_success: Type.Optional(Type.Boolean()), // Replaces is_failure, matches DB
+    is_min_success: Type.Optional(Type.Boolean()),
     is_warmup: Type.Optional(Type.Boolean()),
     rest_time_seconds: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
     planned_weight_increase_kg: Type.Optional(
