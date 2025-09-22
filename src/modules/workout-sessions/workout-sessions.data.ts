@@ -406,12 +406,6 @@ export async function _gatherAndPrepareWorkoutData(
 
         const isCustom = exerciseDetail?.source === "custom";
 
-        // Server-side calculation for progression success
-        const planned_max_reps = set.planned_max_reps ?? 0;
-        const planned_weight_kg = set.planned_weight_kg ?? 0;
-        const is_success_for_progression =
-          (actual_reps ?? 0) >= planned_max_reps && (actual_weight_kg ?? 0) >= planned_weight_kg;
-
         const setPayload: SetPayloadPreamble = {
           exercise_id: isCustom ? null : exercise.exercise_id,
           custom_exercise_id: isCustom ? exercise.exercise_id : null,
@@ -421,7 +415,7 @@ export async function _gatherAndPrepareWorkoutData(
           planned_min_reps: set.planned_min_reps,
           planned_max_reps: set.planned_max_reps,
           planned_weight_kg: set.planned_weight_kg,
-          is_success: is_success_for_progression,
+          is_success: set.is_success,
           is_min_success: set.is_min_success,
           is_warmup: set.is_warmup,
           rest_seconds_taken: set.rest_time_seconds,
@@ -445,7 +439,7 @@ export async function _gatherAndPrepareWorkoutData(
           planned_max_reps: set.planned_max_reps ?? null,
           planned_weight_increase_kg: set.planned_weight_increase_kg ?? null,
           target_rep_increase: set.target_rep_increase ?? null,
-          is_success: is_success_for_progression,
+          is_success: set.is_success,
           is_min_success: set.is_min_success,
         });
       });
