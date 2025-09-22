@@ -25,6 +25,7 @@ export type SetProgressionInput = {
   planned_weight_increase_kg?: number | null;
   target_rep_increase?: number | null;
   is_success?: boolean | null;
+  is_min_success?: boolean | null;
 };
 
 export type SetPayloadPreamble = Omit<TablesInsert<"workout_session_sets">, "workout_session_id"> & {
@@ -404,22 +405,24 @@ export async function _gatherAndPrepareWorkoutData(
         }
 
         const isCustom = exerciseDetail?.source === "custom";
+
         const setPayload: SetPayloadPreamble = {
           exercise_id: isCustom ? null : exercise.exercise_id,
           custom_exercise_id: isCustom ? exercise.exercise_id : null,
           set_order: set.order_index,
           actual_reps: actual_reps,
           actual_weight_kg: actual_weight_kg,
-          notes: set.user_notes ?? exercise.user_notes ?? null,
           planned_min_reps: set.planned_min_reps,
           planned_max_reps: set.planned_max_reps,
           planned_weight_kg: set.planned_weight_kg,
           is_success: set.is_success,
+          is_min_success: set.is_min_success,
           is_warmup: set.is_warmup,
           rest_seconds_taken: set.rest_time_seconds,
           performed_at: finishData.ended_at,
           calculated_1rm: calculated_1rm,
           calculated_swr: calculated_swr,
+          workout_plan_day_exercise_sets_id: set.workout_plan_day_exercise_sets_id,
         };
         setInsertPayloads.push(setPayload);
 
@@ -436,7 +439,8 @@ export async function _gatherAndPrepareWorkoutData(
           planned_max_reps: set.planned_max_reps ?? null,
           planned_weight_increase_kg: set.planned_weight_increase_kg ?? null,
           target_rep_increase: set.target_rep_increase ?? null,
-          is_success: set.is_success ?? null,
+          is_success: set.is_success,
+          is_min_success: set.is_min_success,
         });
       });
     });
@@ -498,7 +502,6 @@ export async function _gatherAndPrepareWorkoutData(
     completed_at: finishData.ended_at,
     status: "completed",
     public: finishData.public ?? true,
-    notes: finishData.notes,
     workout_plan_id: finishData.workout_plan_id,
     workout_plan_day_id: finishData.workout_plan_day_id,
     duration_seconds: durationSeconds,
