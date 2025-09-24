@@ -205,6 +205,31 @@ async function isUsernameTaken(fastify: FastifyInstance, username: string): Prom
   return !!data;
 }
 
+export async function generateUsernameFromDisplayName(fastify: FastifyInstance, displayName: string): Promise<string> {
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+
+  const baseUsername = displayName.replace(/\s+/g, "").toLowerCase();
+  let finalUsername = baseUsername;
+  let isTaken = await isUsernameTaken(fastify, finalUsername);
+  let attempts = 0;
+
+  while (isTaken && attempts < 10) {
+    const randomSuffix = Math.floor(Math.random() * 1000);
+    finalUsername = `${baseUsername}${randomSuffix}`;
+    isTaken = await isUsernameTaken(fastify, finalUsername);
+    attempts++;
+  }
+
+  if (isTaken) {
+    // Fallback for the rare case of 10 collisions
+    finalUsername = `${baseUsername}${Date.now()}`;
+  }
+
+  return finalUsername;
+}
+
 // Template system for funny gym names
 const templates = [
   // Classic Enjoyer / Enthusiast

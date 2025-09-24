@@ -2188,6 +2188,7 @@ export type Database = {
           last_workout_timestamp: string | null
           notification_enabled: boolean | null
           onboard_complete: boolean
+          onboarding_metadata: Json | null
           plan_type: string | null
           premium_expires_at: string | null
           profile_privacy: Database["public"]["Enums"]["visibility_level"]
@@ -2209,6 +2210,7 @@ export type Database = {
           last_workout_timestamp?: string | null
           notification_enabled?: boolean | null
           onboard_complete?: boolean
+          onboarding_metadata?: Json | null
           plan_type?: string | null
           premium_expires_at?: string | null
           profile_privacy?: Database["public"]["Enums"]["visibility_level"]
@@ -2230,6 +2232,7 @@ export type Database = {
           last_workout_timestamp?: string | null
           notification_enabled?: boolean | null
           onboard_complete?: boolean
+          onboarding_metadata?: Json | null
           plan_type?: string | null
           premium_expires_at?: string | null
           profile_privacy?: Database["public"]["Enums"]["visibility_level"]

@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Tables, Enums } from "../../types/database";
-import { OnboardBody } from "../../schemas/onboardSchemas";
+import { OnboardingData } from "../../schemas/onboardSchemas";
 import { CACHE_KEYS } from "../../services/cache.service";
 
 type FullExercise = (Tables<"exercises"> | Tables<"custom_exercises">) & { source: "standard" | "custom" };
@@ -37,7 +37,7 @@ export type PreparedOnboardingData = {
 export async function _gatherAndPrepareOnboardingData(
   fastify: FastifyInstance,
   userId: string,
-  data: OnboardBody
+  data: OnboardingData
 ): Promise<PreparedOnboardingData> {
   fastify.log.info({ userId }, `[PREPARE_ONBOARDING_DATA] Starting data preparation for user`);
   fastify.log.debug({ userId, data }, `[PREPARE_ONBOARDING_DATA] Full onboarding data`);

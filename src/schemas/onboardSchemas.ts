@@ -4,6 +4,7 @@ import { ProfileSchema } from "./profileSchemas"; // Import the actual ProfileSc
 // Schema for the initial rank request body
 export const InitialRankBodySchema = Type.Object(
   {
+    display_name: Type.Optional(Type.String({ description: "User's chosen display name" })),
     selected_exercise_id: Type.Optional(
       Type.String({ format: "uuid", description: "UUID of the exercise used for ranking" })
     ),
@@ -33,10 +34,18 @@ export const InitialRankBodySchema = Type.Object(
     rank_exercise_weight_kg: Type.Optional(
       Type.Number({ description: "Weight (in kg) used for the rank exercise", minimum: 0 })
     ),
-    rank_exercise_strength_score: Type.Optional(
-      Type.Number({ description: "Strength score calculated for the onboarding ranking exercise" })
+    rank_exercise_leaderboard_score: Type.Optional(
+      Type.Number({ description: "Leaderboard score calculated for the onboarding ranking exercise" })
     ),
-    push_notification_token: Type.Optional(Type.String({ description: "The user's push notification token" })),
+    onboarding_metadata: Type.Optional(
+      Type.Object({
+        funnel: Type.Optional(Type.String()),
+        dream_goal: Type.Optional(Type.String()),
+        physique: Type.Optional(Type.String()),
+        consistency: Type.Optional(Type.String()),
+        distraction: Type.Optional(Type.String()),
+      })
+    ),
   },
   {
     $id: "InitialRankBodySchema",
@@ -44,4 +53,4 @@ export const InitialRankBodySchema = Type.Object(
   }
 );
 
-export type OnboardBody = Static<typeof InitialRankBodySchema>;
+export type OnboardingData = Static<typeof InitialRankBodySchema>;
