@@ -1,6 +1,10 @@
 import { FastifyInstance } from "fastify";
 import { ProfileUpdate } from "./onboard.types";
 
+export function sanitizeForUrl(text: string): string {
+  return text.replace(/[^a-zA-Z0-9]/g, "");
+}
+
 // Expanded + tuned word lists
 const wordLists = {
   adjectives: [
@@ -210,7 +214,7 @@ export async function generateUsernameFromDisplayName(fastify: FastifyInstance, 
     throw new Error("Supabase client not available");
   }
 
-  const baseUsername = displayName.replace(/\s+/g, "").toLowerCase();
+  const baseUsername = sanitizeForUrl(displayName.replace(/\s+/g, "").toLowerCase());
   let finalUsername = baseUsername;
   let isTaken = await isUsernameTaken(fastify, finalUsername);
   let attempts = 0;
@@ -339,7 +343,8 @@ export const rerollUsername = async (
   const supabase = fastify.supabase;
 
   const { username, displayName } = await generateUniqueUsername(fastify);
-  const newAvatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/png?seed=${username}`;
+  const sanitizedUsername = sanitizeForUrl(username);
+  const newAvatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/png?seed=${sanitizedUsername}`;
 
   const profileUpdatePayload: ProfileUpdate = {
     updated_at: new Date().toISOString(),

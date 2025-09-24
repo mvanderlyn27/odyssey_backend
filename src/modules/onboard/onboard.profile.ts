@@ -35,7 +35,7 @@ export async function _createInitialProfile(
     displayName = generated.displayName;
   }
 
-  const avatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/svg?seed=${username}`;
+  const avatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/svg?seed=${encodeURIComponent(username)}`;
 
   const profilePayload: TablesUpdate<"profiles"> = {
     id: userId,

@@ -65,15 +65,14 @@ export async function _finalizeOnboarding(fastify: FastifyInstance, userId: stri
     throw new Error("Failed to fetch final updated profile after onboarding.");
   }
 
-  fastify.log.info({ userId }, `[FINALIZE_ONBOARDING] Onboarding fully completed`);
+  fastify.log.info(finalProfileData, `[FINALIZE_ONBOARDING] Onboarding fully completed`);
 
   _sendLoopsEvent(fastify, userId); // Fire-and-forget
-
   return {
     id: finalProfileData.id,
     username: finalProfileData.username,
     display_name: finalProfileData.display_name,
-    avatar_url: finalProfileData.avatar_url,
+    avatar_url: finalProfileData.avatar_url || null,
     bio: finalProfileData.bio,
     created_at: finalProfileData.created_at,
     updated_at: finalProfileData.updated_at,
