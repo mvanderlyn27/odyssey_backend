@@ -56,6 +56,7 @@ export type PreparedWorkoutData = {
     exercise_name: string;
     reps: number;
     weight_kg: number;
+    exercise_type: Enums<"exercise_type"> | null;
   } | null;
   exerciseDetailsMap: Map<
     string,
@@ -350,6 +351,7 @@ export async function _gatherAndPrepareWorkoutData(
     reps: number;
     weight_kg: number;
     score: number;
+    exercise_type: Enums<"exercise_type"> | null;
   } | null = null;
   const performedExerciseNamesForSummary = new Set<string>();
 
@@ -385,6 +387,7 @@ export async function _gatherAndPrepareWorkoutData(
               reps: actual_reps ?? 0,
               weight_kg: actual_weight_kg ?? 0,
               score: currentSetScore,
+              exercise_type: exerciseType ?? null,
             };
           }
         }

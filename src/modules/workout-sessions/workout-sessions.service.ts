@@ -348,7 +348,7 @@ export const finishWorkoutSession = async (
           const setInfo = {
             set_number: set.set_order,
             reps_achieved: set.actual_reps,
-            target_reps: set.planned_min_reps,
+            target_reps: set.planned_max_reps,
             achieved_weight: set.actual_weight_kg,
             target_weight: set.planned_weight_kg,
             exercise_type: exerciseDetail?.exercise_type,

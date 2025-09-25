@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Database, TablesInsert } from "../../types/database";
+import { Database, Enums, TablesInsert } from "../../types/database";
 import { WorkoutFeedMetadata, RankUp } from "./types";
 import { RankUpData } from "../../shared/ranking/types";
 import { Tables } from "../../types/database";
@@ -23,6 +23,7 @@ export interface FeedItemCreationData {
       exercise_name: string;
       reps: number;
       weight_kg: number;
+      exercise_type: Enums<"exercise_type"> | null;
     } | null;
   };
   personalRecords: NewPr[];
@@ -131,7 +132,7 @@ export async function createWorkoutFeedItem(fastify: FastifyInstance, inputData:
       muscle_name: m.name,
       muscle_intensity: m.muscle_intensity,
     })),
-    best_set: inputData.summaryStats.best_set || { exercise_name: "N/A", reps: 0, weight_kg: 0 },
+    best_set: inputData.summaryStats.best_set || { exercise_name: "N/A", reps: 0, weight_kg: 0, exercise_type: null },
   };
 
   // Handle Personal Records
