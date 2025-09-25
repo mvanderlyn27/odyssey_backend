@@ -193,6 +193,7 @@ export const finishWorkoutSession = async (
           genderForRanking,
           userBodyweight,
           persistedSessionSets,
+          exerciseDetailsMap,
           exercises,
           mcw,
           allMuscles,
