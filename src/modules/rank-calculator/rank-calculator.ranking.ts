@@ -62,7 +62,7 @@ export async function _handleRankCalculation(
     initialMuscleGroupRanks,
     initialMuscleRanks,
     userExerciseRanks,
-    user.is_premium || false,
+    false,
     "calculator"
   );
 

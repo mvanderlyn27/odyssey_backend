@@ -183,6 +183,11 @@ export class RankingService {
       if (!affectedMuscleGroupIds.has(muscleGroupId)) continue;
       const initialRank = muscleGroupRanksMap.get(muscleGroupId);
 
+      if (source === "workout" && !isPremium && initialRank && initialRank.locked === false) {
+        rankUpData.unchangedMuscleGroupRanks?.push(initialRank);
+        continue;
+      }
+
       if (!initialRank || newScore > (initialRank?.leaderboard_score ?? 0)) {
         const newPermanentScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
         const newPermanentInterRank = findRankAndInterRank(newPermanentScore, allInterRanks);
@@ -256,6 +261,11 @@ export class RankingService {
     for (const [muscleId, newScore] of muscleScores.entries()) {
       if (!affectedMuscleIds.has(muscleId)) continue;
       const initialRank = muscleRanksMap.get(muscleId);
+
+      if (source === "workout" && !isPremium && initialRank && initialRank.locked === false) {
+        rankUpData.unchangedMuscleRanks?.push(initialRank);
+        continue;
+      }
 
       if (!initialRank || newScore > (initialRank?.leaderboard_score ?? 0)) {
         const newPermanentScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
