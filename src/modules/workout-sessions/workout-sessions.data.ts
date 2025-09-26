@@ -363,6 +363,9 @@ export async function _gatherAndPrepareWorkoutData(
         performedExerciseNamesForSummary.add(exerciseName);
       }
       exercise.sets.forEach((set: SessionSetInput) => {
+        if (set.is_completed === false) {
+          return;
+        }
         calculatedTotalSets++;
         const actual_weight_kg = set.actual_weight_kg ?? null;
         const actual_reps = set.actual_reps ?? null;
