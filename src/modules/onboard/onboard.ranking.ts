@@ -34,13 +34,17 @@ export async function _handleOnboardingRanking(
       if (userExerciseRanks.error) throw userExerciseRanks.error;
 
       const rankingService = new RankingService(fastify);
-      const calculationInput = persistedSessionSets.map((s) => ({
-        exercise_id: s.exercise_id || s.custom_exercise_id!,
-        reps: s.actual_reps || 0,
-        duration: 0,
-        weight_kg: s.actual_weight_kg || 0,
-        score: 0, // Initialize score to 0, it will be calculated in the service
-      }));
+      const calculationInput = persistedSessionSets.map((s) => {
+        const exercise = preparedData.exercises.find((e) => e.id === s.exercise_id);
+        return {
+          exercise_id: s.exercise_id || s.custom_exercise_id!,
+          reps: s.actual_reps || 0,
+          duration: 0,
+          weight_kg: s.actual_weight_kg || 0,
+          score: 0, // Initialize score to 0, it will be calculated in the service
+          exercise_type: exercise?.exercise_type ?? null,
+        };
+      });
 
       const results = await rankingService.updateUserRanks(
         userId,
