@@ -20,7 +20,7 @@ const SubscriptionStatusEnum = Type.Union(
 export const ProfileSchema = Type.Object(
   {
     id: Type.String({ format: "uuid" }),
-    username: Type.Union([Type.String(), Type.Null()]),
+    username: Type.Union([Type.String({ pattern: "^[a-zA-Z0-9]*$" }), Type.Null()]),
     display_name: Type.Union([Type.String(), Type.Null()]),
     avatar_url: Type.Union([Type.String({ format: "uri" }), Type.Null()]),
     bio: Type.Union([Type.String(), Type.Null()]),

@@ -35,6 +35,7 @@ export async function _handleRankCalculation(
   } = data;
 
   const rankingService = new RankingService(fastify);
+  const exercise = exercises.find((e) => e.id === persistedSet.exercise_id || e.id === persistedSet.custom_exercise_id);
   const calculationInput = [
     {
       exercise_id: persistedSet.exercise_id || persistedSet.custom_exercise_id!,
@@ -42,6 +43,7 @@ export async function _handleRankCalculation(
       duration: 0,
       weight_kg: persistedSet.actual_weight_kg || 0,
       score: 0,
+      exercise_type: exercise?.exercise_type ?? null,
     },
   ];
 
@@ -60,7 +62,7 @@ export async function _handleRankCalculation(
     initialMuscleGroupRanks,
     initialMuscleRanks,
     userExerciseRanks,
-    user.is_premium || false,
+    false,
     "calculator"
   );
 

@@ -186,13 +186,14 @@ export const finishWorkoutSession = async (
         if (!userData.gender) {
           fastify.log.warn({ userId }, "User gender is not specified. Defaulting to 'male' for ranking calculations.");
         }
-        const isLocked = !userData.is_premium;
+        const isPremium = userData.is_premium || false;
         return _updateUserRanks(
           fastify,
           userId,
           genderForRanking,
           userBodyweight,
           persistedSessionSets,
+          exerciseDetailsMap,
           exercises,
           mcw,
           allMuscles,
@@ -203,7 +204,7 @@ export const finishWorkoutSession = async (
           initialMuscleGroupRanks,
           initialMuscleRanks,
           userExerciseRanks,
-          isLocked
+          isPremium
         );
       })(),
       _awardXpAndLevel(fastify, userProfile, allLevelDefinitions),
@@ -324,61 +325,67 @@ export const finishWorkoutSession = async (
       muscles_worked_summary: muscles_worked_summary,
       rank_up_data: rankUpdateResults.rankUpData,
       logged_set_overview: (() => {
-        const overviewMap = persistedSessionSets.reduce((acc, set) => {
-          const exerciseId = set.exercise_id || set.custom_exercise_id;
-          const exerciseName = set.exercise_name || "Unknown Exercise";
-          const exerciseDetail = exerciseId ? exerciseDetailsMap.get(exerciseId) : undefined;
+        const exercisesWithReps = new Set(
+          persistedSessionSets.filter((s) => (s.actual_reps ?? 0) > 0).map((s) => s.exercise_id || s.custom_exercise_id)
+        );
 
-          if (!acc.has(exerciseName)) {
-            acc.set(exerciseName, {
-              exercise_name: exerciseName,
-              progression_status: "failed", // Default value, will be updated later
-              failed_set_info: [],
-              successful_set_info: [],
-              highest_weight_info: undefined,
-              user_notes: finishData.notes.filter((note) => note.exercise_key === exerciseId),
-              // Temporary storage for calculation
-              all_sets_min_success: true,
-              all_sets_full_success: true,
-            });
-          }
+        const overviewMap = persistedSessionSets
+          .filter((s) => exercisesWithReps.has(s.exercise_id || s.custom_exercise_id))
+          .reduce((acc, set) => {
+            const exerciseId = set.exercise_id || set.custom_exercise_id;
+            const exerciseName = set.exercise_name || "Unknown Exercise";
+            const exerciseDetail = exerciseId ? exerciseDetailsMap.get(exerciseId) : undefined;
 
-          const overview = acc.get(exerciseName)!;
-
-          const setInfo = {
-            set_number: set.set_order,
-            reps_achieved: set.actual_reps,
-            target_reps: set.planned_min_reps,
-            achieved_weight: set.actual_weight_kg,
-            target_weight: set.planned_weight_kg,
-            exercise_type: exerciseDetail?.exercise_type,
-            is_min_success: set.is_min_success,
-            is_success: set.is_success,
-          };
-
-          if (set.is_min_success === false) {
-            overview.failed_set_info.push(setInfo);
-            overview.all_sets_min_success = false;
-            overview.all_sets_full_success = false;
-          } else {
-            overview.successful_set_info.push(setInfo);
-            if (set.is_success === false) {
-              overview.all_sets_full_success = false;
+            if (!acc.has(exerciseName)) {
+              acc.set(exerciseName, {
+                exercise_name: exerciseName,
+                progression_status: "failed", // Default value, will be updated later
+                failed_set_info: [],
+                successful_set_info: [],
+                highest_weight_info: undefined,
+                user_notes: finishData.notes.filter((note) => note.exercise_key === exerciseId),
+                // Temporary storage for calculation
+                all_sets_min_success: true,
+                all_sets_full_success: true,
+              });
             }
-          }
 
-          if (
-            set.actual_weight_kg &&
-            (!overview.highest_weight_info || set.actual_weight_kg > overview.highest_weight_info.weight)
-          ) {
-            overview.highest_weight_info = {
-              weight: set.actual_weight_kg,
-              reps: set.actual_reps || 0,
+            const overview = acc.get(exerciseName)!;
+
+            const setInfo = {
+              set_number: set.set_order,
+              reps_achieved: set.actual_reps,
+              target_reps: set.planned_max_reps,
+              achieved_weight: set.actual_weight_kg,
+              target_weight: set.planned_weight_kg,
+              exercise_type: exerciseDetail?.exercise_type,
+              is_min_success: set.is_min_success,
+              is_success: set.is_success,
             };
-          }
 
-          return acc;
-        }, new Map<string, any>());
+            if (set.is_min_success === false) {
+              overview.failed_set_info.push(setInfo);
+              overview.all_sets_min_success = false;
+              overview.all_sets_full_success = false;
+            } else {
+              overview.successful_set_info.push(setInfo);
+              if (set.is_success === false) {
+                overview.all_sets_full_success = false;
+              }
+            }
+
+            if (
+              set.actual_weight_kg &&
+              (!overview.highest_weight_info || set.actual_weight_kg > overview.highest_weight_info.weight)
+            ) {
+              overview.highest_weight_info = {
+                weight: set.actual_weight_kg,
+                reps: set.actual_reps || 0,
+              };
+            }
+
+            return acc;
+          }, new Map<string, any>());
 
         overviewMap.forEach((overview) => {
           if (overview.all_sets_full_success) {

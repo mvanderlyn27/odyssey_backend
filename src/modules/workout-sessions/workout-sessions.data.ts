@@ -56,6 +56,7 @@ export type PreparedWorkoutData = {
     exercise_name: string;
     reps: number;
     weight_kg: number;
+    exercise_type: Enums<"exercise_type"> | null;
   } | null;
   exerciseDetailsMap: Map<
     string,
@@ -350,6 +351,7 @@ export async function _gatherAndPrepareWorkoutData(
     reps: number;
     weight_kg: number;
     score: number;
+    exercise_type: Enums<"exercise_type"> | null;
   } | null = null;
   const performedExerciseNamesForSummary = new Set<string>();
 
@@ -361,12 +363,28 @@ export async function _gatherAndPrepareWorkoutData(
         performedExerciseNamesForSummary.add(exerciseName);
       }
       exercise.sets.forEach((set: SessionSetInput) => {
+        if (set.is_completed === false) {
+          return;
+        }
         calculatedTotalSets++;
-        const actual_weight_kg = set.actual_weight_kg ?? null;
-        const actual_reps = set.actual_reps ?? null;
-        calculatedTotalReps += actual_reps || 0;
+        const actual_weight_kg = set.actual_weight_kg ?? 0;
+        const actual_reps = set.actual_reps ?? 0;
+        calculatedTotalReps += actual_reps;
 
-        const calculated_1rm = calculate_1RM(actual_weight_kg, actual_reps);
+        const exerciseType = exerciseDetail?.exercise_type;
+        let weightFor1rm = actual_weight_kg;
+
+        if (userBodyweight) {
+          if (exerciseType === "assisted_body_weight") {
+            weightFor1rm = Math.max(0, userBodyweight - actual_weight_kg);
+          } else if (exerciseType === "weighted_body_weight") {
+            weightFor1rm = userBodyweight + actual_weight_kg;
+          } else if (exerciseType === "calisthenics") {
+            weightFor1rm = userBodyweight;
+          }
+        }
+
+        const calculated_1rm = calculate_1RM(weightFor1rm, actual_reps);
         const calculated_swr = calculate_SWR(calculated_1rm, userBodyweight);
 
         if (set.is_warmup !== true) {
@@ -385,6 +403,7 @@ export async function _gatherAndPrepareWorkoutData(
               reps: actual_reps ?? 0,
               weight_kg: actual_weight_kg ?? 0,
               score: currentSetScore,
+              exercise_type: exerciseType ?? null,
             };
           }
         }

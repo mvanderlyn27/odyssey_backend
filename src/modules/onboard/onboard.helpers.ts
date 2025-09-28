@@ -1,6 +1,10 @@
 import { FastifyInstance } from "fastify";
 import { ProfileUpdate } from "./onboard.types";
 
+export function sanitizeForUrl(text: string): string {
+  return text.replace(/[^a-zA-Z0-9]/g, "");
+}
+
 // Expanded + tuned word lists
 const wordLists = {
   adjectives: [
@@ -205,6 +209,31 @@ async function isUsernameTaken(fastify: FastifyInstance, username: string): Prom
   return !!data;
 }
 
+export async function generateUsernameFromDisplayName(fastify: FastifyInstance, displayName: string): Promise<string> {
+  if (!fastify.supabase) {
+    throw new Error("Supabase client not available");
+  }
+
+  const baseUsername = sanitizeForUrl(displayName.replace(/\s+/g, "").toLowerCase());
+  let finalUsername = baseUsername;
+  let isTaken = await isUsernameTaken(fastify, finalUsername);
+  let attempts = 0;
+
+  while (isTaken && attempts < 10) {
+    const randomSuffix = Math.floor(Math.random() * 1000);
+    finalUsername = `${baseUsername}${randomSuffix}`;
+    isTaken = await isUsernameTaken(fastify, finalUsername);
+    attempts++;
+  }
+
+  if (isTaken) {
+    // Fallback for the rare case of 10 collisions
+    finalUsername = `${baseUsername}${Date.now()}`;
+  }
+
+  return finalUsername;
+}
+
 // Template system for funny gym names
 const templates = [
   // Classic Enjoyer / Enthusiast
@@ -314,7 +343,8 @@ export const rerollUsername = async (
   const supabase = fastify.supabase;
 
   const { username, displayName } = await generateUniqueUsername(fastify);
-  const newAvatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/png?seed=${username}`;
+  const sanitizedUsername = sanitizeForUrl(username);
+  const newAvatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/png?seed=${sanitizedUsername}`;
 
   const profileUpdatePayload: ProfileUpdate = {
     updated_at: new Date().toISOString(),

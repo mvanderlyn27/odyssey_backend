@@ -11,6 +11,15 @@ export async function _updateUserRanks(
   userGender: Database["public"]["Enums"]["gender"],
   userBodyweight: number | null,
   persistedSessionSets: (Tables<"workout_session_sets"> & { exercise_name?: string | null })[],
+  exerciseDetailsMap: Map<
+    string,
+    {
+      id: string;
+      name: string;
+      exercise_type: Enums<"exercise_type"> | null;
+      source: "standard" | "custom" | null;
+    }
+  >,
   exercises: Tables<"exercises">[],
   mcw: Tables<"exercise_muscles">[],
   allMuscles: Tables<"muscles">[],
@@ -24,13 +33,21 @@ export async function _updateUserRanks(
   isPremium: boolean
 ): Promise<RankingResults> {
   const rankingService = new RankingService(fastify);
-  const calculationInput = persistedSessionSets.map((s) => ({
-    exercise_id: s.exercise_id || s.custom_exercise_id!,
-    reps: s.actual_reps || 0,
-    duration: 0, // TODO: Handle duration for cardio exercises
-    weight_kg: s.actual_weight_kg || 0,
-    score: 0, // Initialize score to 0, it will be calculated in the service
-  }));
+  const calculationInput = persistedSessionSets
+    .filter((s) => (s.actual_reps ?? 0) > 0)
+    .map((s) => {
+      const exerciseId = s.exercise_id || s.custom_exercise_id!;
+      const exerciseDetail = exerciseDetailsMap.get(exerciseId);
+      return {
+        exercise_id: exerciseId,
+        reps: s.actual_reps || 0,
+        duration: 0, // TODO: Handle duration for cardio exercises
+        weight_kg: s.actual_weight_kg || 0,
+        score: 0, // Initialize score to 0, it will be calculated in the service
+        session_set_id: s.id,
+        exercise_type: exerciseDetail?.exercise_type ?? null,
+      };
+    });
   const results = await rankingService.updateUserRanks(
     userId,
     userGender,

@@ -18,6 +18,7 @@ export type RankCalculationInput = {
   duration: number;
   weight_kg: number;
   score: number;
+  exercise_type: Enums<"exercise_type"> | null;
 };
 
 export class RankingService {
@@ -72,7 +73,9 @@ export class RankingService {
     // Calculate new scores based on the workout session input
     const exerciseScores = this._calculateExerciseScores(calculationInput, exercises, userGender, userBodyweight);
     this.log.info(
-      { exerciseScores: Object.fromEntries(exerciseScores) },
+      {
+        exerciseScores: Object.fromEntries(Array.from(exerciseScores.entries()).map(([k, v]) => [k, v.score])),
+      },
       "[RankingService] Newly calculated exercise scores"
     );
 
@@ -80,7 +83,7 @@ export class RankingService {
     for (const rank of existingUserExerciseRanks) {
       allExerciseScores.set(rank.exercise_id, rank.permanent_score ?? 0);
     }
-    for (const [exerciseId, score] of exerciseScores.entries()) {
+    for (const [exerciseId, { score }] of exerciseScores.entries()) {
       allExerciseScores.set(exerciseId, score);
     }
 
@@ -180,6 +183,11 @@ export class RankingService {
       if (!affectedMuscleGroupIds.has(muscleGroupId)) continue;
       const initialRank = muscleGroupRanksMap.get(muscleGroupId);
 
+      if (source === "workout" && !isPremium && initialRank && initialRank.locked === false) {
+        rankUpData.unchangedMuscleGroupRanks?.push(initialRank);
+        continue;
+      }
+
       if (!initialRank || newScore > (initialRank?.leaderboard_score ?? 0)) {
         const newPermanentScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
         const newPermanentInterRank = findRankAndInterRank(newPermanentScore, allInterRanks);
@@ -254,6 +262,11 @@ export class RankingService {
       if (!affectedMuscleIds.has(muscleId)) continue;
       const initialRank = muscleRanksMap.get(muscleId);
 
+      if (source === "workout" && !isPremium && initialRank && initialRank.locked === false) {
+        rankUpData.unchangedMuscleRanks?.push(initialRank);
+        continue;
+      }
+
       if (!initialRank || newScore > (initialRank?.leaderboard_score ?? 0)) {
         const newPermanentScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
         const newPermanentInterRank = findRankAndInterRank(newPermanentScore, allInterRanks);
@@ -321,7 +334,6 @@ export class RankingService {
 
     // --- Process Exercise Ranks ---
     const exerciseRanksMap = new Map(existingUserExerciseRanks.map((r) => [r.exercise_id, r]));
-    const calculationInputMap = new Map(calculationInput.map((input) => [input.exercise_id, input]));
 
     // Populate unchanged ranks for exercises that were not part of this calculation
     for (const rank of existingUserExerciseRanks) {
@@ -330,9 +342,10 @@ export class RankingService {
       }
     }
 
-    for (const [exerciseId, newScore] of exerciseScores.entries()) {
+    for (const [exerciseId, { score: newScore, set: bestSet }] of exerciseScores.entries()) {
       const initialRank = exerciseRanksMap.get(exerciseId);
-      const newPermanentScore = Math.max(newScore, initialRank?.permanent_score ?? 0);
+      const newPermanentScore =
+        newScore > (initialRank?.permanent_score ?? 0) ? newScore : initialRank?.permanent_score ?? 0;
       const newPermanentInterRank = findRankAndInterRank(newPermanentScore, allInterRanks);
       const newLeaderboardInterRank = findRankAndInterRank(newScore, allInterRanks);
 
@@ -366,13 +379,21 @@ export class RankingService {
       }
 
       // We only want to save the rank to the DB if it's a real improvement.
-      const input = calculationInputMap.get(exerciseId);
-      if (input) {
-        const estimated_1rm = calculate_1RM(input.weight_kg, input.reps);
+      const input = bestSet;
+      if (input && userBodyweight) {
+        let weightFor1rm = input.weight_kg;
+        if (input.exercise_type === "assisted_body_weight") {
+          weightFor1rm = Math.max(0, userBodyweight - input.weight_kg);
+        } else if (input.exercise_type === "weighted_body_weight") {
+          weightFor1rm = userBodyweight + input.weight_kg;
+        } else if (input.exercise_type === "calisthenics") {
+          weightFor1rm = userBodyweight;
+        }
+
+        const estimated_1rm = calculate_1RM(weightFor1rm, input.reps);
         const swr = calculate_SWR(estimated_1rm, userBodyweight);
 
-        const hasImproved =
-          !initialRank || newScore > (initialRank?.leaderboard_score ?? 0) || (swr ?? 0) > (initialRank?.swr ?? 0);
+        const hasImproved = !initialRank || newPermanentScore > (initialRank?.permanent_score ?? 0);
 
         if (hasImproved) {
           rankUpdatePayload.exerciseRanks?.push({
@@ -509,8 +530,8 @@ export class RankingService {
     exercises: Tables<"exercises">[],
     userGender: Enums<"gender">,
     userBodyweight: number
-  ): Map<string, number> {
-    const exerciseScores = new Map<string, number>();
+  ): Map<string, { score: number; set: RankCalculationInput }> {
+    const exerciseScores = new Map<string, { score: number; set: RankCalculationInput }>();
     const exercisesMap = new Map(exercises.map((e) => [e.id, e]));
 
     for (const input of calculationInput) {
@@ -531,7 +552,14 @@ export class RankingService {
             userGender === "female" ? exercise.elite_duration_female ?? 0 : exercise.elite_duration_male ?? 0;
           break;
         default:
-          const oneRm = calculate_1RM(input.weight_kg, input.reps);
+          let totalWeight = input.weight_kg;
+          if (input.exercise_type === "weighted_body_weight") {
+            totalWeight += userBodyweight;
+          } else if (input.exercise_type === "assisted_body_weight") {
+            totalWeight = Math.max(0, userBodyweight - input.weight_kg);
+          }
+
+          const oneRm = calculate_1RM(totalWeight, input.reps);
           const swr = calculate_SWR(oneRm, userBodyweight);
           userRatio = swr ?? 0;
           eliteRatio = userGender === "female" ? exercise.elite_swr_female ?? 0 : exercise.elite_swr_male ?? 0;
@@ -539,7 +567,10 @@ export class RankingService {
       }
 
       const score = calculateRankPoints(exercise.alpha_value ?? 0.1, eliteRatio, userRatio, 5000, this.log);
-      exerciseScores.set(input.exercise_id, score);
+      const existing = exerciseScores.get(input.exercise_id);
+      if (!existing || score > existing.score) {
+        exerciseScores.set(input.exercise_id, { score, set: input });
+      }
     }
     return exerciseScores;
   }

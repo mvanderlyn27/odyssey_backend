@@ -22,6 +22,7 @@ export type WorkoutFeedMetadata = {
     exercise_name: string;
     reps: number;
     weight_kg: number;
+    exercise_type: Enums<"exercise_type"> | null;
   };
   personal_records?: {
     exercise_name: string;

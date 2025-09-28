@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { Database, Tables, TablesUpdate } from "../../types/database";
-import { generateUniqueUsername } from "./onboard.helpers";
+import { generateUniqueUsername, generateUsernameFromDisplayName } from "./onboard.helpers";
 import { OnboardingData } from "./onboard.types";
 import { PreparedOnboardingData } from "./onboard.data";
 
@@ -22,8 +22,20 @@ export async function _createInitialProfile(
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
-  const { username, displayName } = await generateUniqueUsername(fastify);
-  const avatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/svg?seed=${username}`;
+
+  let username: string;
+  let displayName: string;
+
+  if (data.display_name) {
+    displayName = data.display_name;
+    username = await generateUsernameFromDisplayName(fastify, displayName);
+  } else {
+    const generated = await generateUniqueUsername(fastify);
+    username = generated.username;
+    displayName = generated.displayName;
+  }
+
+  const avatarUrl = `https://api.dicebear.com/9.x/avataaars-neutral/svg?seed=${encodeURIComponent(username)}`;
 
   const profilePayload: TablesUpdate<"profiles"> = {
     id: userId,
@@ -40,7 +52,7 @@ export async function _createInitialProfile(
     gender: data.gender ?? preparedData.userData?.gender,
     weight_preference: mapUnitsToWeightPreference(data.units) ?? preparedData.userData?.weight_preference,
     funnel: data.funnel ?? preparedData.userData?.funnel ?? null,
-    push_notification_token: data.push_notification_token ?? preparedData.userData?.push_notification_token,
+    onboarding_metadata: data.onboarding_metadata ?? preparedData.userData?.onboarding_metadata,
   };
 
   const { error: profileError } = await fastify.supabase.from("profiles").upsert(profilePayload);
