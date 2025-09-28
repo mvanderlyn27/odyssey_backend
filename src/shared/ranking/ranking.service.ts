@@ -380,8 +380,17 @@ export class RankingService {
 
       // We only want to save the rank to the DB if it's a real improvement.
       const input = bestSet;
-      if (input) {
-        const estimated_1rm = calculate_1RM(input.weight_kg, input.reps);
+      if (input && userBodyweight) {
+        let weightFor1rm = input.weight_kg;
+        if (input.exercise_type === "assisted_body_weight") {
+          weightFor1rm = Math.max(0, userBodyweight - input.weight_kg);
+        } else if (input.exercise_type === "weighted_body_weight") {
+          weightFor1rm = userBodyweight + input.weight_kg;
+        } else if (input.exercise_type === "calisthenics") {
+          weightFor1rm = userBodyweight;
+        }
+
+        const estimated_1rm = calculate_1RM(weightFor1rm, input.reps);
         const swr = calculate_SWR(estimated_1rm, userBodyweight);
 
         const hasImproved = !initialRank || newPermanentScore > (initialRank?.permanent_score ?? 0);
