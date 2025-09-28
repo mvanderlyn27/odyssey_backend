@@ -69,10 +69,31 @@ export async function _handleOnboardingRanking(
         { userId, payload: results.rankUpdatePayload },
         `[ONBOARD_RANKING] Rank update payload calculated`
       );
-      if (Object.keys(results.rankUpdatePayload).length > 0) {
-        await _saveRankingResults(fastify, results.rankUpdatePayload);
+
+      const payload = results.rankUpdatePayload;
+      const hasUpdates =
+        payload.userRank ||
+        (payload.muscleGroupRanks && payload.muscleGroupRanks.length > 0) ||
+        (payload.muscleRanks && payload.muscleRanks.length > 0) ||
+        (payload.exerciseRanks && payload.exerciseRanks.length > 0);
+
+      if (hasUpdates) {
+        await _saveRankingResults(fastify, payload);
       } else {
         fastify.log.warn({ userId }, `[ONBOARD_RANKING] No rank updates to save; payload is empty`);
+        if (fastify.posthog) {
+          fastify.posthog.capture({
+            distinctId: userId,
+            event: "onboarding_ranking_no_updates",
+            properties: {
+              rankUpdatePayload: payload,
+              onboardingData: data,
+              initialUserRank: preparedData.initialUserRank,
+              initialMuscleGroupRanks: preparedData.initialMuscleGroupRanks,
+              initialMuscleRanks: preparedData.initialMuscleRanks,
+            },
+          });
+        }
       }
 
       fastify.log.info({ userId }, `[ONBOARD_RANKING] Onboarding rank calculation completed`);
@@ -82,6 +103,7 @@ export async function _handleOnboardingRanking(
         { error: rankingError, userId },
         "[ONBOARD_RANKING] Error during onboarding ranking calculation"
       );
+      throw rankingError;
     }
   } else {
     fastify.log.warn(

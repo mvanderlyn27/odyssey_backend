@@ -31,5 +31,18 @@ export async function _handleOnboardingPRs(
     fastify.log.info({ userId }, "[ONBOARD_PRS] Initial exercise PR calculation completed");
   } catch (prError: any) {
     fastify.log.error({ error: prError, userId }, "[ONBOARD_PRS] Error during initial exercise PR calculation.");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "onboarding_prs_error",
+        properties: {
+          error: prError.message,
+          stack: prError.stack,
+          onboardingData: data,
+          sessionSets: persistedSessionSets,
+        },
+      });
+    }
+    throw prError;
   }
 }

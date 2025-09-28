@@ -440,6 +440,20 @@ export const finishWorkoutSession = async (
         error.message
       }`
     );
+
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "finish_workout_session_error",
+        properties: {
+          error: error.message,
+          stack: error.stack,
+          sessionId: currentSessionIdToLogOnError,
+          finishData: finishData,
+        },
+      });
+    }
+
     throw error;
   }
 };
