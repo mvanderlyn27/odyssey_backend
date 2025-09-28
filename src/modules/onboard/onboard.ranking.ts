@@ -46,6 +46,20 @@ export async function _handleOnboardingRanking(
         };
       });
 
+      fastify.log.info(
+        {
+          userId,
+          userGenderForRanking,
+          userBodyweight,
+          calculationInput,
+          initialUserRank: preparedData.initialUserRank,
+          initialMuscleGroupRanks: preparedData.initialMuscleGroupRanks,
+          initialMuscleRanks: preparedData.initialMuscleRanks,
+          existingUserExerciseRanks: userExerciseRanks.data,
+        },
+        "[ONBOARD_RANKING] Calling rankingService.updateUserRanks with the following data"
+      );
+
       const results = await rankingService.updateUserRanks(
         userId,
         userGenderForRanking as Enums<"gender">,
@@ -106,16 +120,29 @@ export async function _handleOnboardingRanking(
       throw rankingError;
     }
   } else {
-    fastify.log.warn(
+    const missingData = {
+      hasGender: !!userGenderForRanking,
+      hasBodyweight: !!userBodyweight,
+      hasExerciseId: !!data.selected_exercise_id,
+      hasReps: data.rank_exercise_reps !== undefined,
+      hasWeight: data.rank_exercise_weight_kg !== undefined,
+    };
+    fastify.log.info(
       {
         userId,
-        hasGender: !!userGenderForRanking,
-        hasBodyweight: !!userBodyweight,
-        hasExerciseId: !!data.selected_exercise_id,
-        hasReps: data.rank_exercise_reps !== undefined,
-        hasWeight: data.rank_exercise_weight_kg !== undefined,
+        ...missingData,
       },
       "[ONBOARD_RANKING] Skipping onboarding ranking calculation due to missing data"
     );
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "onboarding_ranking_skipped",
+        properties: {
+          ...missingData,
+          onboardingData: data,
+        },
+      });
+    }
   }
 }
