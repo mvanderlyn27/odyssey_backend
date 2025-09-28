@@ -153,7 +153,7 @@ function configureLoggerOptions(isProduction: boolean): LoggerOptions {
   if (isProduction || isGoogleCloudRun) {
     const loggingWinston = new LoggingWinston();
     return {
-      level: process.env.LOG_LEVEL || "error", // Changed from "info" to "error" for production
+      level: "info", // Explicitly set for production
       transports: [new winston.transports.Console(), loggingWinston],
     };
   } else {

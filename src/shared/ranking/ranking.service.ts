@@ -47,10 +47,25 @@ export class RankingService {
     source: "workout" | "onboard" | "calculator"
   ): Promise<RankingResults> {
     if (!userBodyweight) {
+      this.log.warn({ userId, source }, "[RankingService] Returning early due to missing userBodyweight.");
       return { rankUpData: {}, rankUpdatePayload: {} };
     }
 
     this.log.info({ userId, source }, "[RankingService] Starting updateUserRanks");
+    this.log.debug(
+      {
+        userId,
+        source,
+        userGender,
+        userBodyweight,
+        calculationInput,
+        initialUserRank,
+        initialMuscleGroupRanks,
+        initialMuscleRanks,
+        existingUserExerciseRanks,
+      },
+      "[RankingService] updateUserRanks initial data"
+    );
 
     const { affectedExerciseIds, affectedMuscleIds, affectedMuscleGroupIds } = this._getAffectedEntities(
       calculationInput,
@@ -90,6 +105,17 @@ export class RankingService {
     const muscleScores = this._calculateMuscleScores(allExerciseScores, mcw, allMuscles);
     const muscleGroupScores = this._calculateMuscleGroupScores(muscleScores, allMuscles, allMuscleGroups);
     const overallScore = this._calculateOverallScore(muscleGroupScores, allMuscleGroups);
+
+    this.log.info(
+      {
+        userId,
+        exerciseScores: Object.fromEntries(allExerciseScores),
+        muscleScores: Object.fromEntries(muscleScores),
+        muscleGroupScores: Object.fromEntries(muscleGroupScores),
+        overallScore,
+      },
+      "[RankingService] Calculated scores"
+    );
 
     this.log.debug(
       {
@@ -418,7 +444,15 @@ export class RankingService {
     }
 
     this.log.info({ userId, source }, "[RankingService] Finished updateUserRanks");
-    this.log.debug({ userId, rankUpData, rankUpdatePayload }, "[RankingService] Final ranking results");
+    this.log.info(
+      {
+        userId,
+        source,
+        rankUpData,
+        rankUpdatePayload,
+      },
+      "[RankingService] Final ranking results"
+    );
     return { rankUpData, rankUpdatePayload };
   }
 
