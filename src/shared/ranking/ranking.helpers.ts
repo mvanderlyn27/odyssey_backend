@@ -169,7 +169,7 @@ export async function _saveRankingResults(fastify: FastifyInstance, rankUpdatePa
     { recordTypes: Object.keys(rankUpdatePayload) },
     "[SAVE_RANKING] Attempting to save ranking results"
   );
-  fastify.log.debug({ payload: rankUpdatePayload }, "[SAVE_RANKING] Full ranking payload");
+  fastify.log.info({ payload: rankUpdatePayload }, "[SAVE_RANKING] Full ranking payload");
 
   const { error } = await supabase.rpc("bulk_update_ranks", {
     p_user_rank_update,
