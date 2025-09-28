@@ -23,12 +23,13 @@ export async function _handleWorkoutCompletionNotifications(
   friends: Tables<"friendships">[],
   allRanks: Pick<Tables<"ranks">, "id" | "rank_name">[]
 ): Promise<void> {
-  fastify.log.info({ userId, sessionId: workoutSessionId }, `[NOTIFICATIONS] Starting notification handling`);
-  const supabase = fastify.supabase as SupabaseClient<Database>;
-
+  const module = "workout-sessions";
+  fastify.log.info({ userId, sessionId: workoutSessionId, module }, `[NOTIFICATIONS] Starting notification handling`);
   try {
+    const supabase = fastify.supabase as SupabaseClient<Database>;
+
     if (userData.profile_privacy === "private") {
-      fastify.log.info({ userId }, `[NOTIFICATIONS] User has private profile. No notifications will be sent.`);
+      fastify.log.debug({ userId, module }, `[NOTIFICATIONS] User has private profile. No notifications will be sent.`);
       return;
     }
 
@@ -36,7 +37,7 @@ export async function _handleWorkoutCompletionNotifications(
       friends?.map((friend) => (friend.requester_id === userId ? friend.addressee_id : friend.requester_id)) || [];
 
     if (friendIds.length === 0) {
-      fastify.log.info({ userId }, `[NOTIFICATIONS] User has no friends. No notifications to send.`);
+      fastify.log.debug({ userId, module }, `[NOTIFICATIONS] User has no friends. No notifications to send.`);
       return;
     }
 
@@ -94,20 +95,28 @@ export async function _handleWorkoutCompletionNotifications(
       const { error: insertError } = await supabase.from("notifications").insert(notificationPayloads);
 
       if (insertError) {
-        fastify.log.error(
-          { error: insertError, userId },
-          `[NOTIFICATIONS] Failed to insert workout completion notifications.`
-        );
+        throw new Error(`Failed to insert workout completion notifications: ${insertError.message}`);
       } else {
-        fastify.log.info(
-          `[NOTIFICATIONS] Successfully created ${notificationPayloads.length} notifications for user ${userId}'s workout.`
+        fastify.log.debug(
+          { userId, workoutSessionId, count: notificationPayloads.length, module },
+          `[NOTIFICATIONS] Successfully created notifications.`
         );
       }
     }
-  } catch (err) {
+  } catch (error) {
+    const module = "workout-sessions";
     fastify.log.error(
-      { err, userId, workoutSessionId },
+      { error, userId, workoutSessionId, module },
       `[NOTIFICATIONS] An unexpected error occurred during notification handling.`
     );
+    fastify.posthog?.capture({
+      distinctId: userId,
+      event: "notification_handling_error",
+      properties: {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : "No stack trace",
+        workoutSessionId,
+      },
+    });
   }
 }

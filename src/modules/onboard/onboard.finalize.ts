@@ -28,13 +28,22 @@ async function _sendLoopsEvent(fastify: FastifyInstance, userId: string) {
             },
           }
         );
-        fastify.log.info({ userId }, `[FINALIZE_ONBOARDING] Event sent to Loops.so`);
+        fastify.log.debug({ userId }, `[FINALIZE_ONBOARDING] Event sent to Loops.so`);
       } else {
         fastify.log.warn("[FINALIZE_ONBOARDING] LOOPS_API_KEY not configured, skipping event send.");
       }
     }
   } catch (error) {
     fastify.log.error({ error, userId }, "Failed to send event to Loops.so");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "loops_event_send_error",
+        properties: {
+          error,
+        },
+      });
+    }
   }
 }
 
@@ -49,6 +58,15 @@ export async function _finalizeOnboarding(fastify: FastifyInstance, userId: stri
 
   if (activePlanResult.error) {
     fastify.log.error({ error: activePlanResult.error, userId }, "Error creating blank active workout plan entry");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "finalize_onboarding_active_plan_error",
+        properties: {
+          error: activePlanResult.error,
+        },
+      });
+    }
   }
 
   if (activeSessionResult.error) {
@@ -56,12 +74,30 @@ export async function _finalizeOnboarding(fastify: FastifyInstance, userId: stri
       { error: activeSessionResult.error, userId },
       "Error creating blank active workout session entry"
     );
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "finalize_onboarding_active_session_error",
+        properties: {
+          error: activeSessionResult.error,
+        },
+      });
+    }
   }
 
   const { data: finalProfileData, error: finalProfileError } = profileResult;
 
   if (finalProfileError || !finalProfileData) {
     fastify.log.error({ error: finalProfileError, userId }, "Error fetching final updated profile");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "finalize_onboarding_profile_error",
+        properties: {
+          error: finalProfileError,
+        },
+      });
+    }
     throw new Error("Failed to fetch final updated profile after onboarding.");
   }
 

@@ -14,8 +14,8 @@ export async function _handlePrCalculation(
   entry: RankEntryType,
   data: RankCalculationData
 ) {
-  fastify.log.info({ userId: user.id }, "[RankCalculator] Starting PR calculation handler");
-  fastify.log.debug({ userId: user.id, entry }, "[RankCalculator] PR calculation entry data");
+  fastify.log.info({ module: "rank-calculator", userId: user.id }, "Starting PR calculation handler");
+  fastify.log.debug({ module: "rank-calculator", userId: user.id, entry }, "PR calculation entry data");
   if (!fastify.supabase) throw new Error("Supabase client not available");
   const prService = new PrService(fastify);
 
@@ -41,5 +41,5 @@ export async function _handlePrCalculation(
     existingPrMap,
     exerciseDetailsMap
   );
-  fastify.log.info({ userId: user.id }, "[RankCalculator] PR calculation handler finished");
+  fastify.log.info({ module: "rank-calculator", userId: user.id }, "PR calculation handler finished");
 }

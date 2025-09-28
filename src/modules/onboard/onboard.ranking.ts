@@ -15,7 +15,7 @@ export async function _handleOnboardingRanking(
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
-  const userGenderForRanking = data.gender ?? preparedData.userData?.gender;
+  const userGenderForRanking = data.gender ?? "male";
   const userBodyweight = data.weight ?? null;
 
   if (
@@ -46,7 +46,7 @@ export async function _handleOnboardingRanking(
         };
       });
 
-      fastify.log.info(
+      fastify.log.debug(
         {
           userId,
           userGenderForRanking,
@@ -57,7 +57,7 @@ export async function _handleOnboardingRanking(
           initialMuscleRanks: preparedData.initialMuscleRanks,
           existingUserExerciseRanks: userExerciseRanks.data,
         },
-        "[ONBOARD_RANKING] Calling rankingService.updateUserRanks with the following data"
+        "Calling rankingService.updateUserRanks"
       );
 
       const results = await rankingService.updateUserRanks(
@@ -80,8 +80,8 @@ export async function _handleOnboardingRanking(
       );
 
       fastify.log.debug(
-        { userId, payload: results.rankUpdatePayload },
-        `[ONBOARD_RANKING] Rank update payload calculated`
+        { module: "onboard", userId, payload: results.rankUpdatePayload },
+        "Rank update payload calculated"
       );
 
       const payload = results.rankUpdatePayload;
@@ -94,7 +94,7 @@ export async function _handleOnboardingRanking(
       if (hasUpdates) {
         await _saveRankingResults(fastify, payload);
       } else {
-        fastify.log.warn({ userId }, `[ONBOARD_RANKING] No rank updates to save; payload is empty`);
+        fastify.log.warn({ module: "onboard", userId }, "No rank updates to save; payload is empty");
         if (fastify.posthog) {
           fastify.posthog.capture({
             distinctId: userId,
@@ -110,13 +110,22 @@ export async function _handleOnboardingRanking(
         }
       }
 
-      fastify.log.info({ userId }, `[ONBOARD_RANKING] Onboarding rank calculation completed`);
-      fastify.log.debug({ userId, rankUpData: results.rankUpData }, `[ONBOARD_RANKING] Rank up data`);
+      fastify.log.info({ module: "onboard", userId }, "Onboarding rank calculation completed");
+      fastify.log.debug({ module: "onboard", userId, rankUpData: results.rankUpData }, "Rank up data");
     } catch (rankingError: any) {
       fastify.log.error(
-        { error: rankingError, userId },
-        "[ONBOARD_RANKING] Error during onboarding ranking calculation"
+        { module: "onboard", error: rankingError, userId },
+        "Error during onboarding ranking calculation"
       );
+      if (fastify.posthog) {
+        fastify.posthog.capture({
+          distinctId: userId,
+          event: "onboarding_ranking_error",
+          properties: {
+            error: rankingError,
+          },
+        });
+      }
       throw rankingError;
     }
   } else {
@@ -129,10 +138,11 @@ export async function _handleOnboardingRanking(
     };
     fastify.log.info(
       {
+        module: "onboard",
         userId,
         ...missingData,
       },
-      "[ONBOARD_RANKING] Skipping onboarding ranking calculation due to missing data"
+      "Skipping onboarding ranking calculation due to missing data"
     );
     if (fastify.posthog) {
       fastify.posthog.capture({

@@ -52,69 +52,72 @@ class XpService {
     return achievableLevels.sort((a, b) => b.level_number - a.level_number)[0];
   }
 
-  async addXPAndUpdateLevel(userProfile: UserProfile, xpToAdd: number): Promise<XPUpdateResult | null> {
+  async addXPAndUpdateLevel(userProfile: UserProfile, xpToAdd: number): Promise<XPUpdateResult> {
     const userId = userProfile.id;
-    const oldExperiencePoints = userProfile.experience_points ?? 0;
-    const newExperiencePoints = oldExperiencePoints + xpToAdd;
-    const oldLevelId = userProfile.current_level_id; // This can be null
+    try {
+      const oldExperiencePoints = userProfile.experience_points ?? 0;
+      const newExperiencePoints = oldExperiencePoints + xpToAdd;
+      const oldLevelId = userProfile.current_level_id; // This can be null
 
-    const newAchievedLevel = this.getHighestAchievableLevel(newExperiencePoints);
+      const newAchievedLevel = this.getHighestAchievableLevel(newExperiencePoints);
 
-    if (!newAchievedLevel) {
-      this.fastify.log.warn(
-        { userId, newExperiencePoints },
-        "Could not determine new level. XP will be updated, but level will remain unchanged."
-      );
-      // Still update XP, but level remains as it was (null or an old ID)
-      const { error: xpOnlyUpdateError } = await this.supabase
-        .from("profiles")
-        .update({ experience_points: newExperiencePoints })
-        .eq("id", userId);
-
-      if (xpOnlyUpdateError) {
-        this.fastify.log.error(
-          { error: xpOnlyUpdateError, userId },
-          "Error updating only XP when new level not determined."
+      if (!newAchievedLevel) {
+        const module = "workout-sessions";
+        this.fastify.log.warn(
+          { userId, newExperiencePoints, module },
+          "Could not determine new level. XP will be updated, but level will remain unchanged."
         );
+        // Still update XP, but level remains as it was (null or an old ID)
+        const { error: xpOnlyUpdateError } = await this.supabase
+          .from("profiles")
+          .update({ experience_points: newExperiencePoints })
+          .eq("id", userId);
+
+        if (xpOnlyUpdateError) {
+          throw new Error(`Error updating only XP when new level not determined: ${xpOnlyUpdateError.message}`);
+        }
+
+        const oldLevel = oldLevelId ? this.getLevelById(oldLevelId) : null;
+        return {
+          userId,
+          oldExperiencePoints,
+          newExperiencePoints,
+          oldLevelId,
+          newLevelId: oldLevelId,
+          leveledUp: false,
+          newLevelNumber: oldLevel?.level_number,
+        };
       }
 
-      const oldLevel = oldLevelId ? this.getLevelById(oldLevelId) : null;
+      const newLevelId = newAchievedLevel.id;
+      const leveledUp = oldLevelId !== newLevelId;
+
+      const { error: updateError } = await this.supabase
+        .from("profiles")
+        .update({
+          experience_points: newExperiencePoints,
+          current_level_id: newLevelId,
+        })
+        .eq("id", userId);
+
+      if (updateError) {
+        throw new Error(`Error updating profile for XP and level: ${updateError.message}`);
+      }
+
       return {
         userId,
         oldExperiencePoints,
         newExperiencePoints,
         oldLevelId,
-        newLevelId: oldLevelId,
-        leveledUp: false,
-        newLevelNumber: oldLevel?.level_number,
+        newLevelId,
+        leveledUp,
+        newLevelNumber: newAchievedLevel.level_number,
       };
+    } catch (error) {
+      const module = "workout-sessions";
+      this.fastify.log.error({ error, userId, module }, "Error in addXPAndUpdateLevel");
+      throw error;
     }
-
-    const newLevelId = newAchievedLevel.id;
-    const leveledUp = oldLevelId !== newLevelId;
-
-    const { error: updateError } = await this.supabase
-      .from("profiles")
-      .update({
-        experience_points: newExperiencePoints,
-        current_level_id: newLevelId,
-      })
-      .eq("id", userId);
-
-    if (updateError) {
-      this.fastify.log.error({ error: updateError, userId }, "Error updating profile for XP and level.");
-      return null;
-    }
-
-    return {
-      userId,
-      oldExperiencePoints,
-      newExperiencePoints,
-      oldLevelId,
-      newLevelId,
-      leveledUp,
-      newLevelNumber: newAchievedLevel.level_number,
-    };
   }
 }
 
@@ -129,15 +132,46 @@ export async function _awardXpAndLevel(
   allLevelDefinitions: LevelDefinition[]
 ): Promise<XPUpdateResult & { awardedXp: number; remaining_xp_for_next_level: number | null }> {
   const userId = userProfile.id;
-  fastify.log.info({ userId }, `[XP_LEVEL] Starting XP and Level update`);
-  const supabase = fastify.supabase as SupabaseClient<Database>;
-  const xpService = new XpService(supabase, fastify, allLevelDefinitions);
+  const module = "workout-sessions";
+  fastify.log.info({ userId, module }, `[XP_LEVEL] Starting XP and Level update`);
   const awardedXp = XP_PER_WORKOUT;
+  try {
+    const supabase = fastify.supabase as SupabaseClient<Database>;
+    const xpService = new XpService(supabase, fastify, allLevelDefinitions);
 
-  const xpResult = await xpService.addXPAndUpdateLevel(userProfile, awardedXp);
+    const xpResult = await xpService.addXPAndUpdateLevel(userProfile, awardedXp);
 
-  if (!xpResult) {
-    fastify.log.error({ userId, awardedXp }, "[XP_LEVEL] Failed to update user XP and level via XpService");
+    let remaining_xp_for_next_level: number | null = null;
+    const currentLevel = allLevelDefinitions.find((l) => l.id === xpResult.newLevelId);
+    if (currentLevel) {
+      const nextLevel = allLevelDefinitions.find((l) => l.level_number === currentLevel.level_number + 1);
+      if (nextLevel) {
+        remaining_xp_for_next_level = nextLevel.xp_required - xpResult.newExperiencePoints;
+        if (remaining_xp_for_next_level < 0) remaining_xp_for_next_level = 0;
+      }
+    }
+
+    if (xpResult.leveledUp) {
+      fastify.log.info(
+        {
+          userId,
+          oldLevelId: xpResult.oldLevelId,
+          newLevelId: xpResult.newLevelId,
+          newLevelNumber: xpResult.newLevelNumber,
+          module,
+        },
+        `[XP_LEVEL] User leveled up`
+      );
+    } else {
+      fastify.log.debug(
+        { userId, awardedXp, newTotalXp: xpResult.newExperiencePoints, module },
+        `[XP_LEVEL] Awarded XP. No level up.`
+      );
+    }
+    return { ...xpResult, awardedXp, remaining_xp_for_next_level };
+  } catch (error) {
+    const module = "workout-sessions";
+    fastify.log.error({ error, userId, awardedXp, module }, "[XP_LEVEL] Failed to update user XP and level");
     // Construct a fallback response matching the expected return type
     return {
       userId,
@@ -151,32 +185,4 @@ export async function _awardXpAndLevel(
       remaining_xp_for_next_level: null,
     };
   }
-
-  let remaining_xp_for_next_level: number | null = null;
-  const currentLevel = allLevelDefinitions.find((l) => l.id === xpResult.newLevelId);
-  if (currentLevel) {
-    const nextLevel = allLevelDefinitions.find((l) => l.level_number === currentLevel.level_number + 1);
-    if (nextLevel) {
-      remaining_xp_for_next_level = nextLevel.xp_required - xpResult.newExperiencePoints;
-      if (remaining_xp_for_next_level < 0) remaining_xp_for_next_level = 0;
-    }
-  }
-
-  if (xpResult.leveledUp) {
-    fastify.log.info(
-      {
-        userId,
-        oldLevelId: xpResult.oldLevelId,
-        newLevelId: xpResult.newLevelId,
-        newLevelNumber: xpResult.newLevelNumber,
-      },
-      `[XP_LEVEL] User leveled up`
-    );
-  } else {
-    fastify.log.info(
-      { userId, awardedXp, newTotalXp: xpResult.newExperiencePoints },
-      `[XP_LEVEL] Awarded XP. No level up.`
-    );
-  }
-  return { ...xpResult, awardedXp, remaining_xp_for_next_level };
 }

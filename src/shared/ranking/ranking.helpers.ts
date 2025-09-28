@@ -54,15 +54,16 @@ export function calculateRankPoints(
   maxScore: number = 5000,
   log?: FastifyBaseLogger
 ): number {
+  const module = "ranking";
   if (userRatio <= 0) return 0;
   if (eliteRatio <= 0) {
-    log?.error({ alpha, eliteRatio, userRatio }, "[calculateRankPoints] Missing Elite Ratio (elitRatio <= 0)");
+    log?.error({ alpha, eliteRatio, userRatio, module }, "[calculateRankPoints] Missing Elite Ratio (elitRatio <= 0)");
     return 0; // Prevent division by zero
   }
   const numerator = Math.log(1 + alpha * (userRatio / eliteRatio));
   const denominator = Math.log(1 + alpha);
   const score = Math.round(maxScore * (numerator / denominator));
-  log?.debug({ alpha, eliteRatio, userRatio, score }, "[calculateRankPoints] Calculation");
+  log?.debug({ alpha, eliteRatio, userRatio, score, module }, "[calculateRankPoints] Calculation");
 
   return Math.min(score, maxScore);
 }
@@ -165,11 +166,12 @@ export async function _saveRankingResults(fastify: FastifyInstance, rankUpdatePa
     last_calculated_at: rank.last_calculated_at ?? null,
   }));
 
-  fastify.log.info(
-    { recordTypes: Object.keys(rankUpdatePayload) },
+  const module = "ranking";
+  fastify.log.debug(
+    { recordTypes: Object.keys(rankUpdatePayload), module },
     "[SAVE_RANKING] Attempting to save ranking results"
   );
-  fastify.log.info({ payload: rankUpdatePayload }, "[SAVE_RANKING] Full ranking payload");
+  fastify.log.trace({ payload: rankUpdatePayload, module }, "[SAVE_RANKING] Full ranking payload");
 
   const { error } = await supabase.rpc("bulk_update_ranks", {
     p_user_rank_update,
@@ -179,9 +181,20 @@ export async function _saveRankingResults(fastify: FastifyInstance, rankUpdatePa
   });
 
   if (error) {
-    fastify.log.error({ error }, "[SAVE_RANKING] Error saving ranking results");
+    const module = "ranking";
+    fastify.log.error({ error, rankUpdatePayload, module }, "[SAVE_RANKING] Error saving ranking results");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: "system",
+        event: "save_ranking_results_error",
+        properties: {
+          error,
+        },
+      });
+    }
     throw new Error("Error saving ranking results");
   } else {
-    fastify.log.info("[SAVE_RANKING] Successfully saved ranking results");
+    const module = "ranking";
+    fastify.log.info({ module }, "[SAVE_RANKING] Successfully saved ranking results");
   }
 }

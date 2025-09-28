@@ -32,44 +32,60 @@ export async function _updateUserRanks(
   existingUserExerciseRanks: Tables<"user_exercise_ranks">[],
   isPremium: boolean
 ): Promise<RankingResults> {
-  const rankingService = new RankingService(fastify);
-  const calculationInput = persistedSessionSets
-    .filter((s) => (s.actual_reps ?? 0) > 0)
-    .map((s) => {
-      const exerciseId = s.exercise_id || s.custom_exercise_id!;
-      const exerciseDetail = exerciseDetailsMap.get(exerciseId);
-      return {
-        exercise_id: exerciseId,
-        reps: s.actual_reps || 0,
-        duration: 0, // TODO: Handle duration for cardio exercises
-        weight_kg: s.actual_weight_kg || 0,
-        score: 0, // Initialize score to 0, it will be calculated in the service
-        session_set_id: s.id,
-        exercise_type: exerciseDetail?.exercise_type ?? null,
-      };
+  const module = "workout-sessions";
+  fastify.log.info({ userId, module }, `[RANKING] Starting user rank update process`);
+  try {
+    const rankingService = new RankingService(fastify);
+    const calculationInput = persistedSessionSets
+      .filter((s) => (s.actual_reps ?? 0) > 0)
+      .map((s) => {
+        const exerciseId = s.exercise_id || s.custom_exercise_id!;
+        const exerciseDetail = exerciseDetailsMap.get(exerciseId);
+        return {
+          exercise_id: exerciseId,
+          reps: s.actual_reps || 0,
+          duration: 0, // TODO: Handle duration for cardio exercises
+          weight_kg: s.actual_weight_kg || 0,
+          score: 0, // Initialize score to 0, it will be calculated in the service
+          session_set_id: s.id,
+          exercise_type: exerciseDetail?.exercise_type ?? null,
+        };
+      });
+    const results = await rankingService.updateUserRanks(
+      userId,
+      userGender,
+      userBodyweight,
+      calculationInput,
+      exercises,
+      mcw,
+      allMuscles,
+      allMuscleGroups,
+      allRanks,
+      allInterRanks,
+      initialUserRank,
+      initialMuscleGroupRanks,
+      initialMuscleRanks,
+      existingUserExerciseRanks,
+      isPremium,
+      "workout"
+    );
+
+    if (Object.keys(results.rankUpdatePayload).length > 0) {
+      await _saveRankingResults(fastify, results.rankUpdatePayload);
+    }
+
+    return results;
+  } catch (error) {
+    const module = "workout-sessions";
+    fastify.log.error({ error, userId, module }, `[RANKING] Failed to update user ranks`);
+    fastify.posthog?.capture({
+      distinctId: userId,
+      event: "user_rank_update_error",
+      properties: {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : "No stack trace",
+      },
     });
-  const results = await rankingService.updateUserRanks(
-    userId,
-    userGender,
-    userBodyweight,
-    calculationInput,
-    exercises,
-    mcw,
-    allMuscles,
-    allMuscleGroups,
-    allRanks,
-    allInterRanks,
-    initialUserRank,
-    initialMuscleGroupRanks,
-    initialMuscleRanks,
-    existingUserExerciseRanks,
-    isPremium,
-    "workout"
-  );
-
-  if (Object.keys(results.rankUpdatePayload).length > 0) {
-    await _saveRankingResults(fastify, results.rankUpdatePayload);
+    throw error;
   }
-
-  return results;
 }

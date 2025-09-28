@@ -14,8 +14,6 @@ export async function _handleWorkoutPlanCycleCompletion(
   sessionPlanId: string | null | undefined,
   activeWorkoutPlans: Tables<"active_workout_plans">[]
 ): Promise<void> {
-  const supabase = fastify.supabase as SupabaseClient<Database>;
-
   if (!sessionPlanId) {
     fastify.log.debug({ userId }, `[CYCLE_COMPLETION] No workout_plan_id provided. Skipping.`);
     return;
@@ -24,6 +22,7 @@ export async function _handleWorkoutPlanCycleCompletion(
   fastify.log.info({ userId, planId: sessionPlanId }, `[CYCLE_COMPLETION] Starting cycle completion check`);
 
   try {
+    const supabase = fastify.supabase as SupabaseClient<Database>;
     // 1. Call the database function to check for cycle completion
     const { data: isComplete, error: rpcError } = await supabase.rpc("check_cycle_completion", {
       p_user_id: userId,
@@ -31,28 +30,21 @@ export async function _handleWorkoutPlanCycleCompletion(
     });
 
     if (rpcError) {
-      fastify.log.error(
-        { error: rpcError, userId, sessionPlanId },
-        `[CYCLE_COMPLETION] Error calling check_cycle_completion RPC.`
-      );
-      return;
+      throw new Error(`[CYCLE_COMPLETION] Error calling check_cycle_completion RPC: ${rpcError.message}`);
     }
 
     // 2. If the cycle is complete, update the plan
     if (isComplete) {
       fastify.log.info(
-        `[CYCLE_COMPLETION] User ${userId} has completed all days for plan ${sessionPlanId}. Resetting cycle.`
+        { userId, sessionPlanId },
+        `[CYCLE_COMPLETION] User has completed all days for plan. Resetting cycle.`
       );
 
       // Get the current cycle start date to move it to the previous date
       const activePlan = activeWorkoutPlans.find((p) => p.active_workout_plan_id === sessionPlanId);
 
       if (!activePlan) {
-        fastify.log.error(
-          { userId, sessionPlanId },
-          `[CYCLE_COMPLETION] Could not find active plan to update cycle dates.`
-        );
-        return; // Can't proceed if we can't find the plan to update
+        throw new Error(`[CYCLE_COMPLETION] Could not find active plan to update cycle dates.`);
       }
 
       // Calculate the start of the next day (midnight)
@@ -71,21 +63,29 @@ export async function _handleWorkoutPlanCycleCompletion(
         .eq("active_workout_plan_id", sessionPlanId);
 
       if (updateError) {
-        fastify.log.error(
-          { error: updateError, userId, sessionPlanId },
-          `[CYCLE_COMPLETION] Failed to update cycle dates.`
-        );
+        throw new Error(`[CYCLE_COMPLETION] Failed to update cycle dates: ${updateError.message}`);
       } else {
-        fastify.log.info(
-          `[CYCLE_COMPLETION] Successfully reset cycle for user ${userId}, plan ${sessionPlanId}. New start date: ${nextMidnight.toISOString()}`
+        fastify.log.debug(
+          { userId, sessionPlanId, nextMidnight },
+          `[CYCLE_COMPLETION] Successfully reset cycle for user.`
         );
       }
     } else {
-      fastify.log.info(
-        `[CYCLE_COMPLETION] User ${userId} has not yet completed all days for plan ${sessionPlanId}. No action taken.`
+      fastify.log.debug(
+        { userId, sessionPlanId },
+        `[CYCLE_COMPLETION] User has not yet completed all days for plan. No action taken.`
       );
     }
-  } catch (err) {
-    fastify.log.error({ err, userId, sessionPlanId }, `[CYCLE_COMPLETION] Unexpected error.`);
+  } catch (error) {
+    fastify.log.error({ error, userId, sessionPlanId }, `[CYCLE_COMPLETION] Unexpected error.`);
+    fastify.posthog?.capture({
+      distinctId: userId,
+      event: "cycle_completion_error",
+      properties: {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : "No stack trace",
+        sessionPlanId,
+      },
+    });
   }
 }

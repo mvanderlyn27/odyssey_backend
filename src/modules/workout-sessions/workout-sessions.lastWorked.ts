@@ -17,37 +17,38 @@ export async function _updateUserMuscleLastWorked(
   sessionEndedAt: string,
   exerciseMuscleMappings: ExerciseMuscleMapping[]
 ): Promise<void> {
-  fastify.log.info({ userId, sessionId: currentSessionId }, `[MUSCLE_LAST_WORKED] Starting update`);
-  const supabase = fastify.supabase as SupabaseClient<Database>;
-
-  const workedSets = persistedSessionSets.filter((s) => s.actual_reps && s.actual_reps > 0);
-  if (workedSets.length === 0) {
-    fastify.log.debug(
-      { userId, sessionId: currentSessionId },
-      "[MUSCLE_LAST_WORKED] No sets with actual reps. Skipping."
-    );
-    return;
-  }
-
-  const workedExerciseIds = Array.from(
-    new Set(workedSets.map((s) => s.exercise_id || s.custom_exercise_id).filter(Boolean))
-  ) as string[];
-  if (workedExerciseIds.length === 0) {
-    fastify.log.debug(
-      { userId, sessionId: currentSessionId },
-      "[MUSCLE_LAST_WORKED] No valid exercise IDs from worked sets. Skipping."
-    );
-    return;
-  }
-
+  const module = "workout-sessions";
+  fastify.log.info({ userId, sessionId: currentSessionId, module }, `[MUSCLE_LAST_WORKED] Starting update`);
   try {
+    const supabase = fastify.supabase as SupabaseClient<Database>;
+
+    const workedSets = persistedSessionSets.filter((s) => s.actual_reps && s.actual_reps > 0);
+    if (workedSets.length === 0) {
+      fastify.log.debug(
+        { userId, sessionId: currentSessionId, module },
+        "[MUSCLE_LAST_WORKED] No sets with actual reps. Skipping."
+      );
+      return;
+    }
+
+    const workedExerciseIds = Array.from(
+      new Set(workedSets.map((s) => s.exercise_id || s.custom_exercise_id).filter(Boolean))
+    ) as string[];
+    if (workedExerciseIds.length === 0) {
+      fastify.log.debug(
+        { userId, sessionId: currentSessionId, module },
+        "[MUSCLE_LAST_WORKED] No valid exercise IDs from worked sets. Skipping."
+      );
+      return;
+    }
+
     const allMuscleMappings = exerciseMuscleMappings.filter(
       (em) => em.exercise_id && workedExerciseIds.includes(em.exercise_id)
     );
 
     if (!allMuscleMappings || allMuscleMappings.length === 0) {
       fastify.log.debug(
-        { userId, sessionId: currentSessionId },
+        { userId, sessionId: currentSessionId, module },
         "[MUSCLE_LAST_WORKED] No muscle mappings found for worked exercises. Skipping."
       );
       return;
@@ -74,7 +75,7 @@ export async function _updateUserMuscleLastWorked(
 
     if (muscleIdsToUpdate.length === 0) {
       fastify.log.debug(
-        { userId, sessionId: currentSessionId },
+        { userId, sessionId: currentSessionId, module },
         "[MUSCLE_LAST_WORKED] No unique muscle IDs to update. Skipping."
       );
       return;
@@ -93,15 +94,25 @@ export async function _updateUserMuscleLastWorked(
         .from("user_muscle_last_worked")
         .upsert(upsertPayloads, { onConflict: "user_id,muscle_id" });
       if (upsertError) {
-        fastify.log.error({ error: upsertError, userId }, "[MUSCLE_LAST_WORKED] Failed to upsert records.");
+        throw new Error(`Failed to upsert records: ${upsertError.message}`);
       } else {
-        fastify.log.info(
-          { userId, sessionId: currentSessionId, count: upsertPayloads.length },
+        fastify.log.debug(
+          { userId, sessionId: currentSessionId, count: upsertPayloads.length, module },
           `[MUSCLE_LAST_WORKED] Upserted records`
         );
       }
     }
-  } catch (err: any) {
-    fastify.log.error({ error: err.message, stack: err.stack, userId }, "[MUSCLE_LAST_WORKED] Unexpected error.");
+  } catch (error) {
+    const module = "workout-sessions";
+    fastify.log.error({ error, userId, sessionId: currentSessionId, module }, "[MUSCLE_LAST_WORKED] Unexpected error.");
+    fastify.posthog?.capture({
+      distinctId: userId,
+      event: "muscle_last_worked_error",
+      properties: {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : "No stack trace",
+        sessionId: currentSessionId,
+      },
+    });
   }
 }

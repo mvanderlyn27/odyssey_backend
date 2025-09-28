@@ -15,8 +15,8 @@ export const handleOnboarding = async (
   userId: string,
   data: OnboardingData
 ): Promise<Profile> => {
-  fastify.log.info({ userId }, "[ONBOARD_SERVICE] Starting comprehensive onboarding process");
-  fastify.log.debug({ userId, data }, "[ONBOARD_SERVICE] Full onboarding data");
+  fastify.log.info({ module: "onboard", userId }, "Starting comprehensive onboarding process");
+  fastify.log.debug({ module: "onboard", userId, data }, "Full onboarding data");
 
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
@@ -27,7 +27,7 @@ export const handleOnboarding = async (
   const { userProfile: existingProfileData, userData: existingUserData } = preparedData;
 
   if (existingUserData?.onboard_complete) {
-    fastify.log.info({ userId }, "[ONBOARD_SERVICE] User is already onboarded. Skipping.");
+    fastify.log.info({ module: "onboard", userId }, "User is already onboarded. Skipping.");
     if (!existingProfileData) {
       throw new Error(`User ${userId} is marked as onboarded, but profile data is missing.`);
     }
@@ -48,7 +48,7 @@ export const handleOnboarding = async (
       };
     } else {
       fastify.log.warn(
-        { userId, oldUsername: existingProfileData.username },
+        { module: "onboard", userId, oldUsername: existingProfileData.username },
         "Invalid username detected for onboarded user. Sanitizing and updating."
       );
       const sanitizedUsername = sanitizeForUrl(existingProfileData.username || "");
@@ -61,7 +61,16 @@ export const handleOnboarding = async (
         .single();
 
       if (error || !updatedProfile) {
-        fastify.log.error({ error, userId }, "Failed to update sanitized username for legacy user.");
+        fastify.log.error({ module: "onboard", error, userId }, "Failed to update sanitized username for legacy user.");
+        if (fastify.posthog) {
+          fastify.posthog.capture({
+            distinctId: userId,
+            event: "onboard_service_sanitize_username_error",
+            properties: {
+              error,
+            },
+          });
+        }
         throw new Error("Failed to update legacy user profile.");
       }
 
@@ -120,8 +129,8 @@ export const handleOnboarding = async (
 
     if (newlyCreatedUser) {
       fastify.log.info(
-        { userId },
-        "[ONBOARD_SERVICE] User profile created. Proceeding with ranking and PR calculation"
+        { module: "onboard", userId },
+        "User profile created. Proceeding with ranking and PR calculation"
       );
       await Promise.all([
         _handleOnboardingRanking(fastify, userId, data, preparedData, inMemorySets),
@@ -131,7 +140,17 @@ export const handleOnboarding = async (
 
     return await _finalizeOnboarding(fastify, userId);
   } catch (error: any) {
-    fastify.log.error({ error, userId, data }, "Critical error during onboarding process");
+    fastify.log.error({ module: "onboard", error, userId, data }, "Critical error during onboarding process");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "onboard_service_critical_error",
+        properties: {
+          error,
+          data,
+        },
+      });
+    }
     throw error;
   }
 };

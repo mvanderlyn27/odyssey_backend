@@ -6,7 +6,7 @@ import { CACHE_KEYS } from "../../services/cache.service";
 type FullExercise = (Tables<"exercises"> | Tables<"custom_exercises">) & { source: "standard" | "custom" };
 
 export async function getRankCalculationData(fastify: FastifyInstance, userId: string, exerciseId: string) {
-  fastify.log.info({ userId, exerciseId }, "[RankCalculator] Starting data fetch");
+  fastify.log.info({ module: "rank-calculator", userId, exerciseId }, "Starting data fetch");
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   const [
@@ -85,7 +85,7 @@ export async function getRankCalculationData(fastify: FastifyInstance, userId: s
     supabase.from("user_exercise_ranks").select("*").eq("user_id", userId),
   ]);
 
-  fastify.log.info({ userId, exerciseId }, "[RankCalculator] Finished fetching data");
+  fastify.log.info({ module: "rank-calculator", userId, exerciseId }, "Finished fetching data");
 
   if (userData.error || !userData.data) throw new Error("User not found.");
   if (bodyweightData.error || !bodyweightData.data?.value) throw new Error("User bodyweight not found.");

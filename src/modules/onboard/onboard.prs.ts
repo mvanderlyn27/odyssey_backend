@@ -14,7 +14,7 @@ export async function _handleOnboardingPRs(
   const userBodyweight = data.weight ?? null;
   const userId = user.id;
   if (!userBodyweight) {
-    fastify.log.warn({ userId }, "[ONBOARD_PRS] Cannot calculate initial PRs without bodyweight.");
+    fastify.log.warn({ module: "onboard", userId }, "Cannot calculate initial PRs without bodyweight");
     return;
   }
 
@@ -28,9 +28,9 @@ export async function _handleOnboardingPRs(
       existingUserExercisePRs,
       preparedData.rankingExerciseMap
     );
-    fastify.log.info({ userId }, "[ONBOARD_PRS] Initial exercise PR calculation completed");
+    fastify.log.debug({ module: "onboard", userId }, "Initial exercise PR calculation completed");
   } catch (prError: any) {
-    fastify.log.error({ error: prError, userId }, "[ONBOARD_PRS] Error during initial exercise PR calculation.");
+    fastify.log.error({ module: "onboard", error: prError, userId }, "Error during initial exercise PR calculation");
     if (fastify.posthog) {
       fastify.posthog.capture({
         distinctId: userId,
