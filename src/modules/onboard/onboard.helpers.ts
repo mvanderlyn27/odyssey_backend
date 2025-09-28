@@ -204,6 +204,16 @@ async function isUsernameTaken(fastify: FastifyInstance, username: string): Prom
 
   if (error && error.code !== "PGRST116") {
     fastify.log.error({ error }, `Error checking if username '${username}' is taken.`);
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: "system",
+        event: "username_taken_check_error",
+        properties: {
+          error,
+          username,
+        },
+      });
+    }
     throw error;
   }
   return !!data;
@@ -315,6 +325,15 @@ export async function generateUniqueUsername(
 
     if (error) {
       fastify.log.error({ error }, `Error checking batch of usernames.`);
+      if (fastify.posthog) {
+        fastify.posthog.capture({
+          distinctId: "system",
+          event: "unique_username_generation_error",
+          properties: {
+            error,
+          },
+        });
+      }
       throw error;
     }
 
@@ -357,9 +376,18 @@ export const rerollUsername = async (
 
   if (updateProfileError) {
     fastify.log.error({ profileError: updateProfileError, userId }, "Error rerolling username");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "reroll_username_error",
+        properties: {
+          error: updateProfileError,
+        },
+      });
+    }
     throw new Error(`Failed to reroll username: ${updateProfileError.message}`);
   }
 
-  fastify.log.info({ userId, newUsername: username }, `[ONBOARD_HELPERS] Username rerolled`);
+  fastify.log.debug({ userId, newUsername: username }, `[ONBOARD_HELPERS] Username rerolled`);
   return { username, displayName };
 };

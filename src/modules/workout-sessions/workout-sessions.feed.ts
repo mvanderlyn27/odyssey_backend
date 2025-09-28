@@ -118,71 +118,80 @@ function _transformRankUpdateResultsToRankUps(
 }
 
 export async function createWorkoutFeedItem(fastify: FastifyInstance, inputData: FeedItemCreationData): Promise<void> {
-  const supabase = fastify.supabase as SupabaseClient<Database>;
+  const userId = inputData.userProfile.id;
+  const sessionId = inputData.workoutSession.id;
+  const module = "workout-sessions";
+  fastify.log.info({ userId, sessionId, module }, "[FEED] Attempting to insert workout feed item");
+  fastify.log.debug({ userId, sessionId, inputData, module }, "[FEED] Full feed item creation data");
 
-  const metadata: WorkoutFeedMetadata = {
-    user_display_name: inputData.userProfile.display_name || "Anonymous",
-    user_avatar_url: inputData.userProfile.avatar_url || "",
-    workout_plan_name: inputData.workoutContext.plan_name || "Quick Workout",
-    workout_day_name: inputData.workoutContext.day_name || "Quick Workout",
-    total_volume_kg: inputData.workoutSession.total_volume_kg || 0,
-    total_duration: inputData.workoutSession.duration_seconds || 0,
-    muscles_worked: inputData.summaryStats.muscles_worked.map((m) => ({
-      muscle_id: m.id,
-      muscle_name: m.name,
-      muscle_intensity: m.muscle_intensity,
-    })),
-    best_set: inputData.summaryStats.best_set || { exercise_name: "N/A", reps: 0, weight_kg: 0, exercise_type: null },
-  };
+  try {
+    const supabase = fastify.supabase as SupabaseClient<Database>;
 
-  // Handle Personal Records
-  if (inputData.personalRecords && inputData.personalRecords.length > 0) {
-    metadata.personal_records = inputData.personalRecords.map((pr) => ({
-      exercise_name: pr.exercise_name,
-      reps: pr.reps || 0,
-      weight_kg: pr.weight_kg || 0,
-      pr_type: pr.pr_type,
-    }));
-  }
+    const metadata: WorkoutFeedMetadata = {
+      user_display_name: inputData.userProfile.display_name || "Anonymous",
+      user_avatar_url: inputData.userProfile.avatar_url || "",
+      workout_plan_name: inputData.workoutContext.plan_name || "Quick Workout",
+      workout_day_name: inputData.workoutContext.day_name || "Quick Workout",
+      total_volume_kg: inputData.workoutSession.total_volume_kg || 0,
+      total_duration: inputData.workoutSession.duration_seconds || 0,
+      muscles_worked: inputData.summaryStats.muscles_worked.map((m) => ({
+        muscle_id: m.id,
+        muscle_name: m.name,
+        muscle_intensity: m.muscle_intensity,
+      })),
+      best_set: inputData.summaryStats.best_set || { exercise_name: "N/A", reps: 0, weight_kg: 0, exercise_type: null },
+    };
 
-  // Handle Rank Ups
-  const rankUps = _transformRankUpdateResultsToRankUps(
-    inputData.rankUpData,
-    inputData.userData.is_premium || false,
-    inputData.allRanks,
-    inputData.allMuscleGroups,
-    inputData.allMuscles,
-    inputData.allExercises
-  );
-  if (rankUps.length > 0) {
-    metadata.rank_ups = rankUps;
-  }
+    // Handle Personal Records
+    if (inputData.personalRecords && inputData.personalRecords.length > 0) {
+      metadata.personal_records = inputData.personalRecords.map((pr) => ({
+        exercise_name: pr.exercise_name,
+        reps: pr.reps || 0,
+        weight_kg: pr.weight_kg || 0,
+        pr_type: pr.pr_type,
+      }));
+    }
 
-  const feedItemToInsert: TablesInsert<"feed_items"> = {
-    user_id: inputData.userProfile.id,
-    post_type: "workout",
-    workout_session_id: inputData.workoutSession.id, // Using the dedicated FK column
-    metadata: metadata, // The fully assembled JSONB object
-    // likes_count and comments_count will default to 0 in the DB
-  };
-
-  // Example using Supabase client
-  fastify.log.info(
-    { userId: inputData.userProfile.id, sessionId: inputData.workoutSession.id },
-    "[FEED] Attempting to insert workout feed item"
-  );
-  const { error } = await supabase.from("feed_items").insert(feedItemToInsert);
-
-  if (error) {
-    // Handle error logging and reporting
-    fastify.log.error(
-      { error, userId: inputData.userProfile.id, sessionId: inputData.workoutSession.id },
-      `[FEED] Failed to create feed item`
+    // Handle Rank Ups
+    const rankUps = _transformRankUpdateResultsToRankUps(
+      inputData.rankUpData,
+      inputData.userData.is_premium || false,
+      inputData.allRanks,
+      inputData.allMuscleGroups,
+      inputData.allMuscles,
+      inputData.allExercises
     );
-    throw new Error(`Failed to create feed item: ${error.message}`);
+    if (rankUps.length > 0) {
+      metadata.rank_ups = rankUps;
+    }
+
+    const feedItemToInsert: TablesInsert<"feed_items"> = {
+      user_id: userId,
+      post_type: "workout",
+      workout_session_id: sessionId, // Using the dedicated FK column
+      metadata: metadata, // The fully assembled JSONB object
+      // likes_count and comments_count will default to 0 in the DB
+    };
+
+    const { error } = await supabase.from("feed_items").insert(feedItemToInsert);
+
+    if (error) {
+      throw new Error(`Failed to create feed item: ${error.message}`);
+    }
+    const module = "workout-sessions";
+    fastify.log.info({ userId, sessionId, module }, "[FEED] Successfully created workout feed item");
+  } catch (error) {
+    const module = "workout-sessions";
+    fastify.log.error({ error, userId, sessionId, module }, `[FEED] Failed to create feed item`);
+    fastify.posthog?.capture({
+      distinctId: userId,
+      event: "feed_item_creation_error",
+      properties: {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : "No stack trace",
+        sessionId,
+      },
+    });
+    throw error;
   }
-  fastify.log.info(
-    { userId: inputData.userProfile.id, sessionId: inputData.workoutSession.id },
-    "[FEED] Successfully created workout feed item"
-  );
 }

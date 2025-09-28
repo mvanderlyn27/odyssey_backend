@@ -139,6 +139,17 @@ export async function _gatherAndPrepareOnboardingData(
       },
       "[PREPARE_ONBOARDING_DATA] Error fetching data required for the ranking system."
     );
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "prepare_onboarding_data_error",
+        properties: {
+          initialUserRankError: initialUserRankResult.error,
+          initialMuscleGroupRanksError: initialMuscleGroupRanksResult.error,
+          initialMuscleRanksError: initialMuscleRanksResult.error,
+        },
+      });
+    }
   }
 
   const exerciseDetailsMap = new Map<

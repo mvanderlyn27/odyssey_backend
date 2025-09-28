@@ -61,11 +61,12 @@ async function workoutSessionRoutes(fastify: FastifyInstance, options: FastifyPl
         const result = await finishWorkoutSession(fastify, userId, request.body);
         return reply.send(result);
       } catch (error: any) {
-        fastify.log.error(error, `Failed finishing/logging session`);
+        const module = "workout-sessions";
+        fastify.log.error({ err: error, userId, module }, `Failed finishing/logging session`);
         if (fastify.posthog) {
           fastify.posthog.capture({
             distinctId: userId,
-            event: "finish_workout_error",
+            event: "finish_workout_session_error",
             properties: {
               error: error.message,
               stack: error.stack,

@@ -51,7 +51,7 @@ async function onboardRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
         const updatedProfile = await handleOnboarding(fastify, userId, request.body);
         return reply.send(updatedProfile);
       } catch (error: any) {
-        fastify.log.error(error, "Failed saving initial rank");
+        fastify.log.error({ module: "onboard", error, userId }, "Failed saving initial rank");
         if (fastify.posthog) {
           fastify.posthog.capture({
             distinctId: userId,
@@ -100,7 +100,17 @@ async function onboardRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
         const { username, displayName } = await rerollUsername(fastify, userId);
         return reply.send({ username, displayName });
       } catch (error: any) {
-        fastify.log.error(error, "Failed to reroll username");
+        fastify.log.error({ module: "onboard", error, userId }, "Failed to reroll username");
+        if (fastify.posthog) {
+          fastify.posthog.capture({
+            distinctId: userId,
+            event: "reroll_username_route_error",
+            properties: {
+              error: error.message,
+              stack: error.stack,
+            },
+          });
+        }
         return reply
           .code(500)
           .send({ error: "Internal Server Error", message: error.message || "Failed to reroll username." });

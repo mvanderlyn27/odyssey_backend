@@ -18,7 +18,7 @@ export async function _createInitialProfile(
   data: OnboardingData,
   preparedData: PreparedOnboardingData
 ): Promise<Tables<"users">> {
-  fastify.log.info({ userId }, "[ONBOARD_PROFILE] Creating initial profile");
+  fastify.log.info({ module: "onboard", userId }, "Creating initial profile");
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
@@ -57,7 +57,16 @@ export async function _createInitialProfile(
 
   const { error: profileError } = await fastify.supabase.from("profiles").upsert(profilePayload);
   if (profileError) {
-    fastify.log.error({ error: profileError, userId }, "Error creating initial profile");
+    fastify.log.error({ module: "onboard", error: profileError, userId }, "Failed to create initial profile");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "create_initial_profile_error",
+        properties: {
+          error: profileError,
+        },
+      });
+    }
     throw new Error("Failed to create initial profile");
   }
 
@@ -67,7 +76,16 @@ export async function _createInitialProfile(
     .select()
     .single();
   if (userError || !userData) {
-    fastify.log.error({ error: userError, userId }, "Error updating user data");
+    fastify.log.error({ module: "onboard", error: userError, userId }, "Failed to update user data");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "create_initial_user_error",
+        properties: {
+          error: userError,
+        },
+      });
+    }
     throw new Error("Failed to update user data");
   }
 
@@ -80,8 +98,8 @@ export async function _createInitialProfile(
 
     if (bodyMeasurementError) {
       fastify.log.warn(
-        { error: bodyMeasurementError, userId },
-        "[ONBOARD_PROFILE] Failed to insert initial body weight measurement. This is a non-critical error."
+        { module: "onboard", error: bodyMeasurementError, userId },
+        "Failed to insert initial body weight measurement"
       );
       // This is a non-critical error, so we just log a warning and continue.
     }

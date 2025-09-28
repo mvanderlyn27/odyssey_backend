@@ -34,7 +34,7 @@ export default async function (fastify: FastifyInstance) {
         if (error instanceof InsufficientBalanceError) {
           return reply.status(403).send({ error: error.message });
         }
-        fastify.log.error(error, `[RankCalculator] Error calculating rank for user ${userId}`);
+        fastify.log.error({ module: "rank-calculator", error, userId }, `Error calculating rank for user ${userId}`);
         return reply.status(500).send({ error: "Internal Server Error" });
       }
     }

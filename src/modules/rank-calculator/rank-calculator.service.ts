@@ -22,8 +22,8 @@ export async function calculateRankForEntry(
 ): Promise<RankingResults> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
-  fastify.log.info({ userId }, "[RankCalculator] Starting rank calculation for entry");
-  fastify.log.debug({ userId, entry }, "[RankCalculator] Full entry data");
+  fastify.log.info({ module: "rank-calculator", userId }, "Starting rank calculation for entry");
+  fastify.log.debug({ module: "rank-calculator", userId, entry }, "Full entry data");
 
   const { data: user, error: userError } = await supabase.from("users").select("*").eq("id", userId).single();
 
@@ -46,14 +46,14 @@ export async function calculateRankForEntry(
   const { user: userData, userGender, userBodyweight, exerciseDetails } = rankCalculationData;
 
   fastify.log.debug(
-    { userId, userGender, userBodyweight, exerciseDetails },
-    "[RankCalculator] Fetched rank calculation data"
+    { module: "rank-calculator", userId, userGender, userBodyweight, exerciseDetails },
+    "Fetched rank calculation data"
   );
 
   const calculated_1rm = calculate_1RM(entry.weight, entry.reps);
   const calculated_swr = calculate_SWR(calculated_1rm, userBodyweight);
 
-  fastify.log.debug({ userId, calculated_1rm, calculated_swr }, "[RankCalculator] Calculated 1RM and SWR");
+  fastify.log.debug({ module: "rank-calculator", userId, calculated_1rm, calculated_swr }, "Calculated 1RM and SWR");
 
   const inMemorySet: Tables<"workout_session_sets"> = {
     id: "synthetic-set-id",
@@ -89,21 +89,24 @@ export async function calculateRankForEntry(
   const calculationLog = log;
 
   try {
-    fastify.log.info({ userId }, "[RankCalculator] Handling PR and Rank calculations");
+    fastify.log.info({ module: "rank-calculator", userId }, "Handling PR and Rank calculations");
     const [results] = await Promise.all([
       _handleRankCalculation(fastify, userData, userGender, userBodyweight, inMemorySet, entry, rankCalculationData),
       _handlePrCalculation(fastify, user, userBodyweight, inMemorySet, entry, rankCalculationData),
     ]);
     rankUpdateResults = results;
 
-    fastify.log.info({ userId }, "[RankCalculator] Rank calculation finished");
-    fastify.log.debug({ userId, rankUpdateResults }, "[RankCalculator] Full rank calculation results");
+    fastify.log.info({ module: "rank-calculator", userId }, "Rank calculation finished");
+    fastify.log.debug({ module: "rank-calculator", userId, rankUpdateResults }, "Full rank calculation results");
 
-    fastify.log.info({ userId }, "[RankCalculator] Returning rank calculation result");
+    fastify.log.info({ module: "rank-calculator", userId }, "Returning rank calculation result");
     return rankUpdateResults;
+  } catch (error) {
+    fastify.log.error({ module: "rank-calculator", error, userId }, "Error during rank/PR calculation");
+    throw error;
   } finally {
     await _updateRankCalculationLog(fastify, calculationLog.id, user, entry, userBodyweight, rankUpdateResults);
-    fastify.log.info({ userId }, "[RankCalculator] Finished calculating ranks");
+    fastify.log.info({ module: "rank-calculator", userId }, "Finished calculating ranks");
   }
 }
 
@@ -137,8 +140,8 @@ async function _updateRankCalculationLog(
 
   if (updateError) {
     fastify.log.error(
-      { error: updateError, calculationLogId: logId },
-      "[RankCalculator] Failed to update rank calculation log"
+      { module: "rank-calculator", error: updateError, calculationLogId: logId },
+      "Failed to update rank calculation log"
     );
   }
 }

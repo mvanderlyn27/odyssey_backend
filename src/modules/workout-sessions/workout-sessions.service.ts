@@ -35,7 +35,8 @@ async function _updateSessionSummary(
     .eq("id", sessionId);
 
   if (error) {
-    fastify.log.error(error, `[SUMMARY_SAVE] Failed to save summary data for session ${sessionId}`);
+    const module = "workout-sessions";
+    fastify.log.error({ err: error, sessionId, module }, `[SUMMARY_SAVE] Failed to save summary data`);
   }
 }
 
@@ -55,11 +56,12 @@ export const finishWorkoutSession = async (
   userId: string,
   finishData: NewFinishSessionBody
 ): Promise<DetailedFinishSessionResponse> => {
-  fastify.log.info({ userId }, `[FINISH_SESSION] Starting`);
-  fastify.log.debug({ userId, finishData }, `[FINISH_SESSION] Full finish session data`);
+  const module = "workout-sessions";
+  fastify.log.info({ userId, module }, `[FINISH_SESSION] Starting`);
+  fastify.log.debug({ userId, finishData, module }, `[FINISH_SESSION] Full finish session data`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
   if (!supabase) {
-    fastify.log.error("[FINISH_SESSION] Supabase client not available.");
+    fastify.log.error({ module }, "[FINISH_SESSION] Supabase client not available.");
     throw new Error("Supabase client not available");
   }
 
@@ -112,7 +114,7 @@ export const finishWorkoutSession = async (
         .single();
       if (updateError || !updatedSession) {
         fastify.log.error(
-          { error: updateError, sessionId: finishData.existing_session_id },
+          { error: updateError, sessionId: finishData.existing_session_id, module },
           "[FINISH_SESSION] Error updating existing session"
         );
         throw new Error(`Error updating existing session: ${updateError?.message || "No data returned"}`);
@@ -125,7 +127,7 @@ export const finishWorkoutSession = async (
         .select()
         .single();
       if (insertError || !newSession) {
-        fastify.log.error({ error: insertError, userId }, "[FINISH_SESSION] Error inserting new session");
+        fastify.log.error({ error: insertError, userId, module }, "[FINISH_SESSION] Error inserting new session");
         throw new Error(`Error inserting new session: ${insertError?.message || "No data returned"}`);
       }
       newlyCreatedOrFetchedSession = newSession;
@@ -149,7 +151,7 @@ export const finishWorkoutSession = async (
 
       if (setsInsertError || !insertedSetsRaw) {
         fastify.log.error(
-          { error: setsInsertError, sessionId: newlyCreatedOrFetchedSession.id },
+          { error: setsInsertError, sessionId: newlyCreatedOrFetchedSession.id, module },
           "Failed to insert workout_session_sets."
         );
         throw new Error(`Failed to insert workout_session_sets: ${setsInsertError?.message || "No data returned"}`);
@@ -184,7 +186,10 @@ export const finishWorkoutSession = async (
       (() => {
         const genderForRanking = (userData.gender || "male") as Enums<"gender">;
         if (!userData.gender) {
-          fastify.log.warn({ userId }, "User gender is not specified. Defaulting to 'male' for ranking calculations.");
+          fastify.log.warn(
+            { userId, module },
+            "User gender is not specified. Defaulting to 'male' for ranking calculations."
+          );
         }
         const isPremium = userData.is_premium || false;
         return _updateUserRanks(
@@ -246,7 +251,7 @@ export const finishWorkoutSession = async (
         }
         return Promise.resolve({ data: null, error: null });
       })(),
-      _saveWorkoutNotes(fastify, newlyCreatedOrFetchedSession.id, finishData.notes),
+      _saveWorkoutNotes(fastify, newlyCreatedOrFetchedSession.id, finishData.notes, userId),
     ]);
 
     // ASYNCHRONOUSLY create a feed item. Do not block the response for this.
@@ -267,12 +272,15 @@ export const finishWorkoutSession = async (
         allMuscles,
         allExercises: exercises,
       }).catch((err) => {
-        fastify.log.error(err, `[FEED] Failed to create feed item for session ${newlyCreatedOrFetchedSession.id}`);
+        fastify.log.error(
+          { err, sessionId: newlyCreatedOrFetchedSession.id, module },
+          `[FEED] Failed to create feed item`
+        );
       });
     }
 
     fastify.log.info(
-      { userId, sessionId: newlyCreatedOrFetchedSession.id },
+      { userId, sessionId: newlyCreatedOrFetchedSession.id, module },
       "[FINISH_SESSION] Spawning post-workout operations (feed, notifications, etc.)"
     );
 
@@ -290,7 +298,12 @@ export const finishWorkoutSession = async (
 
     if (previousSessionDataResult.error) {
       fastify.log.warn(
-        { error: previousSessionDataResult.error, userId, planDayId: newlyCreatedOrFetchedSession.workout_plan_day_id },
+        {
+          error: previousSessionDataResult.error,
+          userId,
+          planDayId: newlyCreatedOrFetchedSession.workout_plan_day_id,
+          module,
+        },
         "Failed to fetch previous session data for deltas. Deltas might be full values."
       );
     }
@@ -423,22 +436,21 @@ export const finishWorkoutSession = async (
     // ASYNCHRONOUSLY save the summary data. Do not block the response for this.
     _updateSessionSummary(fastify, newlyCreatedOrFetchedSession.id, responsePayload).catch((err) => {
       fastify.log.error(
-        err,
-        `[SUMMARY_SAVE] Failed to save summary data for session ${newlyCreatedOrFetchedSession.id}`
+        { err, sessionId: newlyCreatedOrFetchedSession.id, module },
+        `[SUMMARY_SAVE] Failed to save summary data`
       );
     });
 
     fastify.log.info(
-      { userId, sessionId: responsePayload.sessionId },
+      { userId, sessionId: responsePayload.sessionId, module },
       "[FINISH_SESSION] Successfully processed finishWorkoutSession."
     );
     return responsePayload;
   } catch (error: any) {
+    const module = "workout-sessions";
     fastify.log.error(
-      error,
-      `[FINISH_SESSION_ERROR] User ${userId}. SessionID (if known): ${currentSessionIdToLogOnError || "N/A"}. Msg: ${
-        error.message
-      }`
+      { error, userId, sessionId: currentSessionIdToLogOnError, module },
+      `[FINISH_SESSION_ERROR] Finish session failed`
     );
 
     if (fastify.posthog) {

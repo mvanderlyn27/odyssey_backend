@@ -32,23 +32,39 @@ export async function _updateUserExercisePRs(
     }
   >
 ): Promise<NewPr[]> {
-  const prService = new PrService(fastify);
-  fastify.log.info({ userId: user.id }, `[USER_EXERCISE_PRS] Starting PR update process`);
+  const userId = user.id;
+  const module = "workout-sessions";
+  fastify.log.info({ userId, module }, `[USER_EXERCISE_PRS] Starting PR update process`);
+  try {
+    const prService = new PrService(fastify);
 
-  const newPrs = await prService.calculateUserExercisePRs(
-    user,
-    userBodyweight || 0,
-    persistedSessionSets,
-    existingUserExercisePRs,
-    exerciseDetailsMap
-  );
+    const newPrs = await prService.calculateUserExercisePRs(
+      user,
+      userBodyweight || 0,
+      persistedSessionSets,
+      existingUserExercisePRs,
+      exerciseDetailsMap
+    );
 
-  if (newPrs.length > 0) {
-    fastify.log.info({ userId: user.id, count: newPrs.length }, `[USER_EXERCISE_PRS] Found new PR(s)`);
-    fastify.log.debug({ userId: user.id, newPrs }, `[USER_EXERCISE_PRS] Full new PRs data`);
-  } else {
-    fastify.log.info({ userId: user.id }, "[USER_EXERCISE_PRS] No new PRs to update.");
+    if (newPrs.length > 0) {
+      fastify.log.info({ userId, count: newPrs.length, module }, `[USER_EXERCISE_PRS] Found new PR(s)`);
+      fastify.log.debug({ userId, newPrs, module }, `[USER_EXERCISE_PRS] Full new PRs data`);
+    } else {
+      fastify.log.debug({ userId, module }, "[USER_EXERCISE_PRS] No new PRs to update.");
+    }
+
+    return newPrs;
+  } catch (error) {
+    const module = "workout-sessions";
+    fastify.log.error({ error, userId, module }, `[USER_EXERCISE_PRS] Failed to update user exercise PRs`);
+    fastify.posthog?.capture({
+      distinctId: userId,
+      event: "user_exercise_prs_error",
+      properties: {
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : "No stack trace",
+      },
+    });
+    return [];
   }
-
-  return newPrs;
 }
