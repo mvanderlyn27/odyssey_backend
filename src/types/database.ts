@@ -1849,6 +1849,7 @@ export type Database = {
         Row: {
           completed: boolean
           created_at: string
+          feedback_type: Database["public"]["Enums"]["feedback_type"]
           id: string
           requested_response: boolean
           text: string
@@ -1857,6 +1858,7 @@ export type Database = {
         Insert: {
           completed?: boolean
           created_at?: string
+          feedback_type?: Database["public"]["Enums"]["feedback_type"]
           id?: string
           requested_response?: boolean
           text: string
@@ -1865,6 +1867,7 @@ export type Database = {
         Update: {
           completed?: boolean
           created_at?: string
+          feedback_type?: Database["public"]["Enums"]["feedback_type"]
           id?: string
           requested_response?: boolean
           text?: string
@@ -2179,6 +2182,10 @@ export type Database = {
       users: {
         Row: {
           age: number | null
+          beta_offer_claimed:
+            | Database["public"]["Enums"]["beta_offer_type"]
+            | null
+          beta_user: boolean | null
           deleted: boolean
           force_logout: boolean | null
           funnel: string | null
@@ -2196,11 +2203,17 @@ export type Database = {
           rank_calculator_balance: number
           reset_persist: boolean
           theme_preference: string | null
+          trial_end: string | null
+          trial_start: string | null
           updated_at: string
           weight_preference: Database["public"]["Enums"]["unit_type"] | null
         }
         Insert: {
           age?: number | null
+          beta_offer_claimed?:
+            | Database["public"]["Enums"]["beta_offer_type"]
+            | null
+          beta_user?: boolean | null
           deleted?: boolean
           force_logout?: boolean | null
           funnel?: string | null
@@ -2218,11 +2231,17 @@ export type Database = {
           rank_calculator_balance?: number
           reset_persist?: boolean
           theme_preference?: string | null
+          trial_end?: string | null
+          trial_start?: string | null
           updated_at?: string
           weight_preference?: Database["public"]["Enums"]["unit_type"] | null
         }
         Update: {
           age?: number | null
+          beta_offer_claimed?:
+            | Database["public"]["Enums"]["beta_offer_type"]
+            | null
+          beta_user?: boolean | null
           deleted?: boolean
           force_logout?: boolean | null
           funnel?: string | null
@@ -2240,6 +2259,8 @@ export type Database = {
           rank_calculator_balance?: number
           reset_persist?: boolean
           theme_preference?: string | null
+          trial_end?: string | null
+          trial_start?: string | null
           updated_at?: string
           weight_preference?: Database["public"]["Enums"]["unit_type"] | null
         }
@@ -2567,6 +2588,7 @@ export type Database = {
           deleted: boolean
           exercise_id: string | null
           id: string
+          is_amrap: boolean | null
           is_min_success: boolean | null
           is_success: boolean | null
           is_warmup: boolean | null
@@ -2589,6 +2611,7 @@ export type Database = {
           deleted?: boolean
           exercise_id?: string | null
           id?: string
+          is_amrap?: boolean | null
           is_min_success?: boolean | null
           is_success?: boolean | null
           is_warmup?: boolean | null
@@ -2611,6 +2634,7 @@ export type Database = {
           deleted?: boolean
           exercise_id?: string | null
           id?: string
+          is_amrap?: boolean | null
           is_min_success?: boolean | null
           is_success?: boolean | null
           is_warmup?: boolean | null
@@ -3312,15 +3336,26 @@ export type Database = {
         Returns: string
       }
       search_exercises: {
-        Args: {
-          equipment_ids_param: string[]
-          exercise_types_param: string[]
-          limit_param?: number
-          muscle_ids_param: string[]
-          name_param: string
-          offset_param?: number
-          user_id_param?: string
-        }
+        Args:
+          | {
+              equipment_ids_param: string[]
+              exercise_types_param: string[]
+              favorites_only_param?: boolean
+              limit_param?: number
+              muscle_ids_param: string[]
+              name_param: string
+              offset_param?: number
+              user_id_param?: string
+            }
+          | {
+              equipment_ids_param: string[]
+              exercise_types_param: string[]
+              limit_param?: number
+              muscle_ids_param: string[]
+              name_param: string
+              offset_param?: number
+              user_id_param?: string
+            }
         Returns: {
           exercise: Json
         }[]
@@ -3335,6 +3370,10 @@ export type Database = {
         Returns: {
           plan: Json
         }[]
+      }
+      send_trial_ending_notifications: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
       }
       set_limit: {
         Args: { "": number }
@@ -3368,6 +3407,7 @@ export type Database = {
     }
     Enums: {
       banner_type: "landing_page" | "unskippable" | "dashboard"
+      beta_offer_type: "monthly" | "trial6m"
       body_measurement_type:
         | "body_weight"
         | "body_fat_percentage"
@@ -3404,6 +3444,7 @@ export type Database = {
         | "assisted_body_weight"
         | "weighted_body_weight"
       feed_post_type: "workout" | "workout_with_pr" | "workout_with_rankup"
+      feedback_type: "default_feedback" | "exercise_request"
       friendship_status: "pending" | "accepted" | "blocked"
       gender: "male" | "female" | "other"
       meal_type: "breakfast" | "lunch" | "dinner" | "snack"
@@ -3815,6 +3856,7 @@ export const Constants = {
   public: {
     Enums: {
       banner_type: ["landing_page", "unskippable", "dashboard"],
+      beta_offer_type: ["monthly", "trial6m"],
       body_measurement_type: [
         "body_weight",
         "body_fat_percentage",
@@ -3854,6 +3896,7 @@ export const Constants = {
         "weighted_body_weight",
       ],
       feed_post_type: ["workout", "workout_with_pr", "workout_with_rankup"],
+      feedback_type: ["default_feedback", "exercise_request"],
       friendship_status: ["pending", "accepted", "blocked"],
       gender: ["male", "female", "other"],
       meal_type: ["breakfast", "lunch", "dinner", "snack"],

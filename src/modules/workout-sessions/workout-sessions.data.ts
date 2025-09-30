@@ -442,6 +442,7 @@ export async function _gatherAndPrepareWorkoutData(
             is_success: set.is_success,
             is_min_success: set.is_min_success,
             is_warmup: set.is_warmup,
+            is_amrap: set.is_amrap,
             rest_seconds_taken: set.rest_time_seconds,
             performed_at: finishData.ended_at,
             calculated_1rm: calculated_1rm,
