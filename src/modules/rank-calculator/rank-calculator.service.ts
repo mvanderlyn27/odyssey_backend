@@ -64,6 +64,7 @@ export async function calculateRankForEntry(
     actual_reps: entry.reps,
     actual_weight_kg: entry.weight,
     is_warmup: false,
+    is_amrap: false,
     is_success: true,
     is_min_success: true,
     rest_seconds_taken: 0,

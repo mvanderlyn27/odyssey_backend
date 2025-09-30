@@ -267,6 +267,7 @@ export const SessionSetInputSchema = Type.Object(
     is_success: Type.Optional(Type.Boolean()), // Replaces is_failure, matches DB
     is_min_success: Type.Optional(Type.Boolean()),
     is_warmup: Type.Optional(Type.Boolean()),
+    is_amrap: Type.Optional(Type.Boolean()),
     rest_time_seconds: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
     planned_weight_increase_kg: Type.Optional(
       Type.Number({ description: "The planned weight increase for this set, if applicable, in kg." })
