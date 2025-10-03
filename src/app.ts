@@ -135,6 +135,9 @@ import {
   OverallUserRankUpSchema,
 } from "./schemas/workoutSessionsSchemas";
 
+// Account
+import { deleteAccountResponseSchema } from "./modules/account/account.schemas";
+
 // --- Import Route Handlers ---
 import statusRoutes from "./routes/status";
 // import aiCoachMessagesRoutes from "./modules/ai-coach-messages/ai-coach-messages.routes"; // Import AI routes for potential manual registration in test
@@ -199,6 +202,7 @@ const swaggerOptions = {
       { name: "Profile", description: "User profile management endpoints" },
       { name: "Onboarding", description: "User onboarding endpoints" },
       { name: "Exercises", description: "Exercise library and management endpoints" },
+      { name: "Account", description: "Endpoints for account management" },
       // Removed Workout Plans tag
     ],
     components: {
@@ -367,6 +371,9 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(CreateUserGoalBodySchema);
   app.addSchema(GetCurrentGoalResponseSchema);
   app.addSchema(GetGoalHistoryResponseSchema);
+
+  // Account
+  app.addSchema(deleteAccountResponseSchema);
 
   app.log.info("[APP_SETUP] All application schemas registered");
 

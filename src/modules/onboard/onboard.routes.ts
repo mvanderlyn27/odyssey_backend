@@ -119,4 +119,4 @@ async function onboardRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
   );
 }
 
-export default fp(onboardRoutes);
+export default onboardRoutes;
