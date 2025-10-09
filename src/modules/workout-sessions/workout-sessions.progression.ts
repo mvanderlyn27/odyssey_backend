@@ -92,7 +92,9 @@ export async function _updateWorkoutPlanProgression(
         continue;
       }
 
-      const wasOverallExerciseSuccessful = progressionSetsForThisExercise.every((ps) => ps.is_success === true);
+      const wasOverallExerciseSuccessful = progressionSetsForThisExercise.every(
+        (ps) => ps.is_completed && ps.is_success
+      );
 
       fastify.log.debug(
         { workoutPlanDayId, exerciseId, success: wasOverallExerciseSuccessful, module },

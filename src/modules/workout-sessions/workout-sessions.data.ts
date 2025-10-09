@@ -10,8 +10,9 @@ import {
 } from "../../schemas/workoutSessionsSchemas";
 import { calculate_1RM, calculate_SWR } from "./workout-sessions.helpers";
 import { CACHE_KEYS } from "../../services/cache.service";
+import { SetCompletionInfo } from "./types";
 
-export type SetProgressionInput = {
+export type SetProgressionInput = SetCompletionInfo & {
   exercise_id: string;
   exercise_name?: string | null;
   exercise_type: Enums<"exercise_type"> | null;
@@ -368,9 +369,30 @@ export async function _gatherAndPrepareWorkoutData(
           performedExerciseNamesForSummary.add(exerciseName);
         }
         exercise.sets.forEach((set: SessionSetInput) => {
+          // Handle progression input for ALL sets, regardless of completion
+          setsProgressionInputArray.push({
+            exercise_id: exercise.exercise_id,
+            exercise_name: exerciseName,
+            exercise_type: exerciseDetail?.exercise_type ?? null,
+            auto_progression_enabled: exercise.auto_progression_enabled ?? false,
+            workout_plan_exercise_id: exercise.workout_plan_exercise_id,
+            workout_plan_day_exercise_sets_id: set.workout_plan_day_exercise_sets_id ?? null,
+            set_order: set.order_index,
+            planned_weight_kg: set.planned_weight_kg ?? null,
+            planned_min_reps: set.planned_min_reps ?? null,
+            planned_max_reps: set.planned_max_reps ?? null,
+            planned_weight_increase_kg: set.planned_weight_increase_kg ?? null,
+            target_rep_increase: set.target_rep_increase ?? null,
+            is_completed: set.is_completed !== false, // default to true if undefined
+            is_success: set.is_completed === false ? false : set.is_success,
+            is_min_success: set.is_completed === false ? false : set.is_min_success,
+          });
+
+          // Only process completed sets for DB insertion, stats, PRs, etc.
           if (set.is_completed === false) {
             return;
           }
+
           calculatedTotalSets++;
           const actual_weight_kg = set.actual_weight_kg ?? 0;
           const actual_reps = set.actual_reps ?? 0;
@@ -450,23 +472,6 @@ export async function _gatherAndPrepareWorkoutData(
             workout_plan_day_exercise_sets_id: set.workout_plan_day_exercise_sets_id,
           };
           setInsertPayloads.push(setPayload);
-
-          setsProgressionInputArray.push({
-            exercise_id: exercise.exercise_id,
-            exercise_name: exerciseName,
-            exercise_type: exerciseDetail?.exercise_type ?? null,
-            auto_progression_enabled: exercise.auto_progression_enabled ?? false,
-            workout_plan_exercise_id: exercise.workout_plan_exercise_id,
-            workout_plan_day_exercise_sets_id: set.workout_plan_day_exercise_sets_id ?? null,
-            set_order: set.order_index,
-            planned_weight_kg: set.planned_weight_kg ?? null,
-            planned_min_reps: set.planned_min_reps ?? null,
-            planned_max_reps: set.planned_max_reps ?? null,
-            planned_weight_increase_kg: set.planned_weight_increase_kg ?? null,
-            target_rep_increase: set.target_rep_increase ?? null,
-            is_success: set.is_success,
-            is_min_success: set.is_min_success,
-          });
         });
       });
     }
