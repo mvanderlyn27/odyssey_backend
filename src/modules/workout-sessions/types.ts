@@ -101,6 +101,10 @@ export interface RankUpData {
   leaderboardScoresRestored?: boolean;
 }
 
+export type SetCompletionInfo = {
+  is_completed: boolean;
+};
+
 export type Note = Tables<"workout_notes">;
 export type NoteFull = Note & {
   workout_sessions: {
