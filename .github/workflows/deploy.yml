@@ -73,6 +73,14 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Debug Environment Variables
+        run: |
+          echo "The following environment variable keys are being set:"
+          echo "NODE_ENV"
+          if [ -n "${{ secrets.STAGING_SUPABASE_URL }}" ]; then echo "STAGING_SUPABASE_URL is set"; else echo "STAGING_SUPABASE_URL is NOT set"; fi
+          if [ -n "${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}" ]; then echo "STAGING_SUPABASE_SERVICE_ROLE_KEY is set"; else echo "STAGING_SUPABASE_SERVICE_ROLE_KEY is NOT set"; fi
+          if [ -n "${{ secrets.STAGING_GEMINI_API_KEY }}" ]; then echo "STAGING_GEMINI_API_KEY is set"; else echo "STAGING_GEMINI_API_KEY is NOT set"; fi
+
       - name: Deploy to Staging Cloud Run
         run: |
           gcloud run deploy ${{ secrets.CLOUD_RUN_SERVICE_STAGING }} \
