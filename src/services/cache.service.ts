@@ -127,6 +127,7 @@ export class CacheService {
 }
 
 // Fastify plugin to decorate the instance with our cache service
+// Triggering a new deployment to apply updated secrets.
 export default fp(async function (fastify: FastifyInstance) {
   const cacheService = new CacheService(fastify);
   fastify.decorate("appCache", cacheService);
