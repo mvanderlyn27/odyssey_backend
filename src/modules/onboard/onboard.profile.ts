@@ -47,7 +47,8 @@ export async function _createInitialProfile(
 
   const userPayload: TablesUpdate<"users"> = {
     id: userId,
-    onboard_complete: true,
+    //default to false for now, wait until user finishes the onboard locally
+    onboard_complete: false,
     age: data.age ?? preparedData.userData?.age,
     gender: data.gender ?? preparedData.userData?.gender,
     weight_preference: mapUnitsToWeightPreference(data.units) ?? preparedData.userData?.weight_preference,
