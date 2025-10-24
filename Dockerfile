@@ -1,6 +1,6 @@
 # Use the official Node.js image.
 # https://hub.docker.com/_/node
-FROM node:slim
+FROM node:20-slim
 
 # Install Bun globally
 RUN apt-get update && apt-get install -y curl unzip && \

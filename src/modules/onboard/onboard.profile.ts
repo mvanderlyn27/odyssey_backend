@@ -47,12 +47,14 @@ export async function _createInitialProfile(
 
   const userPayload: TablesUpdate<"users"> = {
     id: userId,
-    onboard_complete: true,
+    //default to false for now, wait until user finishes the onboard locally
+    onboard_complete: false,
     age: data.age ?? preparedData.userData?.age,
     gender: data.gender ?? preparedData.userData?.gender,
     weight_preference: mapUnitsToWeightPreference(data.units) ?? preparedData.userData?.weight_preference,
     funnel: data.funnel ?? preparedData.userData?.funnel ?? null,
     onboarding_metadata: data.onboarding_metadata ?? preparedData.userData?.onboarding_metadata,
+    profile_privacy: "public",
   };
 
   const { error: profileError } = await fastify.supabase.from("profiles").upsert(profilePayload);

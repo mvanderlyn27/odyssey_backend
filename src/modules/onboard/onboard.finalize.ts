@@ -51,8 +51,8 @@ export async function _finalizeOnboarding(fastify: FastifyInstance, userId: stri
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   const [activePlanResult, activeSessionResult, profileResult] = await Promise.all([
-    supabase.from("active_workout_plans").insert({ user_id: userId }),
-    supabase.from("active_workout_sessions").insert({ user_id: userId }),
+    supabase.from("active_workout_plans").upsert({ user_id: userId }),
+    supabase.from("active_workout_sessions").upsert({ user_id: userId }),
     supabase.from("profiles").select("*").eq("id", userId).single(),
   ]);
 

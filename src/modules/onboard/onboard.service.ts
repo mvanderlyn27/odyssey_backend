@@ -26,68 +26,6 @@ export const handleOnboarding = async (
   const preparedData = await _gatherAndPrepareOnboardingData(fastify, userId, data);
   const { userProfile: existingProfileData, userData: existingUserData } = preparedData;
 
-  if (existingUserData?.onboard_complete) {
-    fastify.log.info({ module: "onboard", userId }, "User is already onboarded. Skipping.");
-    if (!existingProfileData) {
-      throw new Error(`User ${userId} is marked as onboarded, but profile data is missing.`);
-    }
-
-    const usernameIsValid = existingProfileData.username && /^[a-zA-Z0-9]*$/.test(existingProfileData.username);
-
-    if (usernameIsValid) {
-      return {
-        id: existingProfileData.id,
-        username: existingProfileData.username,
-        display_name: existingProfileData.display_name,
-        avatar_url: existingProfileData.avatar_url,
-        bio: existingProfileData.bio,
-        created_at: existingProfileData.created_at,
-        updated_at: existingProfileData.updated_at,
-        experience_points: existingProfileData.experience_points || 0,
-        current_level_id: existingProfileData.current_level_id,
-      };
-    } else {
-      fastify.log.warn(
-        { module: "onboard", userId, oldUsername: existingProfileData.username },
-        "Invalid username detected for onboarded user. Sanitizing and updating."
-      );
-      const sanitizedUsername = sanitizeForUrl(existingProfileData.username || "");
-
-      const { data: updatedProfile, error } = await supabase
-        .from("profiles")
-        .update({ username: sanitizedUsername })
-        .eq("id", userId)
-        .select()
-        .single();
-
-      if (error || !updatedProfile) {
-        fastify.log.error({ module: "onboard", error, userId }, "Failed to update sanitized username for legacy user.");
-        if (fastify.posthog) {
-          fastify.posthog.capture({
-            distinctId: userId,
-            event: "onboard_service_sanitize_username_error",
-            properties: {
-              error,
-            },
-          });
-        }
-        throw new Error("Failed to update legacy user profile.");
-      }
-
-      return {
-        id: updatedProfile.id,
-        username: updatedProfile.username,
-        display_name: updatedProfile.display_name,
-        avatar_url: updatedProfile.avatar_url,
-        bio: updatedProfile.bio,
-        created_at: updatedProfile.created_at,
-        updated_at: updatedProfile.updated_at,
-        experience_points: updatedProfile.experience_points || 0,
-        current_level_id: updatedProfile.current_level_id,
-      };
-    }
-  }
-
   try {
     const newlyCreatedUser = await _createInitialProfile(fastify, userId, data, preparedData);
     preparedData.userData = newlyCreatedUser;
