@@ -54,6 +54,7 @@ export async function _createInitialProfile(
     weight_preference: mapUnitsToWeightPreference(data.units) ?? preparedData.userData?.weight_preference,
     funnel: data.funnel ?? preparedData.userData?.funnel ?? null,
     onboarding_metadata: data.onboarding_metadata ?? preparedData.userData?.onboarding_metadata,
+    profile_privacy: "public",
   };
 
   const { error: profileError } = await fastify.supabase.from("profiles").upsert(profilePayload);
