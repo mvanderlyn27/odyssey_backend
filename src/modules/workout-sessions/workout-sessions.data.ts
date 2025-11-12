@@ -99,7 +99,7 @@ export async function _gatherAndPrepareWorkoutData(
 ): Promise<PreparedWorkoutData> {
   const module = "workout-sessions";
   fastify.log.info({ userId, module }, `[PREPARE_WORKOUT_DATA] Starting data preparation`);
-  fastify.log.debug({ userId, finishData, module }, `[PREPARE_WORKOUT_DATA] Full workout data`);
+  // fastify.log.debug({ userId, finishData, module }, `[PREPARE_WORKOUT_DATA] Full workout data`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
   try {

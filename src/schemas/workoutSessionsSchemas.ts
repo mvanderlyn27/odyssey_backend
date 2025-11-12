@@ -520,6 +520,23 @@ export const RankUpDataSchema = Type.Object(
   { $id: "RankUpDataSchema" }
 );
 
+export const GamificationSummarySchema = Type.Object(
+  {
+    xp_gained: Type.Number(),
+    leveled_up: Type.Boolean(),
+    new_user_state: Type.Object({
+      xp: Type.Number(),
+      level: Type.Number(),
+    }),
+    new_streak_state: Type.Object({
+      current_streak: Type.Number(),
+    }),
+    unlocked_badges: Type.Array(Type.String()),
+    completed_quests: Type.Array(Type.String()),
+  },
+  { $id: "GamificationSummarySchema" }
+);
+
 export const DetailedFinishSessionResponseSchema = Type.Object(
   {
     // Core Session Info & XP
@@ -566,6 +583,7 @@ export const DetailedFinishSessionResponseSchema = Type.Object(
     // Page 3: Logged Set Overview & Plan Progression
     logged_set_overview: Type.Array(Type.Ref(LoggedSetOverviewItemSchema)),
     plan_progression: Type.Array(Type.Ref(NewPlanProgressionItemSchema)),
+    gamification_summary: Type.Optional(Type.Union([Type.Ref(GamificationSummarySchema), Type.Null()])),
   },
   {
     $id: "DetailedFinishSessionResponseSchema",

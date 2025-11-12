@@ -15,7 +15,7 @@ import {
   PlanWeightIncrease,
   PlanRepIncrease,
 } from "./workout-sessions.progression";
-import { _awardXpAndLevel } from "./workout-sessions.xp";
+import { GamificationService } from "../gamification/gamification.service";
 import { _handleWorkoutPlanCycleCompletion } from "./workout-sessions.cycle";
 import { _updateUserMuscleLastWorked } from "./workout-sessions.lastWorked";
 import { _updateUserExercisePRs } from "./workout-sessions.prs";
@@ -167,14 +167,53 @@ export const finishWorkoutSession = async (
       });
     }
 
-    // Step 3 onwards: Parallelize operations
+    // Step 3: Perform Ranking and PR calculations first as they are dependencies for gamification
+    const genderForRanking = (userData.gender || "male") as Enums<"gender">;
+    if (!userData.gender) {
+      fastify.log.warn(
+        { userId, module },
+        "User gender is not specified. Defaulting to 'male' for ranking calculations."
+      );
+    }
+    const isPremium = userData.is_premium || false;
+
+    const [rankUpdateResults, newPrs] = await Promise.all([
+      _updateUserRanks(
+        fastify,
+        userId,
+        genderForRanking,
+        userBodyweight,
+        persistedSessionSets,
+        exerciseDetailsMap,
+        exercises,
+        mcw,
+        allMuscles,
+        allMuscleGroups,
+        allRanks,
+        allInterRanks,
+        initialUserRank,
+        initialMuscleGroupRanks,
+        initialMuscleRanks,
+        userExerciseRanks,
+        isPremium
+      ),
+      _updateUserExercisePRs(
+        fastify,
+        userData,
+        userBodyweight,
+        persistedSessionSets,
+        existingUserExercisePRs,
+        exerciseDetailsMap
+      ),
+    ]);
+
+    // Step 4: Parallelize remaining operations, including gamification which now has its dependencies met
+    const gamificationService = new GamificationService(fastify);
     const [
       planProgressionResults,
-      rankUpdateResults,
-      xpLevelResult,
+      gamificationSummary,
       _muscleLastWorkedResult,
       _activePlanUpdateResult,
-      newPrs,
       previousSessionDataResult,
       _saveWorkoutNotesResult,
     ] = await Promise.all([
@@ -183,36 +222,14 @@ export const finishWorkoutSession = async (
         newlyCreatedOrFetchedSession.workout_plan_day_id,
         setsProgressionInputData
       ),
-      (() => {
-        const genderForRanking = (userData.gender || "male") as Enums<"gender">;
-        if (!userData.gender) {
-          fastify.log.warn(
-            { userId, module },
-            "User gender is not specified. Defaulting to 'male' for ranking calculations."
-          );
-        }
-        const isPremium = userData.is_premium || false;
-        return _updateUserRanks(
-          fastify,
-          userId,
-          genderForRanking,
-          userBodyweight,
-          persistedSessionSets,
-          exerciseDetailsMap,
-          exercises,
-          mcw,
-          allMuscles,
-          allMuscleGroups,
-          allRanks,
-          allInterRanks,
-          initialUserRank,
-          initialMuscleGroupRanks,
-          initialMuscleRanks,
-          userExerciseRanks,
-          isPremium
-        );
-      })(),
-      _awardXpAndLevel(fastify, userProfile, allLevelDefinitions),
+      gamificationService.processWorkoutCompletion(userId, {
+        session: newlyCreatedOrFetchedSession,
+        sets: persistedSessionSets,
+        prs: newPrs,
+        rankingResults: rankUpdateResults,
+        musclesWorked: muscles_worked_summary,
+        userProfile: userProfile,
+      }),
       _updateUserMuscleLastWorked(
         fastify,
         userId,
@@ -227,16 +244,6 @@ export const finishWorkoutSession = async (
         newlyCreatedOrFetchedSession.workout_plan_id,
         activeWorkoutPlans
       ),
-      (() => {
-        return _updateUserExercisePRs(
-          fastify,
-          userData,
-          userBodyweight,
-          persistedSessionSets,
-          existingUserExercisePRs,
-          exerciseDetailsMap
-        );
-      })(),
       (() => {
         if (newlyCreatedOrFetchedSession.workout_plan_day_id) {
           return supabase
@@ -313,12 +320,13 @@ export const finishWorkoutSession = async (
       sessionId: newlyCreatedOrFetchedSession.id,
       completedAt: newlyCreatedOrFetchedSession.completed_at!,
       exercisesPerformed: newlyCreatedOrFetchedSession.exercises_performed_summary || "",
-      xpAwarded: xpLevelResult.awardedXp,
-      total_xp: xpLevelResult.newExperiencePoints,
-      levelUp: xpLevelResult.leveledUp,
-      newLevelNumber: xpLevelResult.newLevelNumber,
-      remaining_xp_for_next_level:
-        xpLevelResult.remaining_xp_for_next_level === null ? undefined : xpLevelResult.remaining_xp_for_next_level,
+      //LEGACY, REMOVE LATER
+      xpAwarded: 0,
+      total_xp: 0,
+      levelUp: false,
+      newLevelNumber: undefined,
+      remaining_xp_for_next_level: undefined, // This will be handled by the gamification service in the future
+
       total_volume: newlyCreatedOrFetchedSession.total_volume_kg || 0,
       volume_delta: previousSessionData
         ? (newlyCreatedOrFetchedSession.total_volume_kg || 0) - (previousSessionData.total_volume_kg || 0)
@@ -431,6 +439,7 @@ export const finishWorkoutSession = async (
           new_max_reps: ri.new_max_reps,
         })),
       ],
+      gamification_summary: gamificationSummary,
     };
 
     // ASYNCHRONOUSLY save the summary data. Do not block the response for this.

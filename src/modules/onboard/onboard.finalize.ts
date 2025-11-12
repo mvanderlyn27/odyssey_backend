@@ -50,11 +50,62 @@ async function _sendLoopsEvent(fastify: FastifyInstance, userId: string) {
 export async function _finalizeOnboarding(fastify: FastifyInstance, userId: string): Promise<Profile> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
-  const [activePlanResult, activeSessionResult, profileResult] = await Promise.all([
+  const [
+    activePlanResult,
+    activeSessionResult,
+    profileResult,
+    userXpResult,
+    userStreaksResult,
+    userMilestoneProgressResult,
+  ] = await Promise.all([
     supabase.from("active_workout_plans").upsert({ user_id: userId }),
     supabase.from("active_workout_sessions").upsert({ user_id: userId }),
     supabase.from("profiles").select("*").eq("id", userId).single(),
+    supabase.from("user_xp").upsert({ user_id: userId }),
+    supabase.from("user_streaks").upsert({ user_id: userId }),
+    supabase.from("user_milestone_progress").upsert({ user_id: userId }),
   ]);
+
+  if (userMilestoneProgressResult.error) {
+    fastify.log.error(
+      { error: userMilestoneProgressResult.error, userId },
+      "Error creating initial user_milestone_progress entry"
+    );
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "finalize_onboarding_user_milestone_progress_error",
+        properties: {
+          error: userMilestoneProgressResult.error,
+        },
+      });
+    }
+  }
+
+  if (userXpResult.error) {
+    fastify.log.error({ error: userXpResult.error, userId }, "Error creating initial user_xp entry");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "finalize_onboarding_user_xp_error",
+        properties: {
+          error: userXpResult.error,
+        },
+      });
+    }
+  }
+  if (userStreaksResult.error) {
+    fastify.log.error({ error: userStreaksResult.error, userId }, "Error creating initial user_streaks entry");
+    if (fastify.posthog) {
+      fastify.posthog.capture({
+        distinctId: userId,
+        event: "finalize_onboarding_user_streaks_error",
+        properties: {
+          error: userStreaksResult.error,
+        },
+      });
+    }
+  }
 
   if (activePlanResult.error) {
     fastify.log.error({ error: activePlanResult.error, userId }, "Error creating blank active workout plan entry");
