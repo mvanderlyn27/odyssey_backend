@@ -2300,6 +2300,7 @@ export type Database = {
           created_at: string;
           progress_data: Json | null;
           quest_id: string;
+          status: Database["public"]["Enums"]["quest_status"];
           task_id: string;
           updated_at: string;
           user_id: string;
@@ -2308,6 +2309,7 @@ export type Database = {
           created_at?: string;
           progress_data?: Json | null;
           quest_id: string;
+          status?: Database["public"]["Enums"]["quest_status"];
           task_id: string;
           updated_at?: string;
           user_id: string;
@@ -2316,6 +2318,7 @@ export type Database = {
           created_at?: string;
           progress_data?: Json | null;
           quest_id?: string;
+          status?: Database["public"]["Enums"]["quest_status"];
           task_id?: string;
           updated_at?: string;
           user_id?: string;
@@ -2671,6 +2674,8 @@ export type Database = {
           created_at: string | null;
           id: string;
           leveled_up: boolean | null;
+          new_level: number | null;
+          new_xp: number | null;
           source: string | null;
           user_id: string;
           xp_added: number;
@@ -2679,6 +2684,8 @@ export type Database = {
           created_at?: string | null;
           id?: string;
           leveled_up?: boolean | null;
+          new_level?: number | null;
+          new_xp?: number | null;
           source?: string | null;
           user_id: string;
           xp_added: number;
@@ -2687,6 +2694,8 @@ export type Database = {
           created_at?: string | null;
           id?: string;
           leveled_up?: boolean | null;
+          new_level?: number | null;
+          new_xp?: number | null;
           source?: string | null;
           user_id?: string;
           xp_added?: number;
@@ -3960,6 +3969,15 @@ export type Database = {
         Args: { is_premium_param: boolean; user_id_param: string };
         Returns: undefined;
       };
+      upsert_user_with_id: {
+        Args: {
+          p_email: string;
+          p_password: string;
+          p_user_id: string;
+          p_user_metadata: Json;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       banner_platform: "all" | "ios" | "android";
@@ -4022,6 +4040,7 @@ export type Database = {
         | "share_workout"
         | "view_profile"
         | "create_workout_plan"
+        | "finish_workout"
         | "open_app"
         | "view_leaderboard"
         | "view_social_media"
@@ -5008,6 +5027,7 @@ export const Constants = {
         "share_workout",
         "view_profile",
         "create_workout_plan",
+        "finish_workout",
         "open_app",
         "view_leaderboard",
         "view_social_media",

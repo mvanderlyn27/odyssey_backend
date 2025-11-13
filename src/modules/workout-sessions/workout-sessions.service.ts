@@ -58,7 +58,6 @@ export const finishWorkoutSession = async (
 ): Promise<DetailedFinishSessionResponse> => {
   const module = "workout-sessions";
   fastify.log.info({ userId, module }, `[FINISH_SESSION] Starting`);
-  fastify.log.debug({ userId, finishData, module }, `[FINISH_SESSION] Full finish session data`);
   const supabase = fastify.supabase as SupabaseClient<Database>;
   if (!supabase) {
     fastify.log.error({ module }, "[FINISH_SESSION] Supabase client not available.");

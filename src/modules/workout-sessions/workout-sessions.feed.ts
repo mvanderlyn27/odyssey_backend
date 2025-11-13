@@ -122,7 +122,7 @@ export async function createWorkoutFeedItem(fastify: FastifyInstance, inputData:
   const sessionId = inputData.workoutSession.id;
   const module = "workout-sessions";
   fastify.log.info({ userId, sessionId, module }, "[FEED] Attempting to insert workout feed item");
-  fastify.log.debug({ userId, sessionId, inputData, module }, "[FEED] Full feed item creation data");
+  // fastify.log.debug({ userId, sessionId, inputData, module }, "[FEED] Full feed item creation data");
 
   try {
     const supabase = fastify.supabase as SupabaseClient<Database>;

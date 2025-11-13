@@ -1,10 +1,12 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Tables } from "../../types/database";
-import { GamificationResponse, GamificationSummary, WorkoutCompletionData } from "./gamification.types";
+import { GamificationSummary, WorkoutCompletionData } from "./gamification.types";
 import { _updateWorkoutStreak } from "./gamification.streaks";
 import { _awardXp } from "./gamification.xp";
-import { _processWorkoutCompletionEvent } from "./gamification.processor";
+import { processQuests } from "./gamification.quests";
+import { processBadges } from "./gamification.badges";
+import { updateUserMilestones } from "./gamification.milestones";
 
 const XP_PER_WORKOUT = 50;
 
@@ -26,9 +28,11 @@ export class GamificationService {
   ): Promise<GamificationSummary | null> {
     this.fastify.log.info({ userId }, "[GAMIFICATION_SERVICE] Processing workout completion");
 
-    const streakResult = await _updateWorkoutStreak(this.fastify, userId);
     const totalXpGained = XP_PER_WORKOUT;
-    const xpResult = await _awardXp(this.fastify, workoutData.userProfile, totalXpGained);
+    const [streakResult, xpResult] = await Promise.all([
+      _updateWorkoutStreak(this.fastify, userId),
+      _awardXp(this.fastify, workoutData.userProfile, totalXpGained),
+    ]);
 
     if (!xpResult) {
       this.fastify.log.error(
@@ -45,7 +49,12 @@ export class GamificationService {
       newStreak: streakResult.current_streak,
     };
 
-    const gamificationResult = await _processWorkoutCompletionEvent(this.fastify, userId, fullWorkoutData);
+    const updatedMilestones = await updateUserMilestones(this.fastify, userId, fullWorkoutData);
+
+    const [completed_quests, unlocked_badges] = await Promise.all([
+      processQuests(this.fastify, userId, fullWorkoutData, updatedMilestones),
+      processBadges(this.fastify, userId, updatedMilestones),
+    ]);
 
     const summary: GamificationSummary = {
       xp_gained: totalXpGained,
@@ -57,8 +66,8 @@ export class GamificationService {
       new_streak_state: {
         current_streak: streakResult.current_streak,
       },
-      unlocked_badges: gamificationResult?.unlocked_badges || [],
-      completed_quests: gamificationResult?.completed_quests || [],
+      unlocked_badges: unlocked_badges || [],
+      completed_quests: completed_quests || [],
     };
 
     return summary;

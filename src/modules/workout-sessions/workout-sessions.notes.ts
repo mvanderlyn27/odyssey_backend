@@ -14,7 +14,7 @@ export async function _saveWorkoutNotes(
   }
   const module = "workout-sessions";
   fastify.log.info({ userId, workoutSessionId, module }, `[WORKOUT_NOTES] Saving workout notes`);
-  fastify.log.debug({ userId, workoutSessionId, notes, module }, `[WORKOUT_NOTES] Full notes data`);
+  // fastify.log.debug({ userId, workoutSessionId, notes, module }, `[WORKOUT_NOTES] Full notes data`);
 
   try {
     const supabase = fastify.supabase as SupabaseClient<Database>;
