@@ -21,7 +21,7 @@ export async function processQuests(
   userId: string,
   workoutData: WorkoutCompletionData,
   updatedMilestones: Tables<"user_milestone_progress">
-): Promise<string[]> {
+): Promise<{ id: string; name: string }[]> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
   const now = new Date();
 
@@ -87,7 +87,7 @@ export async function processQuests(
 
   // Pre-populate completed tasks from existing progress
   for (const progress of allTaskProgress || []) {
-    if ((progress.progress_data as any)?.completed) {
+    if (progress.status === "completed") {
       if (!questsToCheckForCompletion[progress.quest_id]) {
         questsToCheckForCompletion[progress.quest_id] = [];
       }
@@ -294,7 +294,7 @@ export async function processQuests(
   }
 
   // 6. Check for quest completions
-  const completed_quests: string[] = [];
+  const completed_quests: { id: string; name: string }[] = [];
   for (const questId in questsToCheckForCompletion) {
     const quest = activeQuests.find((q) => q.id === questId);
     const userQuest = userQuestMap.get(questId);
@@ -322,7 +322,7 @@ export async function processQuests(
           },
         });
       } else {
-        completed_quests.push(questId);
+        completed_quests.push({ id: questId, name: quest.name });
         fastify.posthog?.capture({
           distinctId: userId,
           event: "quest_completed",

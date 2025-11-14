@@ -17,13 +17,27 @@ export async function processBadges(
   fastify: FastifyInstance,
   userId: string,
   updatedMilestones: Tables<"user_milestone_progress">
-): Promise<string[]> {
+): Promise<{ id: string; name: string }[]> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
-  const { data: userBadges, error: userBadgesError } = await supabase
-    .from("user_badges")
-    .select("badge_id")
-    .eq("user_id", userId);
 
+  const [milestoneResult, userBadgesResult, allBadges] = await Promise.all([
+    supabase.from("user_milestone_progress").select("*").eq("user_id", userId).single(),
+    supabase.from("user_badges").select("badge_id").eq("user_id", userId),
+    fastify.appCache.get<Tables<"badges">[]>(CACHE_KEYS.BADGES, async () => {
+      const { data, error } = await supabase.from("badges").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
+  ]);
+
+  const { data: latestMilestones, error: milestonesError } = milestoneResult;
+  if (milestonesError) {
+    const error = new Error(`Failed to fetch latest milestones: ${milestonesError.message}`);
+    fastify.log.error({ error, userId }, "[GAMIFICATION_BADGES] Failed to fetch latest milestones");
+    throw error;
+  }
+
+  const { data: userBadges, error: userBadgesError } = userBadgesResult;
   if (userBadgesError) {
     const error = new Error(`Failed to fetch user badges: ${userBadgesError.message}`);
     fastify.log.error({ error, userId }, "[GAMIFICATION_BADGES] Failed to fetch user badges");
@@ -38,17 +52,12 @@ export async function processBadges(
     throw error;
   }
 
-  const userBadgeIds = new Set(userBadges.map((b) => b.badge_id));
-  const allBadges = await fastify.appCache.get<Tables<"badges">[]>(CACHE_KEYS.BADGES, async () => {
-    const { data, error } = await supabase.from("badges").select("*");
-    if (error) throw error;
-    return data || [];
-  });
+  const userBadgeIds = new Set((userBadges || []).map((b) => b.badge_id));
 
   const newBadgesToInsert: TablesInsert<"user_badges">[] = [];
   for (const badge of allBadges) {
     if (userBadgeIds.has(badge.id) || !badge.requirements) continue;
-    if (checkRequirementsMet(badge.requirements as any, updatedMilestones)) {
+    if (checkRequirementsMet(badge.requirements as any, latestMilestones)) {
       newBadgesToInsert.push({ user_id: userId, badge_id: badge.id });
     }
   }
@@ -76,5 +85,8 @@ export async function processBadges(
       });
     }
   }
-  return newBadgesToInsert.map((b) => b.badge_id);
+  return newBadgesToInsert.map((b) => {
+    const badge = allBadges.find((badge) => badge.id === b.badge_id);
+    return { id: b.badge_id, name: badge?.name || "" };
+  });
 }

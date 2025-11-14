@@ -122,6 +122,7 @@ import {
   NoteSchema,
   UnchangedMuscleRankSchema,
   UnchangedExerciseRankSchema,
+  UnlockedItemSchema,
   GamificationSummarySchema,
   // Schemas for Workout Session List & Summary (Phase 2)
   ListWorkoutSessionsQuerySchema,
@@ -322,6 +323,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(UnchangedExerciseRankSchema);
   app.addSchema(RankUpDataSchema);
 
+  app.addSchema(UnlockedItemSchema);
   app.addSchema(GamificationSummarySchema);
   app.addSchema(DetailedFinishSessionResponseSchema);
 

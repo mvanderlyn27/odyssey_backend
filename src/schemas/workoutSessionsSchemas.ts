@@ -520,6 +520,14 @@ export const RankUpDataSchema = Type.Object(
   { $id: "RankUpDataSchema" }
 );
 
+export const UnlockedItemSchema = Type.Object(
+  {
+    id: Type.String(),
+    name: Type.String(),
+  },
+  { $id: "UnlockedItemSchema" }
+);
+
 export const GamificationSummarySchema = Type.Object(
   {
     xp_gained: Type.Number(),
@@ -531,8 +539,8 @@ export const GamificationSummarySchema = Type.Object(
     new_streak_state: Type.Object({
       current_streak: Type.Number(),
     }),
-    unlocked_badges: Type.Array(Type.String()),
-    completed_quests: Type.Array(Type.String()),
+    unlocked_badges: Type.Array(Type.Ref(UnlockedItemSchema)),
+    completed_quests: Type.Array(Type.Ref(UnlockedItemSchema)),
   },
   { $id: "GamificationSummarySchema" }
 );
