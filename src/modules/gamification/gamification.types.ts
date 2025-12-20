@@ -12,10 +12,11 @@ export type WorkoutCompletionData = {
   userProfile: Tables<"profiles">;
   xpGained: number;
   leveledUp: boolean;
-  newStreak: number;
+  streakSummary: StreakUpdateResult; // Changed from newStreak
 };
 
-export type UnlockedBadge = string;
+export type UnlockedBadge = { id: string; name: string };
+export type UnlockedQuest = { id: string; name: string };
 
 export interface UpdatedQuest {
   quest_id: string;
@@ -34,12 +35,17 @@ export type GamificationSummary = {
     xp: number;
     level: number;
   };
-  new_streak_state: {
-    current_streak: number;
-  };
+  streak_summary: StreakUpdateResult;
   unlocked_badges: UnlockedBadge[];
-  completed_quests: string[];
+  completed_quests: UnlockedQuest[];
 };
+
+export interface StreakUpdateResult {
+  old_streak: number;
+  new_streak: number;
+  streak_extended: boolean;
+  days_added: number;
+}
 
 export type AddXpRpcResult = {
   final_xp: number;

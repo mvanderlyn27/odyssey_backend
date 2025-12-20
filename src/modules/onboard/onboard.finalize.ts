@@ -64,6 +64,7 @@ export async function _finalizeOnboarding(fastify: FastifyInstance, userId: stri
     supabase.from("user_xp").upsert({ user_id: userId }),
     supabase.from("user_streaks").upsert({ user_id: userId }),
     supabase.from("user_milestone_progress").upsert({ user_id: userId }),
+    supabase.from("workout_plans").insert({ user_id: userId, name: "Other Workouts", plan_type: "system" }),
   ]);
 
   if (userMilestoneProgressResult.error) {

@@ -314,17 +314,11 @@ export const finishWorkoutSession = async (
       );
     }
     const previousSessionData = previousSessionDataResult.data;
-
     const responsePayload: DetailedFinishSessionResponse = {
       sessionId: newlyCreatedOrFetchedSession.id,
       completedAt: newlyCreatedOrFetchedSession.completed_at!,
       exercisesPerformed: newlyCreatedOrFetchedSession.exercises_performed_summary || "",
       //LEGACY, REMOVE LATER
-      xpAwarded: 0,
-      total_xp: 0,
-      levelUp: false,
-      newLevelNumber: undefined,
-      remaining_xp_for_next_level: undefined, // This will be handled by the gamification service in the future
 
       total_volume: newlyCreatedOrFetchedSession.total_volume_kg || 0,
       volume_delta: previousSessionData
@@ -452,6 +446,10 @@ export const finishWorkoutSession = async (
     fastify.log.info(
       { userId, sessionId: responsePayload.sessionId, module },
       "[FINISH_SESSION] Successfully processed finishWorkoutSession."
+    );
+    fastify.log.info(
+      { userId, sessionId: responsePayload.sessionId, module },
+      `[GAMIFICATION_SUMARY] ${JSON.stringify(responsePayload.gamification_summary)}`
     );
     return responsePayload;
   } catch (error: any) {

@@ -135,6 +135,7 @@ import {
   ListWorkoutSessionsSortByEnum,
   ListWorkoutSessionsPeriodEnum,
   OverallUserRankUpSchema,
+  StreakUpdateResultSchema,
 } from "./schemas/workoutSessionsSchemas";
 
 // Account
@@ -364,8 +365,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(UpdateProfileBodySchema);
   app.addSchema(GetProfileResponseSchema);
 
-  // Removed Stats Schemas
-  // Removed Streaks Schemas
+  app.addSchema(StreakUpdateResultSchema);
 
   // User Goals
   console.log("DEBUG: UserGoalSchema:", UserGoalSchema);

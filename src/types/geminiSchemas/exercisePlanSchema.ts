@@ -58,6 +58,11 @@ export const exercisePlanSchema = {
                   description:
                     "the amount of weight this exercise's target weight should increase for the next workout, upon successfully completing all reps for this workout",
                 },
+                target_rep_increase: {
+                  type: "number",
+                  description:
+                    "the amount of reps to increase for the next workout, upon successfully completing all reps for this workout (if weight increase is not applicable)",
+                },
                 target_rest_seconds: {
                   type: "number",
                   nullable: true,

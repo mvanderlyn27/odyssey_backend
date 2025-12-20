@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database, Tables } from "../../types/database";
-import { GamificationSummary, WorkoutCompletionData } from "./gamification.types";
+import { GamificationSummary, WorkoutCompletionData, StreakUpdateResult } from "./gamification.types";
 import { _updateWorkoutStreak } from "./gamification.streaks";
 import { _awardXp } from "./gamification.xp";
 import { processQuests } from "./gamification.quests";
@@ -24,7 +24,7 @@ export class GamificationService {
 
   public async processWorkoutCompletion(
     userId: string,
-    workoutData: Omit<WorkoutCompletionData, "xpGained" | "leveledUp" | "newStreak">
+    workoutData: Omit<WorkoutCompletionData, "xpGained" | "leveledUp" | "streakSummary">
   ): Promise<GamificationSummary | null> {
     this.fastify.log.info({ userId }, "[GAMIFICATION_SERVICE] Processing workout completion");
 
@@ -46,7 +46,7 @@ export class GamificationService {
       ...workoutData,
       xpGained: totalXpGained,
       leveledUp: xpResult.leveled_up,
-      newStreak: streakResult.current_streak,
+      streakSummary: streakResult,
     };
 
     const updatedMilestones = await updateUserMilestones(this.fastify, userId, fullWorkoutData);
@@ -63,9 +63,7 @@ export class GamificationService {
         xp: xpResult.final_xp,
         level: xpResult.final_level || 1,
       },
-      new_streak_state: {
-        current_streak: streakResult.current_streak,
-      },
+      streak_summary: streakResult,
       unlocked_badges: unlocked_badges || [],
       completed_quests: completed_quests || [],
     };
