@@ -142,20 +142,21 @@ ${JSON.stringify(simplifiedExercises)}
 
 **RULES OF PROGRAM DESIGN (Strictly Follow These):**
 
-1.  **NO DUPLICATES:** You must NOT include the same exercise_id more than once.
-2.  **Exercise Hierarchy:**
+1.  **STRICT ID MATCHING:** You must ONLY use 'exercise_id' values that are explicitly listed in the 'Available Exercises' pool. Do NOT invent, guess, or modify UUIDs. If an exercise is not in the pool, do not use it.
+2.  **NO DUPLICATES:** You must NOT include the same exercise_id more than once.
+3.  **Exercise Hierarchy:**
     *   Start with **Compound/Multi-joint** movements (e.g., Squats, Presses, Deadlifts) while the user is fresh.
     *   Follow with **Accessory/Isolation** movements.
     *   If the user selected "Full Body", ensure a balance of Push, Pull, Squat, and Hinge movements.
-3.  **Time Management:**
+4.  **Time Management:**
     *   Estimate the time per set (approx. 45s for the set + target_rest_seconds).
     *   Adjust the number of exercises and sets so the total time fits close to ${duration} minutes.
     *   Do not overload the user with too many exercises if the duration is short.
-4.  **Rep & Rest Logic (Based on Intensity):**
+5.  **Rep & Rest Logic (Based on Intensity):**
     *   *High Intensity/Strength:* Lower reps (3-6), Higher rest (90s-180s), Heavy weight.
     *   *Moderate/Hypertrophy:* Moderate reps (8-12), Moderate rest (60s-90s).
     *   *Low Intensity/Endurance:* High reps (12-20+), Low rest (30s-45s).
-5.  **Weight Estimation:**
+6.  **Weight Estimation:**
     *   Use the User Profile (Gender, Weight, Experience) AND the user's personal records (if available in the exercise object) to estimate a *safe* and appropriate starting weight (\`current_suggested_weight_kg\`).
     *   If experience is "Beginner", be conservative.
     *   If bodyweight exercise, set weight to 0 or null.
@@ -273,6 +274,30 @@ Generate a SINGLE JSON object. Do not include markdown formatting or explanation
     throw new Error("Failed to generate a valid workout plan.");
   }
 
+  // Validate Exercises
+  if (workoutPlan.workouts && workoutPlan.workouts.length > 0) {
+    const validExerciseIds = new Set(filteredExercises.map((e) => e.id));
+    const workout = workoutPlan.workouts[0];
+
+    if (workout.exercises) {
+      const originalCount = workout.exercises.length;
+      workout.exercises = workout.exercises.filter((ex: any) => {
+        const isValid = validExerciseIds.has(ex.exercise_id);
+        if (!isValid) {
+          fastify.log.warn({ invalidId: ex.exercise_id }, "Gemini returned invalid exercise ID");
+        }
+        return isValid;
+      });
+
+      if (workout.exercises.length < originalCount) {
+        fastify.log.warn(
+          { originalCount, newCount: workout.exercises.length },
+          "Filtered out invalid exercises from Gemini response"
+        );
+      }
+    }
+  }
+
   // 7. Save to DB (RPC)
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
@@ -335,6 +360,8 @@ Generate a SINGLE JSON object. Do not include markdown formatting or explanation
     fastify.log.error({ rpcError }, "Error saving workout plan to DB");
     throw new Error(`Failed to save workout plan: ${rpcError.message}`);
   }
+
+  fastify.log.info({ workoutDayId, workoutPlan }, "Smart Create Response Data");
 
   return { workoutDayId, workoutPlan };
 }
