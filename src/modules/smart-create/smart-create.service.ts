@@ -6,17 +6,183 @@ import { exercisePlanSchema } from "../../types/geminiSchemas/exercisePlanSchema
 import { SupabaseClient } from "@supabase/supabase-js";
 import { Database } from "../../types/database";
 
+export async function createSmartPlan(fastify: FastifyInstance, payload: SmartCreatePayload) {
+  const { userId, targetMuscles, equipment, duration, intensity, note } = payload;
+  const module = "smart-create";
+
+  fastify.log.info({ userId, module }, "Starting smart plan creation process (multi-day)");
+
+  // 2. Fetch Data
+  const {
+    user,
+    exercises,
+    equipment: allEquipment,
+    muscleGroups,
+    userExercisePrs,
+  } = await getWorkoutGenerationData(fastify, userId);
+
+  // 3. Filter Exercises (by equipment)
+  const availableEquipmentIds = new Set(equipment);
+  const targetMuscleIds = new Set(targetMuscles);
+
+  const filteredExercises = exercises.filter((exercise) => {
+    const requiredEquipment = (exercise.equipment_required || []).filter((id): id is string => id !== null);
+    const hasEquipment =
+      requiredEquipment.length === 0 || requiredEquipment.every((eqId) => availableEquipmentIds.has(eqId));
+    return hasEquipment;
+  });
+
+  if (filteredExercises.length === 0) {
+    throw new Error("No exercises found matching the criteria. Please adjust your equipment.");
+  }
+
+  // 4. Prepare Simplified Exercises for Gemini
+  const simplifiedExercises = filteredExercises.map((ex) => {
+    const relevantPrs = userExercisePrs
+      .filter((pr: any) => pr.exercise_id === ex.id)
+      .map((pr: any) => ({
+        type: pr.pr_type,
+        value: pr.weight_kg !== null ? `${pr.weight_kg}kg` : pr.reps !== null ? `${pr.reps} reps` : "N/A",
+        estimated_1rm: pr.estimated_1rm,
+      }));
+
+    return {
+      exercise_id: ex.id,
+      exercise_name: ex.name,
+      required_equipment: (ex.equipment_required || [])
+        .filter((id): id is string => id !== null)
+        .map((id) => allEquipment.find((eq) => eq.id === id)?.name)
+        .filter(Boolean),
+      personal_records: relevantPrs,
+    };
+  });
+
+  // 5. Construct Prompt
+  const userProfile = {
+    age: user.age,
+    sex: user.gender,
+    fitness_level: (user.onboarding_metadata as any)?.fitness_level || "intermediate",
+    goals: (user.onboarding_metadata as any)?.goals || [],
+  };
+
+  const availableEquipmentNames = allEquipment
+    .filter((eq) => availableEquipmentIds.has(eq.id))
+    .map((eq) => eq.name)
+    .join(", ");
+
+  const targetMuscleNames = muscleGroups
+    .filter((mg) => targetMuscleIds.has(mg.id))
+    .map((mg) => mg.name)
+    .join(", ");
+
+  const prompt = `You are an elite Strength & Conditioning Coach. Create a comprehensive multi-day workout plan.
+
+**INPUT DATA:**
+- **Workout Frequency:** ${duration} days per week
+- **Intensity Level:** ${intensity}
+- **Target Muscles:** ${targetMuscleNames}
+- **Available Equipment:** ${availableEquipmentNames}
+- **User Profile:** ${JSON.stringify(userProfile)}
+- **User Notes:** ${note || "None"}
+
+**AVAILABLE EXERCISES POOL:**
+${JSON.stringify(simplifiedExercises)}
+
+**RULES:**
+1. Use ONLY exercise_id values from the pool.
+2. Generate a ${duration}-day split plan.
+3. Balance the workouts across the days.
+4. Ensure each workout fits roughly 45-60 minutes.
+5. Provide realistic weight suggestions based on user profile.
+
+---
+
+**OUTPUT FORMAT:**
+Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include markdown formatting or explanations outside the JSON.
+
+**JSON SCHEMA:**
+{
+  "name": "string",
+  "description": "string",
+  "goal_type": "lose_weight | gain_muscle | maintain | improve_strength",
+  "plan_type": "system",
+  "start_date": "${new Date().toISOString()}",
+  "recommended_week_duration": 4,
+  "days_per_week": ${duration},
+  "workouts": [
+    {
+      "name": "string",
+      "day": number (1-7),
+      "focus": "string",
+      "exercises": [
+        {
+          "exercise_id": "UUID",
+          "order_in_workout": number,
+          "target_sets": number,
+          "target_reps_min": number,
+          "target_reps_max": number,
+          "current_suggested_weight_kg": number,
+          "on_success_weight_increase_kg": number,
+          "target_rep_increase": number,
+          "target_rest_seconds": number
+        }
+      ]
+    }
+  ]
+}
+`;
+
+  // 6. Call Gemini
+  const geminiService = new GeminiService(fastify);
+  const responseText = await geminiService.generateText({
+    prompt: prompt + "\nRespond ONLY with valid JSON matching the schema.",
+    modelName: "gemini-2.5-flash-lite", // Using a reliable model
+  });
+
+  let plan;
+  try {
+    const jsonStr = responseText
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+    plan = JSON.parse(jsonStr);
+
+    // Minimal structural fix if needed (mapping workouts)
+    if (plan.dailyWorkouts && !plan.workouts) {
+      plan.workouts = plan.dailyWorkouts;
+    }
+  } catch (e) {
+    fastify.log.error({ e, responseText }, "Failed to parse Gemini plan response");
+    throw new Error("Failed to generate a valid workout plan structure.");
+  }
+
+  // 7. Save to DB (RPC)
+  const supabase = fastify.supabase as SupabaseClient<Database>;
+
+  // Fix plan_type for enum compatibility
+  if (plan.plan_type && !["user", "template", "system"].includes(plan.plan_type)) {
+    fastify.log.info({ originalPlanType: plan.plan_type }, "Mapping AI plan_type to 'system' enum");
+    plan.plan_type = "system";
+  }
+
+  const { data: planId, error: rpcError } = await (supabase.rpc as any)("create_smart_workout_plan_rpc", {
+    p_user_id: userId,
+    p_plan_data: plan,
+  });
+
+  if (rpcError) {
+    fastify.log.error({ rpcError }, "Error saving smart workout plan via RPC");
+    throw new Error(`Failed to save workout plan: ${rpcError.message}`);
+  }
+
+  return { planId, plan };
+}
+
 export async function createSmartWorkout(fastify: FastifyInstance, payload: SmartCreatePayload) {
   const { userId, targetMuscles, equipment, duration, intensity, note } = payload;
   const module = "smart-create";
 
   fastify.log.info({ userId, module }, "Starting smart workout creation process");
-
-  // 1. Check Premium Status
-  const isPremium = await getUserPremiumStatus(fastify, userId);
-  if (!isPremium) {
-    throw new Error("Smart Create is a premium feature.");
-  }
 
   // 2. Fetch Data
   const {
@@ -39,38 +205,8 @@ export async function createSmartWorkout(fastify: FastifyInstance, payload: Smar
 
     if (!hasEquipment) return false;
 
-    // Check Muscles
-    // exercises from getWorkoutGenerationData now has muscle_ids (from exercise_muscles table)
-    // But we need to check against muscle GROUPS if targetMuscles are group IDs.
-    // Assuming targetMuscles are muscle group IDs:
-    // We need to map the exercise's muscle_ids to their group IDs using allMuscles/muscleGroups cache data?
-    // Wait, getWorkoutGenerationData returns 'muscle_ids' which are muscle IDs.
-    // If 'targetMuscles' are muscle group IDs, we need to see if any of the exercise's muscles belong to those groups.
-    // We have 'muscleGroups' data but not the mapping from muscle -> group in this scope easily unless we use the 'muscleGroups' array if it had the mapping?
-    // Actually, 'muscleGroups' is just the groups.
-    // The previous implementation assumed primary_muscle_groups existed on the exercise object (it doesn't in the DB schema).
-
-    // Simplification: Let's assume targetMuscles contains MUSCLE IDs for now if the frontend sends that,
-    // OR we can't filter by muscle group here without fetching the muscle->group mapping.
-    // HOWEVER, the 'getWorkoutGenerationData' fetches 'exercises' which effectively includes everything.
-    // BUT we modified 'getWorkoutGenerationData' to return 'muscle_ids'.
-
-    // Let's assume targetMuscles passed from frontend are actually muscle IDs or we are skipping strict muscle filtering
-    // and relying on Gemini, but filtering by equipment is critical.
-
-    // For now, let's filter by equipment which we have, and loosely by muscles if possible or skip.
-    // Given the types error, 'muscle_ids' exists on our joined object.
-
     const exerciseMuscleIds = new Set(exercise.muscle_ids || []);
-    // If targetMuscles are muscle IDs:
     const matchesTarget = targetMuscles.some((tm) => exerciseMuscleIds.has(tm));
-
-    // If we want to be safe and filtering is optional/heuristic:
-    // return matchesTarget;
-
-    // If targetMuscles are Groups, we can't filter here without more data.
-    // Let's just return true for muscle check to avoid blocking valid exercises if we are unsure of the ID type match.
-    // Prioritizing equipment filter which is explicit.
 
     return true;
   });
@@ -186,7 +322,7 @@ Generate a SINGLE JSON object. Do not include markdown formatting or explanation
           "target_rep_increase": "number (e.g., 1)",
           "target_rest_seconds": "number (Integer)",
           "current_suggested_weight_kg": "number | null (Reasonable starting weight)",
-          "on_success_weight_increase_kg": "number (e.g., 2.5 or 5)"
+          "on_weight_increase_kg": "number (e.g., 2.5 or 5)"
         }
       ]
     }
@@ -196,40 +332,6 @@ Generate a SINGLE JSON object. Do not include markdown formatting or explanation
 
   // 6. Call Gemini
   const geminiService = new GeminiService(fastify);
-  // We need a method that accepts the schema. generateExercisePlanStructured uses exercisePlanSchema internally.
-  // We might need to pass the prompt to it or use a generic generate method if available,
-  // but generateExercisePlanStructured seems to take userData and constructs its own prompt.
-  // Let's reuse generateExercisePlanStructured but we might need to modify it to accept a custom prompt
-  // or we can use generateText and parse it, but structured generation is better.
-  // The existing generateExercisePlanStructured in GeminiService takes userData and makes its own prompt.
-  // We should probably add a method to GeminiService that takes a custom prompt and schema,
-  // or modify generateExercisePlanStructured.
-  // For now, let's assume we can use a new method or modify the existing one.
-  // Since I cannot modify GeminiService right now without context switching,
-  // I will assume I can use a generic generateStructuredContent if I added it,
-  // or I will implement the raw generation here using the exposed client if accessible,
-  // but better to use the service.
-
-  // Let's use the public generateText method and rely on the prompt instructions for JSON,
-  // then parse it. OR better, let's try to add a method to GeminiService in a separate step if needed.
-  // Actually, looking at GeminiService, it has generateExercisePlanStructured.
-  // I will use `generateText` for now and manually parse, forcing JSON in prompt,
-  // effectively what the structured methods do but without the strict schema enforcement in the API call
-  // unless I update the service.
-  // WAIT: The plan said "Calls GeminiService.generateExercisePlanStructured".
-  // But that method's prompt is hardcoded.
-  // I will assume for this step that I should use a method that allows custom prompts with structured output.
-  // I'll define a helper here or directly use the genAI client if exposed on fastify.gemini.
-
-  // Let's try to use the `generateText` with strict JSON instructions as a fallback
-  // if we don't want to change GeminiService yet.
-  // However, the best practice is to update GeminiService to allow custom prompts for structured data.
-  // I'll proceed with constructing the prompt and calling a hypothetical `generateStructuredWithPrompt`
-  // or just `generateText` and parsing.
-
-  // Checking GeminiService again... it has `generateText`.
-  // I will use `generateText` and ensure the prompt asks for JSON.
-
   const responseText = await geminiService.generateText({
     prompt: prompt + "\nRespond ONLY with valid JSON matching the schema.",
     modelName: "gemini-2.5-flash-lite", // Updated to use the latest flash model
@@ -350,7 +452,7 @@ Generate a SINGLE JSON object. Do not include markdown formatting or explanation
   // The RPC expects 'p_target_plan_id' which is UUID | NULL. In JS/TS calling Supabase RPC, undefined maps to omitting the argument or sending null if typed correctly.
   // Given the error "Type 'null' is not assignable to type 'string | undefined'", the generated types likely expect string (UUID) or undefined, but not null explicitly.
 
-  const { data: workoutDayId, error: rpcError } = await supabase.rpc("create_smart_workout_in_plan_rpc", {
+  const { data: workoutDayId, error: rpcError } = await (supabase.rpc as any)("create_smart_workout_in_plan_rpc", {
     p_user_id: userId,
     p_workout_day_data: workoutDayData,
     p_target_plan_id: undefined, // Changed from null to undefined to satisfy TS

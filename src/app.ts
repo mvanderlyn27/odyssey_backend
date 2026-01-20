@@ -76,7 +76,7 @@ import {
 } from "./schemas/exercisesSchemas";
 // Onboarding
 // Removed PostOnboardingCompleteResponseSchema, OnboardingStep1BodySchema, OnboardingStep3BodySchema, OnboardingStep4BodySchema
-import { InitialRankBodySchema } from "./schemas/onboardSchemas";
+import { InitialRankBodySchema, OnboardingV2DataSchema } from "./schemas/onboardSchemas";
 // Profile
 import { ProfileSchema, UpdateProfileBodySchema, GetProfileResponseSchema } from "./schemas/profileSchemas";
 // User Goals
@@ -359,6 +359,7 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // Onboarding
   // Schemas like InitialRankBodySchema are registered within their respective route files if needed, or globally if shared.
   app.addSchema(InitialRankBodySchema);
+  app.addSchema(OnboardingV2DataSchema);
   // Removed app.addSchema for PostOnboardingCompleteResponseSchema, OnboardingStep1BodySchema, OnboardingStep3BodySchema, OnboardingStep4BodySchema
 
   // Profile

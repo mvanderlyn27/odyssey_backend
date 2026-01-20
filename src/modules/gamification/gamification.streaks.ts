@@ -69,7 +69,8 @@ export async function _updateWorkoutStreak(fastify: FastifyInstance, userId: str
       }
     }
 
-    const { error: upsertError } = await supabase.from("user_streaks").upsert({
+    // Prepare parallel operations
+    const streakUpsert = supabase.from("user_streaks").upsert({
       user_id: userId,
       current_streak: newStreak,
       highest_streak: highestStreak,
@@ -79,8 +80,22 @@ export async function _updateWorkoutStreak(fastify: FastifyInstance, userId: str
       updated_at: now.toISOString(),
     });
 
-    if (upsertError) {
-      throw new Error(`Error updating user_streaks: ${upsertError.message}`);
+    const isStreakBroken = v_streak_data && newStreak === 1 && previousStreak > 0 && streakLostAt;
+    const deleteRewards = isStreakBroken
+      ? supabase.from("user_streak_rewards").delete().eq("user_id", userId)
+      : Promise.resolve({ error: null });
+
+    const [upsertResult, deleteResult] = await Promise.all([streakUpsert, deleteRewards]);
+
+    if (upsertResult.error) {
+      throw new Error(`Error updating user_streaks: ${upsertResult.error.message}`);
+    }
+
+    if (deleteResult.error) {
+      fastify.log.error(
+        { userId, error: deleteResult.error.message },
+        "[GAMIFICATION_STREAKS] Failed to delete user_streak_rewards on streak break"
+      );
     }
 
     const streakExtended = newStreak > oldStreak;
