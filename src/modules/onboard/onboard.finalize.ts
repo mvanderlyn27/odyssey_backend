@@ -57,6 +57,7 @@ export async function _finalizeOnboarding(fastify: FastifyInstance, userId: stri
     userXpResult,
     userStreaksResult,
     userMilestoneProgressResult,
+    workoutPlanResult,
   ] = await Promise.all([
     supabase.from("active_workout_plans").upsert({ user_id: userId }),
     supabase.from("active_workout_sessions").upsert({ user_id: userId }),
@@ -135,6 +136,10 @@ export async function _finalizeOnboarding(fastify: FastifyInstance, userId: stri
         },
       });
     }
+  }
+
+  if (workoutPlanResult.error) {
+    fastify.log.error({ error: workoutPlanResult.error, userId }, "Error creating default workout plan entry");
   }
 
   const { data: finalProfileData, error: finalProfileError } = profileResult;

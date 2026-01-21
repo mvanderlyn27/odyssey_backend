@@ -30,16 +30,19 @@ export const handleOnboardingV2 = async (
     const newlyCreatedUser = await _createInitialProfileV2(fastify, userId, data, preparedData);
     preparedData.userData = newlyCreatedUser;
 
-    // 3. Equipment Initialization
-    if (data.selected_equipment_ids) {
-      await _initializeUserEquipment(fastify, userId, data.selected_equipment_ids);
-    }
-
-    // 4. Handle Ranking & PRs (V1 Logic)
     const { rankingExercise } = preparedData;
     const isCustom = rankingExercise.source === "custom";
     const exerciseId = rankingExercise.id;
 
+    // 3. Parallel Execution of Independent Tasks
+    const concurrentTasks: Promise<any>[] = [];
+
+    // Equipment Initialization
+    if (data.selected_equipment_ids) {
+      concurrentTasks.push(_initializeUserEquipment(fastify, userId, data.selected_equipment_ids));
+    }
+
+    // Handle Ranking & PRs (V1 Logic)
     if (data.rank_exercise_reps !== undefined && data.rank_exercise_weight_kg !== undefined) {
       const calculated_1rm = calculate_1RM(data.rank_exercise_weight_kg, data.rank_exercise_reps);
       const calculated_swr = calculate_SWR(calculated_1rm, data.rank_exercise_weight_kg);
@@ -70,38 +73,52 @@ export const handleOnboardingV2 = async (
         },
       ];
 
-      await Promise.all([
+      concurrentTasks.push(
         _handleOnboardingRanking(fastify, userId, data as any, preparedData, inMemorySets),
-        _handleOnboardingPRs(fastify, newlyCreatedUser, data as any, preparedData, inMemorySets),
-      ]);
-    }
-
-    // 5. Generate Smart Plan (Multi-day)
-    try {
-      fastify.log.info({ userId }, "Attempting to generate smart plan during onboarding");
-      const result = await createSmartPlan(fastify, {
-        userId,
-        targetMuscles: data.selected_muscles || [],
-        equipment: data.selected_equipment_ids || [],
-        duration: data.workout_frequency || 3, // Frequency used for number of days
-        intensity: "standard",
-        note: "Initial plan generated during onboarding",
-      });
-      fastify.log.info({ userId, planId: result.planId }, "Successfully generated smart plan during onboarding");
-    } catch (planError: any) {
-      fastify.log.error(
-        {
-          error: planError.message,
-          stack: planError.stack,
-          userId,
-        },
-        "Failed to generate initial smart plan during onboarding"
+        _handleOnboardingPRs(fastify, newlyCreatedUser, data as any, preparedData, inMemorySets)
       );
-      // Continue onboarding even if plan generation fails
     }
 
-    // 6. Finalize
-    return await _finalizeOnboarding(fastify, userId);
+    // Smart Plan Generation (Highest Latency - Trigger Early)
+    const smartPlanPromise = (async () => {
+      try {
+        fastify.log.info({ userId }, "Attempting to generate smart plan during onboarding");
+        const result = await createSmartPlan(fastify, {
+          userId,
+          targetMuscles: data.selected_muscles || [],
+          equipment: data.selected_equipment_ids || [],
+          duration: data.workout_frequency || 3,
+          intensity: "standard",
+          note: "Initial plan generated during onboarding",
+        });
+        fastify.log.info({ userId, planId: result.planId }, "Successfully generated smart plan during onboarding");
+        return result;
+      } catch (planError: any) {
+        fastify.log.error(
+          { error: planError.message, userId },
+          "Failed to generate initial smart plan during onboarding"
+        );
+        return null;
+      }
+    })();
+    concurrentTasks.push(smartPlanPromise);
+
+    // Finalization (XP, Streaks, etc.)
+    const finalizationPromise = _finalizeOnboarding(fastify, userId);
+    concurrentTasks.push(finalizationPromise);
+
+    // Wait for all non-blocking tasks to complete
+    const results = await Promise.all(concurrentTasks);
+
+    // Return the final profile from the _finalizeOnboarding task
+    // We can identify it because it's the only one that returns a Profile object
+    const finalProfile = results.find((r) => r && r.id === userId && r.username);
+    if (!finalProfile) {
+      // Fallback if something went wrong with the identification logic
+      return await finalizationPromise;
+    }
+
+    return finalProfile;
   } catch (error: any) {
     fastify.log.error({ module: "onboard", error, userId }, "Critical error during V2 onboarding");
     throw error;
