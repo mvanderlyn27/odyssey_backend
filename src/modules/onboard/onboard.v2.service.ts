@@ -91,12 +91,15 @@ export const handleOnboardingV2 = async (
           intensity: "standard",
           note: "Initial plan generated during onboarding",
         });
-        fastify.log.info({ userId, planId: result.planId }, "Successfully generated smart plan during onboarding");
+        fastify.log.info(
+          { userId, planId: result.planId, isFallback: result.plan?.name === "Starter Strength Plan" },
+          "Smart plan generation completed during onboarding"
+        );
         return result;
       } catch (planError: any) {
         fastify.log.error(
           { error: planError.message, userId },
-          "Failed to generate initial smart plan during onboarding"
+          "Failed to generate initial smart plan during onboarding even with fallback"
         );
         return null;
       }

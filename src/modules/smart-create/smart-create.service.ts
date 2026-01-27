@@ -4,7 +4,79 @@ import { getUserPremiumStatus, getWorkoutGenerationData } from "./smart-create.d
 import { GeminiService } from "../../services/geminiService";
 import { exercisePlanSchema } from "../../types/geminiSchemas/exercisePlanSchema";
 import { SupabaseClient } from "@supabase/supabase-js";
-import { Database } from "../../types/database";
+import { Database, Tables } from "../../types/database";
+
+/**
+ * Fallback plan generator when AI is unavailable.
+ * Creates a basic split based on target muscles and available equipment.
+ */
+async function generateFallbackPlan(
+  fastify: FastifyInstance,
+  payload: SmartCreatePayload,
+  data: any
+): Promise<any> {
+  const { userId, targetMuscles, equipment, duration } = payload;
+  const { exercises } = data;
+
+  fastify.log.info({ userId }, "Generating fallback workout plan (non-AI)");
+
+  const availableEquipmentIds = new Set(equipment);
+  const targetMuscleIds = new Set(targetMuscles);
+
+  // Filter exercises
+  const filteredExercises = exercises.filter((ex: any) => {
+    const requiredEquipment = (ex.equipment_required || []).filter((id: any) => id !== null);
+    const hasEquipment =
+      requiredEquipment.length === 0 || requiredEquipment.every((eqId: string) => availableEquipmentIds.has(eqId));
+
+    // Check if it targets at least one of our target muscles
+    const targetsMuscle = ex.muscle_ids?.some((mId: string) => targetMuscleIds.has(mId));
+
+    return hasEquipment && targetsMuscle;
+  });
+
+  // Sort by popularity or just take top ones
+  const sortedExercises = [...filteredExercises].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
+
+  // Build a simple plan for the requested duration (days per week)
+  const workouts = [];
+  for (let d = 1; d <= duration; d++) {
+    // Pick 5-6 exercises for this day
+    const dayExercises = sortedExercises
+      .slice((d - 1) * 6, d * 6)
+      .map((ex, index) => ({
+        exercise_id: ex.id,
+        order_in_workout: index + 1,
+        target_sets: 3,
+        target_reps_min: 8,
+        target_reps_max: 12,
+        current_suggested_weight_kg: null,
+        on_success_weight_increase_kg: 2.5,
+        target_rep_increase: 0,
+        target_rest_seconds: 60,
+      }));
+
+    if (dayExercises.length > 0) {
+      workouts.push({
+        name: `Workout Day ${d}`,
+        day: d,
+        focus: "General Strength",
+        exercises: dayExercises,
+      });
+    }
+  }
+
+  return {
+    name: "Starter Strength Plan",
+    description: "A standard strength training plan tailored to your equipment and target muscles (Fallback).",
+    goal_type: "improve_strength",
+    plan_type: "system",
+    start_date: new Date().toISOString(),
+    recommended_week_duration: 4,
+    days_per_week: duration,
+    workouts,
+  };
+}
 
 export async function createSmartPlan(fastify: FastifyInstance, payload: SmartCreatePayload) {
   const { userId, targetMuscles, equipment, duration, intensity, note } = payload;
@@ -143,13 +215,13 @@ Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include ma
 
   // 6. Call Gemini
   const geminiService = new GeminiService(fastify);
-  const responseText = await geminiService.generateText({
-    prompt: prompt + "\nRespond ONLY with valid JSON matching the schema.",
-    modelName: "gemini-2.5-flash-lite", // Using a reliable model
-  });
-
   let plan;
   try {
+    const responseText = await geminiService.generateText({
+      prompt: prompt + "\nRespond ONLY with valid JSON matching the schema.",
+      modelName: "gemini-2.5-flash-lite", // Using a reliable model
+    });
+
     const jsonStr = responseText
       .replace(/```json/g, "")
       .replace(/```/g, "")
@@ -160,9 +232,18 @@ Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include ma
     if (plan.dailyWorkouts && !plan.workouts) {
       plan.workouts = plan.dailyWorkouts;
     }
-  } catch (e) {
-    fastify.log.error({ e, responseText }, "Failed to parse Gemini plan response");
-    throw new Error("Failed to generate a valid workout plan structure.");
+  } catch (error: any) {
+    fastify.log.error(
+      { error: error.message, userId },
+      "Gemini smart plan generation failed. Using fallback plan generator."
+    );
+    plan = await generateFallbackPlan(fastify, payload, {
+      user,
+      exercises,
+      equipment: allEquipment,
+      muscleGroups,
+      userExercisePrs,
+    });
   }
 
   // 7. Save to DB (RPC)
@@ -180,7 +261,7 @@ Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include ma
   });
 
   if (rpcError) {
-    fastify.log.error({ rpcError }, "Error saving smart workout plan via RPC");
+    fastify.log.error({ rpcError, userId }, "Error saving smart workout plan via RPC");
     throw new Error(`Failed to save workout plan: ${rpcError.message}`);
   }
 
