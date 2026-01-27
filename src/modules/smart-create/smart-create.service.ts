@@ -58,11 +58,13 @@ export async function createSmartPlan(fastify: FastifyInstance, payload: SmartCr
   });
 
   // 5. Construct Prompt
+  const weightPreference = user.weight_preference || "metric";
   const userProfile = {
     age: user.age,
     sex: user.gender,
     fitness_level: (user.onboarding_metadata as any)?.fitness_level || "intermediate",
     goals: (user.onboarding_metadata as any)?.goals || [],
+    weight_preference: weightPreference,
   };
 
   const availableEquipmentNames = allEquipment
@@ -94,6 +96,13 @@ ${JSON.stringify(simplifiedExercises)}
 3. Balance the workouts across the days.
 4. Ensure each workout fits roughly 45-60 minutes.
 5. Provide realistic weight suggestions based on user profile.
+6. **WEIGHT UNITS & INCREMENTS:** 
+   - The user's preference is **${weightPreference}**.
+   - If **imperial**, suggested weights MUST be in **lbs** and use standard increments (e.g., 2.5, 5, 10 lbs).
+   - If **metric**, suggested weights MUST be in **kg** and use standard increments (e.g., 1.25, 2.5, 5 kg).
+   - EVEN IF YOU GENERATE IN LBS, the final JSON field current_suggested_weight_kg and on_success_weight_increase_kg MUST BE THE KG EQUIVALENT. 
+   - Calculation: 1 lb ≈ 0.453592 kg. 
+   - Example (Imperial): If you want to suggest 100 lbs, set the value to 45.36 (100 * 0.4536).
 
 ---
 
@@ -241,6 +250,7 @@ export async function createSmartWorkout(fastify: FastifyInstance, payload: Smar
   });
 
   // 5. Construct Prompt
+  const weightPreference = user.weight_preference || "metric";
   const userProfile = {
     age: user.age,
     weight: "N/A", // user.weight is missing from type, need to fetch from body_measurements if needed
@@ -249,6 +259,7 @@ export async function createSmartWorkout(fastify: FastifyInstance, payload: Smar
     fitness_level: (user.onboarding_metadata as any)?.fitness_level || "intermediate",
     goals: (user.onboarding_metadata as any)?.goals || [],
     experience: (user.onboarding_metadata as any)?.experience || "intermediate",
+    weight_preference: weightPreference,
   };
 
   const availableEquipmentNames = allEquipment
@@ -292,8 +303,14 @@ ${JSON.stringify(simplifiedExercises)}
     *   *High Intensity/Strength:* Lower reps (3-6), Higher rest (90s-180s), Heavy weight.
     *   *Moderate/Hypertrophy:* Moderate reps (8-12), Moderate rest (60s-90s).
     *   *Low Intensity/Endurance:* High reps (12-20+), Low rest (30s-45s).
-6.  **Weight Estimation:**
-    *   Use the User Profile (Gender, Weight, Experience) AND the user's personal records (if available in the exercise object) to estimate a *safe* and appropriate starting weight (\`current_suggested_weight_kg\`).
+6.  **Weight Estimation & Units:**
+    *   Use the User Profile (Gender, Weight, Experience) AND the user's personal records (if available in the exercise object) to estimate a *safe* and appropriate starting weight.
+    *   The user's preference is **${weightPreference}**.
+    *   If **imperial**, suggested weights MUST be based on **lbs** increments (e.g., 5 lbs, 10 lbs, 2.5 lb plates).
+    *   If **metric**, suggested weights MUST be based on **kg** increments (e.g., 2.5 kg, 5 kg).
+    *   **CRITICAL:** Even if calculating in lbs, you MUST provide the final value in the JSON field current_suggested_weight_kg and on_weight_increase_kg as the KG equivalent (1 lb = 0.453592 kg).
+    * 
+    *   Example (Imperial): A 45 lb bar = 20.41 kg. A 100 lb lift = 45.36 kg.
     *   If experience is "Beginner", be conservative.
     *   If bodyweight exercise, set weight to 0 or null.
 
