@@ -24,7 +24,7 @@ async function generateFallbackPlan(
   const targetMuscleIds = new Set(targetMuscles);
 
   // Filter exercises
-  const filteredExercises = exercises.filter((ex: any) => {
+  let filteredExercises = exercises.filter((ex: any) => {
     const requiredEquipment = (ex.equipment_required || []).filter((id: any) => id !== null);
     const hasEquipment =
       requiredEquipment.length === 0 || requiredEquipment.every((eqId: string) => availableEquipmentIds.has(eqId));
@@ -34,6 +34,19 @@ async function generateFallbackPlan(
 
     return hasEquipment && targetsMuscle;
   });
+
+  // If no match with muscles, fallback to equipment only
+  if (filteredExercises.length === 0) {
+    filteredExercises = exercises.filter((ex: any) => {
+      const requiredEquipment = (ex.equipment_required || []).filter((id: any) => id !== null);
+      return requiredEquipment.length === 0 || requiredEquipment.every((eqId: string) => availableEquipmentIds.has(eqId));
+    });
+  }
+
+  // If still no match, just take any exercises
+  if (filteredExercises.length === 0) {
+    filteredExercises = exercises;
+  }
 
   // Sort by popularity or just take top ones
   const sortedExercises = [...filteredExercises].sort((a, b) => (b.popularity || 0) - (a.popularity || 0));
@@ -231,6 +244,29 @@ Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include ma
     // Minimal structural fix if needed (mapping workouts)
     if (plan.dailyWorkouts && !plan.workouts) {
       plan.workouts = plan.dailyWorkouts;
+    }
+
+    // Validate exercise IDs in Gemini response and ensure plan isn't empty
+    if (plan.workouts && Array.isArray(plan.workouts)) {
+      const validExerciseIds = new Set(exercises.map((e: any) => e.id));
+      let totalValidExercises = 0;
+
+      for (const workout of plan.workouts) {
+        if (workout.exercises && Array.isArray(workout.exercises)) {
+          workout.exercises = workout.exercises.filter((ex: any) => {
+            const isValid = validExerciseIds.has(ex.exercise_id);
+            if (!isValid) {
+              fastify.log.warn({ invalidId: ex.exercise_id, userId }, "Gemini returned invalid exercise_id. Filtering it out.");
+            }
+            return isValid;
+          });
+          totalValidExercises += workout.exercises.length;
+        }
+      }
+
+      if (totalValidExercises === 0) {
+        throw new Error("Gemini returned a plan with no valid exercises.");
+      }
     }
   } catch (error: any) {
     fastify.log.error(
