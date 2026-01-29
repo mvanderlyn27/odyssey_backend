@@ -68,6 +68,10 @@ export async function _createInitialProfileV2(
     },
     profile_privacy: "public",
     notification_reminder_days: data.notification_reminder_days,
+    notification_enabled:
+      data.notifications_enabled ??
+      (data.notification_reminder_days !== null && data.notification_reminder_days !== undefined),
+    push_notification_token: data.expo_push_token,
   };
 
   const { error: profileError } = await fastify.supabase.from("profiles").upsert(profilePayload);

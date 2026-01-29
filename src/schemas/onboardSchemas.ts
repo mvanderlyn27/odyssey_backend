@@ -53,6 +53,9 @@ export const InitialRankBodySchema = Type.Object(
   }
 );
 
+export type OnboardingData = Static<typeof InitialRankBodySchema>;
+
+// Schema for the V2 onboarding flow (supports purchase-before-signup)
 export const OnboardingV2DataSchema = Type.Object(
   {
     // Existing V1 Fields
@@ -104,6 +107,8 @@ export const OnboardingV2DataSchema = Type.Object(
     workout_frequency: Type.Optional(
       Type.Integer({ description: "Number of workout days per week", minimum: 1, maximum: 7 })
     ),
+    expo_push_token: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    notifications_enabled: Type.Optional(Type.Boolean()),
   },
   {
     $id: "OnboardingV2DataSchema",
@@ -111,5 +116,4 @@ export const OnboardingV2DataSchema = Type.Object(
   }
 );
 
-export type OnboardingData = Static<typeof InitialRankBodySchema>;
 export type OnboardingV2Data = Static<typeof OnboardingV2DataSchema>;
