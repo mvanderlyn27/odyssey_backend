@@ -22,12 +22,12 @@ export async function updateUserMilestones(
     // Assuming the startedAtDate reflects the client's local time or we have a timezone offset.
     const hour = startedAtDate.getHours();
 
-    // Morning: 5 AM - 9 AM (inclusive)
+    // Morning: 6 AM - 10 AM (inclusive)
     if (hour >= 6 && hour <= 10) {
       isMorning = true;
     }
-    // Late Night: 10 PM - 12 AM (22-0) or 12 AM - 2 AM (0-2)
-    else if (hour >= 24 || hour <= 6) {
+    // Late Night: 12 AM - 6 AM (inclusive)
+    else if (hour >= 0 && hour <= 6) {
       isLateNight = true;
     }
   }
@@ -80,7 +80,9 @@ export async function updateUserMilestones(
     workouts_completed: (existingMilestones?.workouts_completed || 0) + 1,
     morning_workouts_completed: (existingMilestones?.morning_workouts_completed || 0) + (isMorning ? 1 : 0),
     late_night_workouts_completed: (existingMilestones?.late_night_workouts_completed || 0) + (isLateNight ? 1 : 0),
-    total_volume_achieved: (existingMilestones?.total_volume_achieved || 0) + (session.total_volume_kg || 0),
+    total_volume_achieved: Math.round(
+      (existingMilestones?.total_volume_achieved || 0) + (session.total_volume_kg || 0),
+    ),
     total_reps_achieved: (existingMilestones?.total_reps_achieved || 0) + (session.total_reps || 0),
     total_sets_achieved: (existingMilestones?.total_sets_achieved || 0) + (session.total_sets || 0),
     max_workout_duration_seconds: Math.max(
@@ -118,17 +120,31 @@ export async function updateUserMilestones(
     .single();
 
   if (updateError || !updatedMilestones) {
-    const error = new Error(`Failed to update user milestones: ${updateError?.message}`);
-    fastify.log.error({ error, userId }, "[GAMIFICATION_MILESTONES] Milestone update failed");
+    const errorMessage = updateError
+      ? `Supabase Error: ${updateError.message} (${updateError.code}) - Details: ${updateError.details} - Hint: ${updateError.hint}`
+      : "No data returned from upsert";
+
+    fastify.log.error(
+      {
+        userId,
+        error: updateError,
+        milestoneUpdate,
+        message: errorMessage,
+      },
+      "[GAMIFICATION_MILESTONES] Milestone update failed",
+    );
+
     fastify.posthog?.capture({
       distinctId: userId,
       event: "gamification_milestone_update_error",
       properties: {
-        error: error.message,
-        stack: error.stack,
+        error_message: errorMessage,
+        supabase_error: updateError,
+        milestone_data: milestoneUpdate,
       },
     });
-    throw error;
+
+    throw new Error(`[GAMIFICATION_MILESTONES] ${errorMessage}`);
   }
 
   return updatedMilestones;
