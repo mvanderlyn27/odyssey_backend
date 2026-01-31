@@ -82,7 +82,7 @@ export type Database = {
             isOneToOne: true;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       active_workout_sessions: {
@@ -121,13 +121,13 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workout_sessions";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       badges: {
         Row: {
           created_at: string;
-          icon_url: string | null;
+          icon_path: string | null;
           id: string;
           locked_description: string | null;
           name: string;
@@ -138,7 +138,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
-          icon_url?: string | null;
+          icon_path?: string | null;
           id?: string;
           locked_description?: string | null;
           name: string;
@@ -149,7 +149,7 @@ export type Database = {
         };
         Update: {
           created_at?: string;
-          icon_url?: string | null;
+          icon_path?: string | null;
           id?: string;
           locked_description?: string | null;
           name?: string;
@@ -192,7 +192,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       custom_exercise_equipment_requirements: {
@@ -234,7 +234,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "equipment";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       custom_exercise_muscles: {
@@ -279,7 +279,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "muscles";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       custom_exercises: {
@@ -366,7 +366,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "v_user_profile_full";
             referencedColumns: ["user_id"];
-          }
+          },
         ];
       };
       equipment: {
@@ -425,7 +425,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "exercises";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       exercise_equipment_requirements: {
@@ -470,7 +470,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "exercises";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       exercise_muscles: {
@@ -512,7 +512,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "muscles";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       exercises: {
@@ -628,7 +628,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workout_sessions";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       friendships: {
@@ -712,7 +712,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "v_user_profile_full";
             referencedColumns: ["user_id"];
-          }
+          },
         ];
       };
       inspirational_quotes: {
@@ -771,7 +771,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "ranks";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       level_definitions: {
@@ -865,7 +865,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       muscle_group_ranks: {
@@ -990,7 +990,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "v_user_profile_full";
             referencedColumns: ["user_id"];
-          }
+          },
         ];
       };
       muscle_groups: {
@@ -1084,7 +1084,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       muscle_ranks: {
@@ -1209,7 +1209,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "v_user_profile_full";
             referencedColumns: ["user_id"];
-          }
+          },
         ];
       };
       muscles: {
@@ -1244,7 +1244,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "muscle_groups";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       notifications: {
@@ -1303,7 +1303,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       profiles: {
@@ -1353,7 +1353,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "level_definitions";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       quest_tasks: {
@@ -1391,7 +1391,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "quests";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       quests: {
@@ -1484,7 +1484,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       ranks: {
@@ -1517,24 +1517,24 @@ export type Database = {
           description: string | null;
           id: string;
           name: string;
+          rewards: Json;
           streak_length: number;
-          xp_reward: number;
         };
         Insert: {
           created_at?: string;
           description?: string | null;
           id?: string;
           name: string;
+          rewards: Json;
           streak_length: number;
-          xp_reward: number;
         };
         Update: {
           created_at?: string;
           description?: string | null;
           id?: string;
           name?: string;
+          rewards?: Json;
           streak_length?: number;
-          xp_reward?: number;
         };
         Relationships: [];
       };
@@ -1610,7 +1610,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_dismissed_banners: {
@@ -1646,7 +1646,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_equipment: {
@@ -1675,7 +1675,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "equipment";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_exercise_pr_history: {
@@ -1738,7 +1738,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_exercise_prs: {
@@ -1821,7 +1821,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_exercise_rank_history: {
@@ -1927,7 +1927,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_exercise_ranks: {
@@ -2046,7 +2046,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_favorite_exercises: {
@@ -2085,7 +2085,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "exercises";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_feedback: {
@@ -2132,7 +2132,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_feeds: {
@@ -2161,7 +2161,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "feed_items";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_interactions: {
@@ -2202,7 +2202,7 @@ export type Database = {
             isOneToOne: true;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_milestone_progress: {
@@ -2211,10 +2211,12 @@ export type Database = {
           body_rank_ups_achieved: number | null;
           exercise_rank_ups_achieved: number | null;
           friends_added: number | null;
+          late_night_workouts_completed: number | null;
           max_muscles_logged_in_one_workout: number | null;
           max_prs_achieved_in_one_workout: number | null;
           max_rank_ups_in_one_workout: number | null;
           max_workout_duration_seconds: number | null;
+          morning_workouts_completed: number | null;
           muscle_group_rank_ups_achieved: number | null;
           muscle_rank_ups_achieved: number | null;
           prs_achieved: number | null;
@@ -2238,10 +2240,12 @@ export type Database = {
           body_rank_ups_achieved?: number | null;
           exercise_rank_ups_achieved?: number | null;
           friends_added?: number | null;
+          late_night_workouts_completed?: number | null;
           max_muscles_logged_in_one_workout?: number | null;
           max_prs_achieved_in_one_workout?: number | null;
           max_rank_ups_in_one_workout?: number | null;
           max_workout_duration_seconds?: number | null;
+          morning_workouts_completed?: number | null;
           muscle_group_rank_ups_achieved?: number | null;
           muscle_rank_ups_achieved?: number | null;
           prs_achieved?: number | null;
@@ -2265,10 +2269,12 @@ export type Database = {
           body_rank_ups_achieved?: number | null;
           exercise_rank_ups_achieved?: number | null;
           friends_added?: number | null;
+          late_night_workouts_completed?: number | null;
           max_muscles_logged_in_one_workout?: number | null;
           max_prs_achieved_in_one_workout?: number | null;
           max_rank_ups_in_one_workout?: number | null;
           max_workout_duration_seconds?: number | null;
+          morning_workouts_completed?: number | null;
           muscle_group_rank_ups_achieved?: number | null;
           muscle_rank_ups_achieved?: number | null;
           prs_achieved?: number | null;
@@ -2294,7 +2300,7 @@ export type Database = {
             isOneToOne: true;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_muscle_last_worked: {
@@ -2339,7 +2345,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workout_sessions";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_quest_task_progress: {
@@ -2384,7 +2390,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "user_quests";
             referencedColumns: ["user_id", "quest_id"];
-          }
+          },
         ];
       };
       user_quests: {
@@ -2429,7 +2435,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_rank_history: {
@@ -2493,7 +2499,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_ranks: {
@@ -2598,7 +2604,7 @@ export type Database = {
             isOneToOne: true;
             referencedRelation: "v_user_profile_full";
             referencedColumns: ["user_id"];
-          }
+          },
         ];
       };
       user_streak_rewards: {
@@ -2640,7 +2646,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_streaks: {
@@ -2681,7 +2687,7 @@ export type Database = {
             isOneToOne: true;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_xp: {
@@ -2713,7 +2719,7 @@ export type Database = {
             isOneToOne: true;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       user_xp_log: {
@@ -2754,7 +2760,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       users: {
@@ -2926,7 +2932,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workout_sessions";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       workout_plan_changes_staging: {
@@ -3006,7 +3012,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workout_plan_day_exercises";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       workout_plan_day_exercises: {
@@ -3079,7 +3085,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workout_plan_days";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       workout_plan_days: {
@@ -3120,7 +3126,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workout_plans";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       workout_plan_interactions: {
@@ -3155,7 +3161,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workout_plans";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       workout_plans: {
@@ -3239,7 +3245,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       workout_session_sets: {
@@ -3340,7 +3346,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workout_sessions";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       workout_sessions: {
@@ -3425,7 +3431,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "workout_plans";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
     };
@@ -3459,7 +3465,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       global_leaderboard: {
@@ -3487,7 +3493,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "ranks";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       global_muscle_group_leaderboard: {
@@ -3542,7 +3548,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "v_user_profile_full";
             referencedColumns: ["user_id"];
-          }
+          },
         ];
       };
       global_muscle_leaderboard: {
@@ -3597,7 +3603,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "v_user_profile_full";
             referencedColumns: ["user_id"];
-          }
+          },
         ];
       };
       v_global_exercise_leaderboard_with_change: {
@@ -3632,7 +3638,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       v_global_leaderboard_with_change: {
@@ -3663,7 +3669,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "ranks";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       v_global_muscle_group_leaderboard_with_change: {
@@ -3722,7 +3728,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "v_user_profile_full";
             referencedColumns: ["user_id"];
-          }
+          },
         ];
       };
       v_global_muscle_leaderboard_with_change: {
@@ -3781,7 +3787,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "v_user_profile_full";
             referencedColumns: ["user_id"];
-          }
+          },
         ];
       };
       v_user_profile_full: {
@@ -3840,7 +3846,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "ranks";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
     };
@@ -4604,7 +4610,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "buckets_analytics";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       iceberg_tables: {
@@ -4649,7 +4655,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "iceberg_namespaces";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       migrations: {
@@ -4726,7 +4732,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "buckets";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       prefixes: {
@@ -4758,7 +4764,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "buckets";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       s3_multipart_uploads: {
@@ -4802,7 +4808,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "buckets";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
       s3_multipart_uploads_parts: {
@@ -4856,7 +4862,7 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "s3_multipart_uploads";
             referencedColumns: ["id"];
-          }
+          },
         ];
       };
     };
@@ -5033,7 +5039,7 @@ export type Tables<
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -5044,12 +5050,12 @@ export type Tables<
     ? R
     : never
   : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-  ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-      Row: infer R;
-    }
-    ? R
-    : never
-  : never;
+    ? (DefaultSchema["Tables"] & DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
+        Row: infer R;
+      }
+      ? R
+      : never
+    : never;
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
@@ -5057,7 +5063,7 @@ export type TablesInsert<
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -5067,12 +5073,12 @@ export type TablesInsert<
     ? I
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-      Insert: infer I;
-    }
-    ? I
-    : never
-  : never;
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Insert: infer I;
+      }
+      ? I
+      : never
+    : never;
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"] | { schema: keyof DatabaseWithoutInternals },
@@ -5080,7 +5086,7 @@ export type TablesUpdate<
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
@@ -5090,12 +5096,12 @@ export type TablesUpdate<
     ? U
     : never
   : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-  ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-      Update: infer U;
-    }
-    ? U
-    : never
-  : never;
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
+        Update: infer U;
+      }
+      ? U
+      : never
+    : never;
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"] | { schema: keyof DatabaseWithoutInternals },
@@ -5103,14 +5109,14 @@ export type Enums<
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never
+    : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
   : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-  ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-  : never;
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
+    : never;
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
@@ -5120,14 +5126,14 @@ export type CompositeTypes<
     schema: keyof DatabaseWithoutInternals;
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never
+    : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals;
 }
   ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
   : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-  ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-  : never;
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
+    : never;
 
 export const Constants = {
   graphql: {
