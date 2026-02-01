@@ -9,7 +9,32 @@ function checkRequirementsMet(requirements: any, progress: any): boolean {
     if (key === "action") {
       continue;
     }
-    if (progress[key] === undefined || progress[key] < requirements[key]) {
+
+    const requirementValue = requirements[key];
+    const progressValue = progress[key];
+
+    if (progressValue === undefined) {
+      return false;
+    }
+
+    // Special handling for unique logged items which are stored as objects/arrays
+    if (key === "unique_exercises_logged") {
+      const count = typeof progressValue === "object" && progressValue !== null ? Object.keys(progressValue).length : 0;
+      if (count < requirementValue) return false;
+      continue;
+    }
+
+    if (key === "unique_muscles_logged") {
+      const count = Array.isArray(progressValue)
+        ? progressValue.length
+        : typeof progressValue === "object" && progressValue !== null
+          ? Object.keys(progressValue).length
+          : 0;
+      if (count < requirementValue) return false;
+      continue;
+    }
+
+    if (progressValue < requirementValue) {
       return false;
     }
   }
@@ -20,7 +45,7 @@ export async function processQuests(
   fastify: FastifyInstance,
   userId: string,
   workoutData: WorkoutCompletionData,
-  updatedMilestones: Tables<"user_milestone_progress">
+  updatedMilestones: Tables<"user_milestone_progress">,
 ): Promise<{ id: string; name: string }[]> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
   const now = new Date();
@@ -30,7 +55,7 @@ export async function processQuests(
     .from("quests")
     .select("*, quest_tasks(*)")
     .or(
-      `and(start_date.lte.${now.toISOString()},end_date.gte.${now.toISOString()}),and(start_date.is.null,end_date.is.null)`
+      `and(start_date.lte.${now.toISOString()},end_date.gte.${now.toISOString()}),and(start_date.is.null,end_date.is.null)`,
     );
 
   if (activeQuestsError) {
@@ -77,7 +102,7 @@ export async function processQuests(
   }
   fastify.log.info(
     { userId, count: allTaskProgress?.length || 0 },
-    "[GAMIFICATION_QUESTS] Fetched user task progress."
+    "[GAMIFICATION_QUESTS] Fetched user task progress.",
   );
 
   const taskProgressMap = new Map((allTaskProgress || []).map((p) => [p.task_id, p]));
@@ -146,11 +171,16 @@ export async function processQuests(
           progressMade = true;
         }
         if (requirements.unique_exercises_logged) {
-          const loggedExercises = new Set(Object.keys(progressData.unique_exercises_logged || {}));
+          if (!progressData.unique_exercises_logged || typeof progressData.unique_exercises_logged !== "object") {
+            progressData.unique_exercises_logged = {};
+          }
+          const loggedExercises = new Set(Object.keys(progressData.unique_exercises_logged));
           const sessionExerciseIds = new Set(
-            workoutData.sets.map((s) => s.exercise_id || s.custom_exercise_id).filter(Boolean)
+            workoutData.sets
+              .map((s) => s.exercise_id || s.custom_exercise_id)
+              .filter((id): id is string => typeof id === "string" && id.length > 0),
           );
-          sessionExerciseIds.forEach((id) => loggedExercises.add(id as string));
+          sessionExerciseIds.forEach((id) => loggedExercises.add(id));
           progressData.unique_exercises_logged = {};
           loggedExercises.forEach((id) => (progressData.unique_exercises_logged[id] = 1));
           progressMade = true;
@@ -165,14 +195,14 @@ export async function processQuests(
         if (requirements.max_workout_duration_seconds) {
           progressData.max_workout_duration_seconds = Math.max(
             progressData.max_workout_duration_seconds || 0,
-            workoutData.session.duration_seconds || 0
+            workoutData.session.duration_seconds || 0,
           );
           progressMade = true;
         }
         if (requirements.max_prs_achieved_in_one_workout) {
           progressData.max_prs_achieved_in_one_workout = Math.max(
             progressData.max_prs_achieved_in_one_workout || 0,
-            workoutData.prs.length
+            workoutData.prs.length,
           );
           progressMade = true;
         }
@@ -208,14 +238,14 @@ export async function processQuests(
             (rankUps.userRankChange ? 1 : 0);
           progressData.max_rank_ups_in_one_workout = Math.max(
             progressData.max_rank_ups_in_one_workout || 0,
-            totalRankUps
+            totalRankUps,
           );
           progressMade = true;
         }
         if (requirements.max_muscles_logged_in_one_workout) {
           progressData.max_muscles_logged_in_one_workout = Math.max(
             progressData.max_muscles_logged_in_one_workout || 0,
-            workoutData.musclesWorked.length
+            workoutData.musclesWorked.length,
           );
           progressMade = true;
         }
@@ -223,13 +253,13 @@ export async function processQuests(
         if (progressMade) {
           fastify.log.info(
             { userId, questId: quest.id, taskId: task.id },
-            "[GAMIFICATION_QUESTS] Progress made for task."
+            "[GAMIFICATION_QUESTS] Progress made for task.",
           );
           if (!userQuestMap.has(quest.id)) {
             if (!userQuestsToInsert.some((q) => q.quest_id === quest.id)) {
               fastify.log.info(
                 { userId, questId: quest.id },
-                "[GAMIFICATION_QUESTS] Queueing new user quest to insert."
+                "[GAMIFICATION_QUESTS] Queueing new user quest to insert.",
               );
               userQuestsToInsert.push({
                 user_id: userId,

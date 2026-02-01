@@ -6,7 +6,31 @@ import { CACHE_KEYS } from "../../services/cache.service";
 // Helper function to check if requirements are met
 function checkRequirementsMet(requirements: any, progress: any): boolean {
   for (const key in requirements) {
-    if (progress[key] === undefined || progress[key] < requirements[key]) {
+    const requirementValue = requirements[key];
+    const progressValue = progress[key];
+
+    if (progressValue === undefined) {
+      return false;
+    }
+
+    // Special handling for unique logged items which are stored as objects/arrays
+    if (key === "unique_exercises_logged") {
+      const count = typeof progressValue === "object" && progressValue !== null ? Object.keys(progressValue).length : 0;
+      if (count < requirementValue) return false;
+      continue;
+    }
+
+    if (key === "unique_muscles_logged") {
+      const count = Array.isArray(progressValue)
+        ? progressValue.length
+        : typeof progressValue === "object" && progressValue !== null
+          ? Object.keys(progressValue).length
+          : 0;
+      if (count < requirementValue) return false;
+      continue;
+    }
+
+    if (progressValue < requirementValue) {
       return false;
     }
   }
@@ -16,7 +40,7 @@ function checkRequirementsMet(requirements: any, progress: any): boolean {
 export async function processBadges(
   fastify: FastifyInstance,
   userId: string,
-  updatedMilestones: Tables<"user_milestone_progress">
+  updatedMilestones: Tables<"user_milestone_progress">,
 ): Promise<{ id: string; name: string }[]> {
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
