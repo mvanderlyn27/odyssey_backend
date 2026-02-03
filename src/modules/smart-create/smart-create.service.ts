@@ -10,11 +10,7 @@ import { Database, Tables } from "../../types/database";
  * Fallback plan generator when AI is unavailable.
  * Creates a basic split based on target muscles and available equipment.
  */
-async function generateFallbackPlan(
-  fastify: FastifyInstance,
-  payload: SmartCreatePayload,
-  data: any
-): Promise<any> {
+async function generateFallbackPlan(fastify: FastifyInstance, payload: SmartCreatePayload, data: any): Promise<any> {
   const { userId, targetMuscles, equipment, duration } = payload;
   const { exercises } = data;
 
@@ -39,7 +35,9 @@ async function generateFallbackPlan(
   if (filteredExercises.length === 0) {
     filteredExercises = exercises.filter((ex: any) => {
       const requiredEquipment = (ex.equipment_required || []).filter((id: any) => id !== null);
-      return requiredEquipment.length === 0 || requiredEquipment.every((eqId: string) => availableEquipmentIds.has(eqId));
+      return (
+        requiredEquipment.length === 0 || requiredEquipment.every((eqId: string) => availableEquipmentIds.has(eqId))
+      );
     });
   }
 
@@ -55,19 +53,17 @@ async function generateFallbackPlan(
   const workouts = [];
   for (let d = 1; d <= duration; d++) {
     // Pick 5-6 exercises for this day
-    const dayExercises = sortedExercises
-      .slice((d - 1) * 6, d * 6)
-      .map((ex, index) => ({
-        exercise_id: ex.id,
-        order_in_workout: index + 1,
-        target_sets: 3,
-        target_reps_min: 8,
-        target_reps_max: 12,
-        current_suggested_weight_kg: null,
-        on_success_weight_increase_kg: 2.5,
-        target_rep_increase: 0,
-        target_rest_seconds: 60,
-      }));
+    const dayExercises = sortedExercises.slice((d - 1) * 6, d * 6).map((ex, index) => ({
+      exercise_id: ex.id,
+      order_in_workout: index + 1,
+      target_sets: 3,
+      target_reps_min: 8,
+      target_reps_max: 12,
+      current_suggested_weight_kg: null,
+      on_success_weight_increase_kg: 2.5,
+      target_rep_increase: 0,
+      target_rest_seconds: 60,
+    }));
 
     if (dayExercises.length > 0) {
       workouts.push({
@@ -83,7 +79,7 @@ async function generateFallbackPlan(
     name: "Starter Strength Plan",
     description: "A standard strength training plan tailored to your equipment and target muscles (Fallback).",
     goal_type: "improve_strength",
-    plan_type: "system",
+    plan_type: "user",
     start_date: new Date().toISOString(),
     recommended_week_duration: 4,
     days_per_week: duration,
@@ -199,7 +195,7 @@ Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include ma
   "name": "string",
   "description": "string",
   "goal_type": "lose_weight | gain_muscle | maintain | improve_strength",
-  "plan_type": "system",
+  "plan_type": "user",
   "start_date": "${new Date().toISOString()}",
   "recommended_week_duration": 4,
   "days_per_week": ${duration},
@@ -256,7 +252,10 @@ Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include ma
           workout.exercises = workout.exercises.filter((ex: any) => {
             const isValid = validExerciseIds.has(ex.exercise_id);
             if (!isValid) {
-              fastify.log.warn({ invalidId: ex.exercise_id, userId }, "Gemini returned invalid exercise_id. Filtering it out.");
+              fastify.log.warn(
+                { invalidId: ex.exercise_id, userId },
+                "Gemini returned invalid exercise_id. Filtering it out.",
+              );
             }
             return isValid;
           });
@@ -271,7 +270,7 @@ Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include ma
   } catch (error: any) {
     fastify.log.error(
       { error: error.message, userId },
-      "Gemini smart plan generation failed. Using fallback plan generator."
+      "Gemini smart plan generation failed. Using fallback plan generator.",
     );
     plan = await generateFallbackPlan(fastify, payload, {
       user,
@@ -287,8 +286,10 @@ Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include ma
 
   // Fix plan_type for enum compatibility
   if (plan.plan_type && !["user", "template", "system"].includes(plan.plan_type)) {
-    fastify.log.info({ originalPlanType: plan.plan_type }, "Mapping AI plan_type to 'system' enum");
-    plan.plan_type = "system";
+    fastify.log.info({ originalPlanType: plan.plan_type }, "Mapping AI plan_type to 'user' enum");
+    plan.plan_type = "user";
+  } else if (!plan.plan_type) {
+    plan.plan_type = "user";
   }
 
   const { data: planId, error: rpcError } = await (supabase.rpc as any)("create_smart_workout_plan_rpc", {
@@ -528,7 +529,7 @@ Generate a SINGLE JSON object. Do not include markdown formatting or explanation
       if (workout.exercises.length < originalCount) {
         fastify.log.warn(
           { originalCount, newCount: workout.exercises.length },
-          "Filtered out invalid exercises from Gemini response"
+          "Filtered out invalid exercises from Gemini response",
         );
       }
     }
