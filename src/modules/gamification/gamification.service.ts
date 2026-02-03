@@ -24,23 +24,15 @@ export class GamificationService {
 
   public async processWorkoutCompletion(
     userId: string,
-    workoutData: Omit<WorkoutCompletionData, "xpGained" | "leveledUp" | "streakSummary">
+    workoutData: Omit<WorkoutCompletionData, "xpGained" | "leveledUp" | "streakSummary">,
   ): Promise<GamificationSummary | null> {
     this.fastify.log.info({ userId }, "[GAMIFICATION_SERVICE] Processing workout completion");
 
     const totalXpGained = XP_PER_WORKOUT;
     const [streakResult, xpResult] = await Promise.all([
       _updateWorkoutStreak(this.fastify, userId),
-      _awardXp(this.fastify, workoutData.userProfile, totalXpGained),
+      _awardXp(this.fastify, this.supabase, workoutData.userProfile, totalXpGained),
     ]);
-
-    if (!xpResult) {
-      this.fastify.log.error(
-        { userId },
-        "[GAMIFICATION_SERVICE] XP awarding failed, aborting gamification processing."
-      );
-      return null;
-    }
 
     const fullWorkoutData: WorkoutCompletionData = {
       ...workoutData,
@@ -61,7 +53,7 @@ export class GamificationService {
       leveled_up: xpResult.leveled_up,
       new_user_state: {
         xp: xpResult.final_xp,
-        level: xpResult.final_level || 1,
+        level: xpResult.final_level,
       },
       streak_summary: streakResult,
       unlocked_badges: unlocked_badges || [],
