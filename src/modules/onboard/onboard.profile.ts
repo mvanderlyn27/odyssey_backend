@@ -5,7 +5,7 @@ import { OnboardingData } from "./onboard.types";
 import { PreparedOnboardingData } from "./onboard.data";
 
 function mapUnitsToWeightPreference(
-  units: "kg" | "lbs" | undefined | null
+  units: "kg" | "lbs" | undefined | null,
 ): Database["public"]["Enums"]["unit_type"] | undefined {
   if (units === "kg") return "metric";
   if (units === "lbs") return "imperial";
@@ -16,7 +16,7 @@ export async function _createInitialProfile(
   fastify: FastifyInstance,
   userId: string,
   data: OnboardingData,
-  preparedData: PreparedOnboardingData
+  preparedData: PreparedOnboardingData,
 ): Promise<Tables<"users">> {
   fastify.log.info({ module: "onboard", userId }, "Creating initial profile");
   if (!fastify.supabase) {
@@ -101,7 +101,7 @@ export async function _createInitialProfile(
     if (bodyMeasurementError) {
       fastify.log.warn(
         { module: "onboard", error: bodyMeasurementError, userId },
-        "Failed to insert initial body weight measurement"
+        "Failed to insert initial body weight measurement",
       );
       // This is a non-critical error, so we just log a warning and continue.
     }

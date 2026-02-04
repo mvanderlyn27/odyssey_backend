@@ -51,9 +51,9 @@ async function generateFallbackPlan(fastify: FastifyInstance, payload: SmartCrea
 
   // Build a simple plan for the requested duration (days per week)
   const workouts = [];
-  for (let d = 1; d <= duration; d++) {
+  for (let d = 0; d < duration; d++) {
     // Pick 5-6 exercises for this day
-    const dayExercises = sortedExercises.slice((d - 1) * 6, d * 6).map((ex, index) => ({
+    const dayExercises = sortedExercises.slice(d * 6, (d + 1) * 6).map((ex, index) => ({
       exercise_id: ex.id,
       order_in_workout: index + 1,
       target_sets: 3,
@@ -202,7 +202,7 @@ Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include ma
   "workouts": [
     {
       "name": "string",
-      "day": number (1-7),
+      "day": number (0-indexed, starting from 0),
       "focus": "string",
       "exercises": [
         {
@@ -540,6 +540,12 @@ Generate a SINGLE JSON object. Do not include markdown formatting or explanation
 
   // We assume the prompt generates a 'workouts' array with one item for a single workout
   const workoutDayData = workoutPlan.workouts?.[0];
+
+  // Set default day to 0 for single workout creation
+  if (workoutDayData && workoutDayData.day === undefined) {
+    workoutDayData.day = 0;
+  }
+
   if (!workoutDayData) {
     throw new Error("Generated plan structure is invalid: missing workouts data.");
   }

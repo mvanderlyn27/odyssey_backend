@@ -6,36 +6,37 @@ export const InitialRankBodySchema = Type.Object(
   {
     display_name: Type.Optional(Type.String({ description: "User's chosen display name" })),
     selected_exercise_id: Type.Optional(
-      Type.String({ format: "uuid", description: "UUID of the exercise used for ranking" })
+      Type.String({ format: "uuid", description: "UUID of the exercise used for ranking" }),
     ),
     muscle_id: Type.Optional(
-      Type.String({ format: "uuid", description: "UUID of the primary muscle for ranking, if provided directly" })
+      Type.String({ format: "uuid", description: "UUID of the primary muscle for ranking, if provided directly" }),
     ),
     calculated_rank_id: Type.Optional(Type.Integer({ description: "ID of the calculated onboarding rank" })),
     age: Type.Optional(Type.Integer({ description: "User's age", minimum: 1 })),
     weight: Type.Optional(Type.Number({ description: "User's current weight", minimum: 0 })),
+    height: Type.Optional(Type.Number({ description: "User's current height", minimum: 0 })),
     gender: Type.Optional(
       Type.Union([Type.Literal("male"), Type.Literal("female"), Type.Literal("other")], {
         description: "User's gender",
-      })
+      }),
     ),
     units: Type.Optional(
       Type.Union([Type.Literal("kg"), Type.Literal("lbs")], {
         description: "User's preferred weight unit (kg or lbs)",
-      })
+      }),
     ),
     funnel: Type.Optional(Type.String({ description: "Source or funnel of user acquisition" })),
     rank_exercise_reps: Type.Optional(
-      Type.Integer({ description: "Reps performed for the rank exercise", minimum: 0 })
+      Type.Integer({ description: "Reps performed for the rank exercise", minimum: 0 }),
     ),
     rank_exercise_sets: Type.Optional(
-      Type.Integer({ description: "Sets performed for the rank exercise", minimum: 0 })
+      Type.Integer({ description: "Sets performed for the rank exercise", minimum: 0 }),
     ),
     rank_exercise_weight_kg: Type.Optional(
-      Type.Number({ description: "Weight (in kg) used for the rank exercise", minimum: 0 })
+      Type.Number({ description: "Weight (in kg) used for the rank exercise", minimum: 0 }),
     ),
     rank_exercise_leaderboard_score: Type.Optional(
-      Type.Number({ description: "Leaderboard score calculated for the onboarding ranking exercise" })
+      Type.Number({ description: "Leaderboard score calculated for the onboarding ranking exercise" }),
     ),
     onboarding_metadata: Type.Optional(
       Type.Object({
@@ -44,13 +45,13 @@ export const InitialRankBodySchema = Type.Object(
         physique: Type.Optional(Type.String()),
         consistency: Type.Optional(Type.String()),
         distraction: Type.Optional(Type.String()),
-      })
+      }),
     ),
   },
   {
     $id: "InitialRankBodySchema",
     description: "Data for initial user onboarding, including rank, profile info, and exercise performance.",
-  }
+  },
 );
 
 export type OnboardingData = Static<typeof InitialRankBodySchema>;
@@ -61,31 +62,31 @@ export const OnboardingV2DataSchema = Type.Object(
     // Existing V1 Fields
     display_name: Type.Optional(Type.String({ description: "User's chosen display name" })),
     selected_exercise_id: Type.Optional(
-      Type.String({ format: "uuid", description: "UUID of the exercise used for ranking" })
+      Type.String({ format: "uuid", description: "UUID of the exercise used for ranking" }),
     ),
     age: Type.Optional(Type.Integer({ description: "User's age", minimum: 1 })),
     weight: Type.Optional(Type.Number({ description: "User's current weight", minimum: 0 })),
     gender: Type.Optional(
       Type.Union([Type.Literal("male"), Type.Literal("female"), Type.Literal("other")], {
         description: "User's gender",
-      })
+      }),
     ),
     units: Type.Optional(
       Type.Union([Type.Literal("kg"), Type.Literal("lbs")], {
         description: "User's preferred weight unit (kg or lbs)",
-      })
+      }),
     ),
     rank_exercise_reps: Type.Optional(
-      Type.Integer({ description: "Reps performed for the rank exercise", minimum: 0 })
+      Type.Integer({ description: "Reps performed for the rank exercise", minimum: 0 }),
     ),
     rank_exercise_sets: Type.Optional(
-      Type.Integer({ description: "Sets performed for the rank exercise", minimum: 0 })
+      Type.Integer({ description: "Sets performed for the rank exercise", minimum: 0 }),
     ),
     rank_exercise_weight_kg: Type.Optional(
-      Type.Number({ description: "Weight (in kg) used for the rank exercise", minimum: 0 })
+      Type.Number({ description: "Weight (in kg) used for the rank exercise", minimum: 0 }),
     ),
     rank_exercise_leaderboard_score: Type.Optional(
-      Type.Number({ description: "Leaderboard score calculated for the onboarding ranking exercise" })
+      Type.Number({ description: "Leaderboard score calculated for the onboarding ranking exercise" }),
     ),
     onboarding_metadata: Type.Optional(
       Type.Object({
@@ -94,7 +95,7 @@ export const OnboardingV2DataSchema = Type.Object(
         physique: Type.Optional(Type.String()),
         consistency: Type.Optional(Type.String()),
         distraction: Type.Optional(Type.String()),
-      })
+      }),
     ),
 
     // New V2 Fields
@@ -105,7 +106,7 @@ export const OnboardingV2DataSchema = Type.Object(
     trial_reminder_date: Type.Optional(Type.Union([Type.String({ format: "date-time" }), Type.Null()])),
     height: Type.Optional(Type.Number({ description: "User's current height", minimum: 0 })),
     workout_frequency: Type.Optional(
-      Type.Integer({ description: "Number of workout days per week", minimum: 1, maximum: 7 })
+      Type.Integer({ description: "Number of workout days per week", minimum: 1, maximum: 7 }),
     ),
     expo_push_token: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     notifications_enabled: Type.Optional(Type.Boolean()),
@@ -113,7 +114,7 @@ export const OnboardingV2DataSchema = Type.Object(
   {
     $id: "OnboardingV2DataSchema",
     description: "Data for initial user onboarding V2, including equipment, muscles and multi-day plan info.",
-  }
+  },
 );
 
 export type OnboardingV2Data = Static<typeof OnboardingV2DataSchema>;
