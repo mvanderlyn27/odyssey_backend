@@ -19,32 +19,57 @@ import { CACHE_KEYS } from "../../services/cache.service";
 export async function getWorkoutGenerationData(fastify: FastifyInstance, userId: string) {
   const supabase = fastify.supabase as SupabaseClient<Database>;
 
-  const [user, exercises, equipment, muscleGroups, exerciseEquipment, exerciseMuscles, userExercisePrs] =
-    await Promise.all([
-      supabase.from("users").select("*").eq("id", userId).single(),
-      fastify.appCache.get(CACHE_KEYS.EXERCISES, async () => {
-        const { data, error } = await supabase.from("exercises").select("*");
-        if (error) throw error;
-        return data || [];
-      }),
-      fastify.appCache.get("equipment", async () => {
-        const { data, error } = await supabase.from("equipment").select("*");
-        if (error) throw error;
-        return data || [];
-      }),
-      fastify.appCache.get(CACHE_KEYS.MUSCLE_GROUPS, async () => {
-        const { data, error } = await supabase.from("muscle_groups").select("*");
-        if (error) throw error;
-        return data || [];
-      }),
-      supabase.from("exercise_equipment_requirements").select("*"),
-      fastify.appCache.get(CACHE_KEYS.EXERCISE_MUSCLES, async () => {
-        const { data, error } = await supabase.from("exercise_muscles").select("*");
-        if (error) throw error;
-        return data || [];
-      }),
-      supabase.from("user_exercise_prs").select("*").eq("user_id", userId),
-    ]);
+  const [
+    user,
+    exercises,
+    equipment,
+    muscleGroups,
+    exerciseEquipment,
+    exerciseMuscles,
+    userExercisePrs,
+    bodyWeight,
+    height,
+  ] = await Promise.all([
+    supabase.from("users").select("*").eq("id", userId).single(),
+    fastify.appCache.get(CACHE_KEYS.EXERCISES, async () => {
+      const { data, error } = await supabase.from("exercises").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
+    fastify.appCache.get("equipment", async () => {
+      const { data, error } = await supabase.from("equipment").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
+    fastify.appCache.get(CACHE_KEYS.MUSCLE_GROUPS, async () => {
+      const { data, error } = await supabase.from("muscle_groups").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
+    supabase.from("exercise_equipment_requirements").select("*"),
+    fastify.appCache.get(CACHE_KEYS.EXERCISE_MUSCLES, async () => {
+      const { data, error } = await supabase.from("exercise_muscles").select("*");
+      if (error) throw error;
+      return data || [];
+    }),
+    supabase.from("user_exercise_prs").select("*").eq("user_id", userId),
+    supabase
+      .from("body_measurements")
+      .select("value")
+      .eq("user_id", userId)
+      .eq("measurement_type", "body_weight")
+      .order("measured_at", { ascending: false })
+      .limit(1)
+      .single(),
+    supabase
+      .from("body_measurements")
+      .select("value")
+      .eq("user_id", userId)
+      .eq("measurement_type", "height")
+      .order("measured_at", { ascending: false })
+      .limit(1)
+      .single(),
+  ]);
 
   if (user.error) throw new Error("User not found");
   if (exerciseEquipment.error) throw new Error("Error fetching exercise equipment");
@@ -76,6 +101,7 @@ export async function getWorkoutGenerationData(fastify: FastifyInstance, userId:
     equipment,
     muscleGroups,
     userExercisePrs: userExercisePrs.data || [],
-    // muscleGroups is still useful for name mapping
+    bodyWeight: bodyWeight.data?.value || null,
+    height: height.data?.value || null,
   };
 }

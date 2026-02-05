@@ -60,7 +60,7 @@ async function generateFallbackPlan(fastify: FastifyInstance, payload: SmartCrea
       target_reps_min: 8,
       target_reps_max: 12,
       current_suggested_weight_kg: null,
-      on_success_weight_increase_kg: 2.5,
+      on_success_weight_increase_kg: payload.intensity === "light" ? 1.25 : 2.5,
       target_rep_increase: 0,
       target_rest_seconds: 60,
     }));
@@ -100,6 +100,8 @@ export async function createSmartPlan(fastify: FastifyInstance, payload: SmartCr
     equipment: allEquipment,
     muscleGroups,
     userExercisePrs,
+    bodyWeight,
+    height,
   } = await getWorkoutGenerationData(fastify, userId);
 
   // 3. Filter Exercises (by equipment)
@@ -118,14 +120,29 @@ export async function createSmartPlan(fastify: FastifyInstance, payload: SmartCr
   }
 
   // 4. Prepare Simplified Exercises for Gemini
+  const weightPreference = user.weight_preference || "metric";
   const simplifiedExercises = filteredExercises.map((ex) => {
     const relevantPrs = userExercisePrs
       .filter((pr: any) => pr.exercise_id === ex.id)
-      .map((pr: any) => ({
-        type: pr.pr_type,
-        value: pr.weight_kg !== null ? `${pr.weight_kg}kg` : pr.reps !== null ? `${pr.reps} reps` : "N/A",
-        estimated_1rm: pr.estimated_1rm,
-      }));
+      .map((pr: any) => {
+        let displayValue = "N/A";
+        if (pr.weight_kg !== null) {
+          if (weightPreference === "imperial") {
+            const lbs = Math.round(pr.weight_kg / 0.45359237);
+            displayValue = `${lbs} lbs (${pr.weight_kg} kg)`;
+          } else {
+            displayValue = `${pr.weight_kg} kg`;
+          }
+        } else if (pr.reps !== null) {
+          displayValue = `${pr.reps} reps`;
+        }
+
+        return {
+          type: pr.pr_type,
+          value: displayValue,
+          estimated_1rm: pr.estimated_1rm,
+        };
+      });
 
     return {
       exercise_id: ex.id,
@@ -139,13 +156,14 @@ export async function createSmartPlan(fastify: FastifyInstance, payload: SmartCr
   });
 
   // 5. Construct Prompt
-  const weightPreference = user.weight_preference || "metric";
   const userProfile = {
     age: user.age,
     sex: user.gender,
     fitness_level: (user.onboarding_metadata as any)?.fitness_level || "intermediate",
     goals: (user.onboarding_metadata as any)?.goals || [],
     weight_preference: weightPreference,
+    body_weight: bodyWeight ? `${bodyWeight}kg` : "N/A",
+    height: height ? `${height}cm` : "N/A",
   };
 
   const availableEquipmentNames = allEquipment
@@ -179,11 +197,12 @@ ${JSON.stringify(simplifiedExercises)}
 5. Provide realistic weight suggestions based on user profile.
 6. **WEIGHT UNITS & INCREMENTS:** 
    - The user's preference is **${weightPreference}**.
-   - If **imperial**, suggested weights MUST be in **lbs** and use standard increments (e.g., 2.5, 5, 10 lbs).
+   - If **imperial**, suggested weights MUST be in **lbs** and use standard increments (e.g., 5, 10 lbs, or 2.5 lb plates).
    - If **metric**, suggested weights MUST be in **kg** and use standard increments (e.g., 1.25, 2.5, 5 kg).
-   - EVEN IF YOU GENERATE IN LBS, the final JSON field current_suggested_weight_kg and on_success_weight_increase_kg MUST BE THE KG EQUIVALENT. 
-   - Calculation: 1 lb ≈ 0.453592 kg. 
-   - Example (Imperial): If you want to suggest 100 lbs, set the value to 45.36 (100 * 0.4536).
+   - **CRITICAL:** Even if calculating in lbs, you MUST provide the final value in the JSON fields 'current_suggested_weight_kg' and 'on_success_weight_increase_kg' as the EXACT KG equivalent (1 lb = 0.45359237 kg).
+   - **GYM-READY ROUNDING:**
+     - If imperial, ensure the weight you are converting from is a "nice" number in lbs, (e.g., 45, 135, 185, 225).
+     - Example (Imperial): A 45 lb bar = 20.41165665 kg. A 100 lb lift = 45.359237 kg.
 
 ---
 
@@ -318,6 +337,8 @@ export async function createSmartWorkout(fastify: FastifyInstance, payload: Smar
     equipment: allEquipment,
     muscleGroups,
     userExercisePrs,
+    bodyWeight,
+    height,
   } = await getWorkoutGenerationData(fastify, userId);
 
   // 3. Filter Exercises
@@ -343,15 +364,30 @@ export async function createSmartWorkout(fastify: FastifyInstance, payload: Smar
   }
 
   // 4. Prepare Simplified Exercises for Gemini
+  const weightPreference = user.weight_preference || "metric";
   const simplifiedExercises = filteredExercises.map((ex) => {
     // Find PRs for this exercise
     const relevantPrs = userExercisePrs
       .filter((pr: any) => pr.exercise_id === ex.id)
-      .map((pr: any) => ({
-        type: pr.pr_type,
-        value: pr.weight_kg !== null ? `${pr.weight_kg}kg` : pr.reps !== null ? `${pr.reps} reps` : "N/A",
-        estimated_1rm: pr.estimated_1rm,
-      }));
+      .map((pr: any) => {
+        let displayValue = "N/A";
+        if (pr.weight_kg !== null) {
+          if (weightPreference === "imperial") {
+            const lbs = Math.round(pr.weight_kg / 0.45359237);
+            displayValue = `${lbs} lbs (${pr.weight_kg} kg)`;
+          } else {
+            displayValue = `${pr.weight_kg} kg`;
+          }
+        } else if (pr.reps !== null) {
+          displayValue = `${pr.reps} reps`;
+        }
+
+        return {
+          type: pr.pr_type,
+          value: displayValue,
+          estimated_1rm: pr.estimated_1rm,
+        };
+      });
 
     return {
       exercise_id: ex.id,
@@ -368,11 +404,10 @@ export async function createSmartWorkout(fastify: FastifyInstance, payload: Smar
   });
 
   // 5. Construct Prompt
-  const weightPreference = user.weight_preference || "metric";
   const userProfile = {
     age: user.age,
-    weight: "N/A", // user.weight is missing from type, need to fetch from body_measurements if needed
-    height: "N/A", // user.height is missing
+    weight: bodyWeight ? `${bodyWeight}kg` : "N/A",
+    height: height ? `${height}cm` : "N/A",
     sex: user.gender,
     fitness_level: (user.onboarding_metadata as any)?.fitness_level || "intermediate",
     goals: (user.onboarding_metadata as any)?.goals || [],
@@ -426,9 +461,10 @@ ${JSON.stringify(simplifiedExercises)}
     *   The user's preference is **${weightPreference}**.
     *   If **imperial**, suggested weights MUST be based on **lbs** increments (e.g., 5 lbs, 10 lbs, 2.5 lb plates).
     *   If **metric**, suggested weights MUST be based on **kg** increments (e.g., 2.5 kg, 5 kg).
-    *   **CRITICAL:** Even if calculating in lbs, you MUST provide the final value in the JSON field current_suggested_weight_kg and on_weight_increase_kg as the KG equivalent (1 lb = 0.453592 kg).
-    * 
-    *   Example (Imperial): A 45 lb bar = 20.41 kg. A 100 lb lift = 45.36 kg.
+    *   **CRITICAL:** Even if calculating in lbs, you MUST provide the final value in the JSON field current_suggested_weight_kg and on_weight_increase_kg as the EXACT KG equivalent (1 lb = 0.45359237 kg).
+    *   **GYM-READY ROUNDING:**
+        - If imperial, ensure the weight you are converting from is a "nice" number in lbs (e.g., 45, 95, 135, 225). 
+        - Example (Imperial): A 45 lb bar = 20.41165665 kg. A 100 lb lift = 45.359237 kg.
     *   If experience is "Beginner", be conservative.
     *   If bodyweight exercise, set weight to 0 or null.
 
