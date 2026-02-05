@@ -14,7 +14,7 @@ import { Tables } from "../../types/database";
 export const handleOnboardingV2 = async (
   fastify: FastifyInstance,
   userId: string,
-  data: OnboardingV2Data
+  data: OnboardingV2Data,
 ): Promise<Profile> => {
   fastify.log.info({ module: "onboard", userId }, "Starting V2 onboarding process");
 
@@ -75,7 +75,7 @@ export const handleOnboardingV2 = async (
 
       concurrentTasks.push(
         _handleOnboardingRanking(fastify, userId, data as any, preparedData, inMemorySets),
-        _handleOnboardingPRs(fastify, newlyCreatedUser, data as any, preparedData, inMemorySets)
+        _handleOnboardingPRs(fastify, newlyCreatedUser, data as any, preparedData, inMemorySets),
       );
     }
 
@@ -90,16 +90,17 @@ export const handleOnboardingV2 = async (
           duration: data.workout_frequency || 3,
           intensity: "standard",
           note: "Initial plan generated during onboarding",
+          dream_goal: data.onboarding_metadata?.dream_goal,
         });
         fastify.log.info(
           { userId, planId: result.planId, isFallback: result.plan?.name === "Starter Strength Plan" },
-          "Smart plan generation completed during onboarding"
+          "Smart plan generation completed during onboarding",
         );
         return result;
       } catch (planError: any) {
         fastify.log.error(
           { error: planError.message, userId },
-          "Failed to generate initial smart plan during onboarding even with fallback"
+          "Failed to generate initial smart plan during onboarding even with fallback",
         );
         return null;
       }

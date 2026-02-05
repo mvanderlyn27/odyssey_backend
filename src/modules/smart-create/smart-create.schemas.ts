@@ -7,9 +7,10 @@ export const SmartCreateWorkoutBodySchema = Type.Object(
     duration: Type.Number(),
     intensity: Type.Union([Type.Literal("light"), Type.Literal("standard"), Type.Literal("intense")]),
     note: Type.Optional(Type.String()),
+    dream_goal: Type.Optional(Type.String()),
     userId: Type.String({ format: "uuid" }),
   },
-  { $id: "SmartCreateWorkoutBodySchema" }
+  { $id: "SmartCreateWorkoutBodySchema" },
 );
 
 export type SmartCreateWorkoutBody = Static<typeof SmartCreateWorkoutBodySchema>;

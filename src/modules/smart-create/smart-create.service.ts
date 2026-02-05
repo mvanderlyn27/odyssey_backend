@@ -88,7 +88,7 @@ async function generateFallbackPlan(fastify: FastifyInstance, payload: SmartCrea
 }
 
 export async function createSmartPlan(fastify: FastifyInstance, payload: SmartCreatePayload) {
-  const { userId, targetMuscles, equipment, duration, intensity, note } = payload;
+  const { userId, targetMuscles, equipment, duration, intensity, note, dream_goal } = payload;
   const module = "smart-create";
 
   fastify.log.info({ userId, module }, "Starting smart plan creation process (multi-day)");
@@ -161,6 +161,7 @@ export async function createSmartPlan(fastify: FastifyInstance, payload: SmartCr
     sex: user.gender,
     fitness_level: (user.onboarding_metadata as any)?.fitness_level || "intermediate",
     goals: (user.onboarding_metadata as any)?.goals || [],
+    dream_goal: dream_goal || (user.onboarding_metadata as any)?.dream_goal || "N/A",
     weight_preference: weightPreference,
     body_weight: bodyWeight ? `${bodyWeight}kg` : "N/A",
     height: height ? `${height}cm` : "N/A",
@@ -325,7 +326,7 @@ Generate a SINGLE JSON object matching the exercisePlanSchema. Do not include ma
 }
 
 export async function createSmartWorkout(fastify: FastifyInstance, payload: SmartCreatePayload) {
-  const { userId, targetMuscles, equipment, duration, intensity, note } = payload;
+  const { userId, targetMuscles, equipment, duration, intensity, note, dream_goal } = payload;
   const module = "smart-create";
 
   fastify.log.info({ userId, module }, "Starting smart workout creation process");
@@ -411,6 +412,7 @@ export async function createSmartWorkout(fastify: FastifyInstance, payload: Smar
     sex: user.gender,
     fitness_level: (user.onboarding_metadata as any)?.fitness_level || "intermediate",
     goals: (user.onboarding_metadata as any)?.goals || [],
+    dream_goal: dream_goal || (user.onboarding_metadata as any)?.dream_goal || "N/A",
     experience: (user.onboarding_metadata as any)?.experience || "intermediate",
     weight_preference: weightPreference,
   };
