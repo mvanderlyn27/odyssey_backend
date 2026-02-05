@@ -10,7 +10,7 @@ export async function _handleOnboardingRanking(
   userId: string,
   data: OnboardingData,
   preparedData: PreparedOnboardingData,
-  persistedSessionSets: Tables<"workout_session_sets">[]
+  persistedSessionSets: Tables<"workout_session_sets">[],
 ) {
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
@@ -22,8 +22,10 @@ export async function _handleOnboardingRanking(
     userGenderForRanking &&
     userBodyweight &&
     data.selected_exercise_id &&
-    data.rank_exercise_reps &&
-    data.rank_exercise_weight_kg
+    data.rank_exercise_reps !== undefined &&
+    data.rank_exercise_reps !== null &&
+    data.rank_exercise_weight_kg !== undefined &&
+    data.rank_exercise_weight_kg !== null
   ) {
     try {
       const userExerciseRanks = await fastify.supabase
@@ -57,7 +59,7 @@ export async function _handleOnboardingRanking(
           initialMuscleRanks: preparedData.initialMuscleRanks,
           existingUserExerciseRanks: userExerciseRanks.data,
         },
-        "Calling rankingService.updateUserRanks"
+        "Calling rankingService.updateUserRanks",
       );
 
       const results = await rankingService.updateUserRanks(
@@ -76,12 +78,12 @@ export async function _handleOnboardingRanking(
         preparedData.initialMuscleRanks,
         userExerciseRanks.data,
         false, // Onboarding ranks are always unlocked
-        "onboard"
+        "onboard",
       );
 
       fastify.log.debug(
         { module: "onboard", userId, payload: results.rankUpdatePayload },
-        "Rank update payload calculated"
+        "Rank update payload calculated",
       );
 
       const payload = results.rankUpdatePayload;
@@ -115,7 +117,7 @@ export async function _handleOnboardingRanking(
     } catch (rankingError: any) {
       fastify.log.error(
         { module: "onboard", error: rankingError, userId },
-        "Error during onboarding ranking calculation"
+        "Error during onboarding ranking calculation",
       );
       if (fastify.posthog) {
         fastify.posthog.capture({
@@ -133,8 +135,8 @@ export async function _handleOnboardingRanking(
       hasGender: !!userGenderForRanking,
       hasBodyweight: !!userBodyweight,
       hasExerciseId: !!data.selected_exercise_id,
-      hasReps: data.rank_exercise_reps !== undefined,
-      hasWeight: data.rank_exercise_weight_kg !== undefined,
+      hasReps: data.rank_exercise_reps !== undefined && data.rank_exercise_reps !== null,
+      hasWeight: data.rank_exercise_weight_kg !== undefined && data.rank_exercise_weight_kg !== null,
     };
     fastify.log.info(
       {
@@ -142,7 +144,7 @@ export async function _handleOnboardingRanking(
         userId,
         ...missingData,
       },
-      "Skipping onboarding ranking calculation due to missing data"
+      "Skipping onboarding ranking calculation due to missing data",
     );
     if (fastify.posthog) {
       fastify.posthog.capture({

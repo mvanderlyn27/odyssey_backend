@@ -43,7 +43,12 @@ export const handleOnboardingV2 = async (
     }
 
     // Handle Ranking & PRs (V1 Logic)
-    if (data.rank_exercise_reps !== undefined && data.rank_exercise_weight_kg !== undefined) {
+    if (
+      data.rank_exercise_reps !== undefined &&
+      data.rank_exercise_reps !== null &&
+      data.rank_exercise_weight_kg !== undefined &&
+      data.rank_exercise_weight_kg !== null
+    ) {
       const calculated_1rm = calculate_1RM(data.rank_exercise_weight_kg, data.rank_exercise_reps);
       const calculated_swr = calculate_SWR(calculated_1rm, data.rank_exercise_weight_kg);
 
