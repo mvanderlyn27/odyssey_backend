@@ -49,7 +49,7 @@ export async function _updateWorkoutPlanProgression(
   }
 
   fastify.log.info({ workoutPlanDayId, module }, `[PROGRESSION] Starting workout plan progression update`);
-  fastify.log.debug({ workoutPlanDayId, setsProgressionData, module }, `[PROGRESSION] Full progression data`);
+  // fastify.log.debug({ workoutPlanDayId, setsProgressionData, module }, `[PROGRESSION] Full progression data`);
 
   try {
     const supabase = fastify.supabase as SupabaseClient<Database>;

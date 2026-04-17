@@ -10,6 +10,10 @@ export enum CACHE_KEYS {
   CUSTOM_EXERCISE_MUSCLES = "customExerciseMuscles",
   EXERCISES = "exercises",
   LEVEL_DEFINITIONS = "levelDefinitions",
+  BADGES = "badges",
+  QUESTS = "quests",
+  QUEST_TASKS = "questTasks",
+  STREAK_REWARDS = "streakRewards",
 }
 
 // A simple in-memory cache store
@@ -112,6 +116,26 @@ export class CacheService {
       }),
       this.get(CACHE_KEYS.LEVEL_DEFINITIONS, async () => {
         const { data, error } = await supabase.from("level_definitions").select("*");
+        if (error) throw error;
+        return data || [];
+      }),
+      this.get(CACHE_KEYS.BADGES, async () => {
+        const { data, error } = await supabase.from("badges").select("*");
+        if (error) throw error;
+        return data || [];
+      }),
+      this.get(CACHE_KEYS.QUESTS, async () => {
+        const { data, error } = await supabase.from("quests").select("*");
+        if (error) throw error;
+        return data || [];
+      }),
+      this.get(CACHE_KEYS.QUEST_TASKS, async () => {
+        const { data, error } = await supabase.from("quest_tasks").select("*");
+        if (error) throw error;
+        return data || [];
+      }),
+      this.get(CACHE_KEYS.STREAK_REWARDS, async () => {
+        const { data, error } = await supabase.from("streak_rewards").select("*");
         if (error) throw error;
         return data || [];
       }),

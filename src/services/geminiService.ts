@@ -51,6 +51,41 @@ export class GeminiService {
   }
 
   /**
+   * Helper to execute a function with exponential backoff retries for specific errors.
+   */
+  private async withRetry<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    initialDelay: number = 1000
+  ): Promise<T> {
+    let lastError: any;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error: any) {
+        lastError = error;
+        const status = error.status || (error as any).response?.status;
+        const message = error.message || "";
+
+        // Retry on 503 (Service Unavailable), 429 (Too Many Requests), or "model is overloaded"
+        const isRetryable = status === 503 || status === 429 || message.toLowerCase().includes("overloaded");
+
+        if (isRetryable && attempt < maxRetries) {
+          const delay = initialDelay * Math.pow(2, attempt);
+          this.fastify.log.warn(
+            { attempt: attempt + 1, delay, error: message },
+            "Gemini API retryable error encountered. Retrying..."
+          );
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError;
+  }
+
+  /**
    * Generates text content using the configured Gemini model.
    * @param params - Parameters including the prompt.
    * @param params.prompt - The text prompt for generation.
@@ -76,25 +111,27 @@ export class GeminiService {
       "Generating text with Gemini"
     );
 
-    try {
-      const model = this.genAI.getGenerativeModel({ model: modelName });
-      let result: GenerateContentResult;
+    return this.withRetry(async () => {
+      try {
+        const model = this.genAI!.getGenerativeModel({ model: modelName });
+        let result: GenerateContentResult;
 
-      // Prepare contents for the API call
-      const currentUserPrompt: Content = { role: "user", parts: [{ text: params.prompt }] };
-      const contents: Content[] = params.history ? [...params.history, currentUserPrompt] : [currentUserPrompt];
+        // Prepare contents for the API call
+        const currentUserPrompt: Content = { role: "user", parts: [{ text: params.prompt }] };
+        const contents: Content[] = params.history ? [...params.history, currentUserPrompt] : [currentUserPrompt];
 
-      result = await model.generateContent({ contents }); // Pass full history
+        result = await model.generateContent({ contents }); // Pass full history
 
-      const response = await result.response;
-      const text = response.text();
-      this.fastify.log.debug({ modelName, responseLength: text.length }, "Gemini text generation successful");
-      return text;
-    } catch (error: any) {
-      this.fastify.log.error(error, `Gemini API error during generateText (model: ${modelName})`);
-      // Re-throw a more specific error or handle as needed
-      throw new Error(`Gemini API error: ${error.message}`);
-    }
+        const response = await result.response;
+        const text = response.text();
+        this.fastify.log.debug({ modelName, responseLength: text.length }, "Gemini text generation successful");
+        return text;
+      } catch (error: any) {
+        this.fastify.log.error(error, `Gemini API error during generateText (model: ${modelName})`);
+        // Re-throw to let withRetry handle it
+        throw error;
+      }
+    });
   }
 
   /**

@@ -3,17 +3,8 @@ import { finishWorkoutSession } from "./workout-sessions.service";
 // Import TypeBox schemas and types
 import {
   type NewFinishSessionBody,
-  DetailedFinishSessionResponseSchema, // New schema for the response
   type DetailedFinishSessionResponse, // New type for the response
   // Schemas for List & Summary
-  ListWorkoutSessionsQuerySchema,
-  ListWorkoutSessionsResponseSchema,
-  type ListWorkoutSessionsQuery,
-  type ListWorkoutSessionsResponse,
-  WorkoutSessionSummaryParamsSchema,
-  WorkoutSessionSummaryResponseSchema,
-  type WorkoutSessionSummaryParams,
-  type WorkoutSessionSummaryResponse,
 } from "../../schemas/workoutSessionsSchemas";
 // Import common schema types
 import { type ErrorResponse, ErrorResponseSchema } from "../../schemas/commonSchemas"; // Added ErrorResponseSchema

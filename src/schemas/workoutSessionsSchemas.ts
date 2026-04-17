@@ -1,10 +1,8 @@
-import { Type, Static, TSchema } from "@sinclair/typebox"; // Added TSchema for WorkoutPlanDaySchema import
-import { UuidParamsSchema, PaginationQuerySchema } from "./commonSchemas"; // Import common schemas
-import { ExerciseSchema } from "./exercisesSchemas"; // Import Exercise schema
+import { Type, Static, TSchema } from "@sinclair/typebox";
+import { UuidParamsSchema, PaginationQuerySchema } from "./commonSchemas";
+import { ExerciseSchema } from "./exercisesSchemas";
 
 // --- Enums ---
-// RankLabelEnum is removed as ranks are now stored in a separate table.
-
 const SessionStatusEnum = Type.Union(
   [
     Type.Literal("pending"),
@@ -16,7 +14,7 @@ const SessionStatusEnum = Type.Union(
     Type.Literal("error"),
     Type.Literal("no_plan"),
     Type.Literal("no_workouts"),
-  ], // Added skipped
+  ],
   { $id: "SessionStatusEnum", description: "Status of a workout session" }
 );
 export type SessionStatus = Static<typeof SessionStatusEnum>;
@@ -221,7 +219,7 @@ export const WorkoutSessionSchema = Type.Object(
     status: SessionStatusEnum,
     notes: Type.Union([Type.String(), Type.Null()]),
     created_at: Type.String({ format: "date-time" }),
-    overall_feeling: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Added based on FinishSessionBody
+    overall_feeling: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   },
   { $id: "WorkoutSessionSchema", description: "Represents a workout session instance" }
 );
@@ -232,21 +230,21 @@ export const SessionExerciseSchema = Type.Object(
     id: Type.String({ format: "uuid" }),
     workout_session_id: Type.String({ format: "uuid" }),
     exercise_id: Type.String({ format: "uuid" }),
-    workout_plan_exercise_id: Type.Union([Type.String({ format: "uuid" }), Type.Null()]), // Renamed from workout_plan_exercise_id based on service
-    set_order: Type.Integer(), // Added based on LogSetBody
-    planned_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])), // Added to store planned weight
-    planned_min_reps: Type.Optional(Type.Integer()), // Renamed from target_reps_min
-    planned_max_reps: Type.Optional(Type.Union([Type.Integer(), Type.Null()])), // Renamed from target_reps_max
-    target_rest_seconds: Type.Optional(Type.Union([Type.Integer(), Type.Null()])), // Make optional
-    logged_sets: Type.Optional(Type.Integer()), // Make optional as it's logged per set
-    logged_reps: Type.Integer(), // Required per set log
-    logged_weight_kg: Type.Union([Type.Number(), Type.Null()]), // Required per set log (can be 0/null)
-    logged_rest_seconds: Type.Optional(Type.Union([Type.Integer(), Type.Null()])), // Make optional
-    logged_notes: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Renamed from notes based on LogSetBody
-    is_completed: Type.Optional(Type.Boolean()), // Make optional
+    workout_plan_exercise_id: Type.Optional(Type.Union([Type.String({ format: "uuid" }), Type.Null()])),
+    set_order: Type.Integer(),
+    planned_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
+    planned_min_reps: Type.Optional(Type.Integer()),
+    planned_max_reps: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
+    target_rest_seconds: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
+    logged_sets: Type.Optional(Type.Integer()),
+    logged_reps: Type.Integer(),
+    logged_weight_kg: Type.Union([Type.Number(), Type.Null()]),
+    logged_rest_seconds: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
+    logged_notes: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+    is_completed: Type.Optional(Type.Boolean()),
     created_at: Type.String({ format: "date-time" }),
-    difficulty_rating: Type.Optional(Type.Union([Type.Integer(), Type.Null()])), // Added based on LogSetBody
-    was_successful_for_progression: Type.Optional(Type.Boolean()), // Added based on service logic
+    difficulty_rating: Type.Optional(Type.Union([Type.Integer(), Type.Null()])),
+    was_successful_for_progression: Type.Optional(Type.Boolean()),
   },
   { $id: "SessionExerciseSchema", description: "A logged set for an exercise within a workout session" }
 );
@@ -258,13 +256,13 @@ export const SessionSetInputSchema = Type.Object(
   {
     id: Type.String({ description: "Client-generated UUID for this specific set instance" }),
     order_index: Type.Integer({ minimum: 0 }),
-    planned_min_reps: Type.Optional(Type.Integer({ minimum: 0 })), // New field
-    planned_max_reps: Type.Optional(Type.Integer({ minimum: 0 })), // New field
+    planned_min_reps: Type.Optional(Type.Integer({ minimum: 0 })),
+    planned_max_reps: Type.Optional(Type.Integer({ minimum: 0 })),
     planned_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     actual_reps: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     actual_weight_kg: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
     is_completed: Type.Boolean(),
-    is_success: Type.Optional(Type.Boolean()), // Replaces is_failure, matches DB
+    is_success: Type.Optional(Type.Boolean()),
     is_min_success: Type.Optional(Type.Boolean()),
     is_warmup: Type.Optional(Type.Boolean()),
     is_amrap: Type.Optional(Type.Boolean()),
@@ -308,7 +306,7 @@ export const NewFinishSessionBodySchema = Type.Object(
     ended_at: Type.String({ format: "date-time" }),
     duration_seconds: Type.Integer({ minimum: 0 }),
     public: Type.Optional(Type.Boolean()),
-    overall_feeling: Type.Optional(Type.Union([Type.String(), Type.Null()])), // Allow any string or null, aligning with service/response
+    overall_feeling: Type.Optional(Type.Union([Type.String(), Type.Null()])),
     exercises: Type.Array(Type.Ref(SessionExerciseInputSchema)),
     notes: Type.Array(Type.Ref(NoteSchema)),
   },
@@ -520,19 +518,45 @@ export const RankUpDataSchema = Type.Object(
   { $id: "RankUpDataSchema" }
 );
 
+export const UnlockedItemSchema = Type.Object(
+  {
+    id: Type.String(),
+    name: Type.String(),
+  },
+  { $id: "UnlockedItemSchema" }
+);
+
+export const StreakUpdateResultSchema = Type.Object(
+  {
+    old_streak: Type.Number(),
+    new_streak: Type.Number(),
+    streak_extended: Type.Boolean(),
+    days_added: Type.Number(),
+  },
+  { $id: "StreakUpdateResultSchema", description: "Result of a streak update operation." }
+);
+
+export const GamificationSummarySchema = Type.Object(
+  {
+    xp_gained: Type.Number(),
+    leveled_up: Type.Boolean(),
+    new_user_state: Type.Object({
+      xp: Type.Number(),
+      level: Type.Number(),
+    }),
+    streak_summary: Type.Ref(StreakUpdateResultSchema), // Changed from new_streak_state
+    unlocked_badges: Type.Array(Type.Ref(UnlockedItemSchema)),
+    completed_quests: Type.Array(Type.Ref(UnlockedItemSchema)),
+  },
+  { $id: "GamificationSummarySchema" }
+);
+
 export const DetailedFinishSessionResponseSchema = Type.Object(
   {
-    // Core Session Info & XP
+    // Core Session Info
     sessionId: Type.String({ format: "uuid" }),
     completedAt: Type.String({ format: "date-time" }),
     exercisesPerformed: Type.String({ description: "Comma-separated list of unique exercise names performed." }),
-    xpAwarded: Type.Number(),
-    total_xp: Type.Number({ description: "User's total experience points after the workout" }),
-    levelUp: Type.Boolean(),
-    newLevelNumber: Type.Optional(Type.Number({ description: "The user's new level number" })),
-    remaining_xp_for_next_level: Type.Optional(
-      Type.Number({ description: "XP needed for the user to reach the next level" })
-    ),
 
     // Page 1: Overview Stats
     total_volume: Type.Number({ minimum: 0, description: "Total volume for the current session in kg." }),
@@ -558,7 +582,6 @@ export const DetailedFinishSessionResponseSchema = Type.Object(
 
     // Page 2: Muscle Groups & Rank Progression
     muscles_worked_summary: Type.Array(Type.Ref(MuscleWorkedSummaryItemSchema), {
-      // Renamed and type changed
       description: "Array of individual muscles worked in this session, including their intensity.",
     }),
     rank_up_data: Type.Ref(RankUpDataSchema),
@@ -566,6 +589,7 @@ export const DetailedFinishSessionResponseSchema = Type.Object(
     // Page 3: Logged Set Overview & Plan Progression
     logged_set_overview: Type.Array(Type.Ref(LoggedSetOverviewItemSchema)),
     plan_progression: Type.Array(Type.Ref(NewPlanProgressionItemSchema)),
+    gamification_summary: Type.Optional(Type.Union([Type.Ref(GamificationSummarySchema), Type.Null()])),
   },
   {
     $id: "DetailedFinishSessionResponseSchema",
@@ -610,8 +634,8 @@ export const ListWorkoutSessionsQuerySchema = Type.Object(
   {
     page: Type.Optional(Type.Integer({ minimum: 1, default: 1 })),
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 10 })),
-    sortBy: Type.Optional(ListWorkoutSessionsSortByEnum), // Default: started_at_desc
-    period: Type.Optional(ListWorkoutSessionsPeriodEnum), // Default: all_time
+    sortBy: Type.Optional(ListWorkoutSessionsSortByEnum),
+    period: Type.Optional(ListWorkoutSessionsPeriodEnum),
     // Future: filterByStatus: Type.Optional(SessionStatusEnum)
     // Future: filterByWorkoutPlanId: Type.Optional(Type.String({ format: "uuid" }))
   },
@@ -629,9 +653,9 @@ export const WorkoutSessionListItemSchema = Type.Object(
     total_volume_kg: Type.Optional(Type.Number()),
     total_sets: Type.Optional(Type.Integer()),
     total_reps: Type.Optional(Type.Integer()),
-    num_exercises: Type.Optional(Type.Integer()), // Number of unique exercises performed
-    workout_plan_name: Type.Optional(Type.String()), // If linked to a plan
-    workout_plan_day_name: Type.Optional(Type.String()), // If linked to a plan day
+    num_exercises: Type.Optional(Type.Integer()),
+    workout_plan_name: Type.Optional(Type.String()),
+    workout_plan_day_name: Type.Optional(Type.String()),
     // Potentially a short summary of exercises, e.g., "Bench Press, Squats, ..."
     exercise_summary_preview: Type.Optional(Type.String()),
   },
@@ -652,7 +676,7 @@ export const ListWorkoutSessionsResponseSchema = Type.Object(
 export type ListWorkoutSessionsResponse = Static<typeof ListWorkoutSessionsResponseSchema>;
 
 // Params Schema for Workout Session Summary (GET /users/me/workout-sessions/:sessionId/summary)
-// Reusing UuidParamsSchema if it's just { sessionId: Type.String({ format: "uuid" }) }
+// Reusing UuidParamsSchema if it"s just { sessionId: Type.String({ format: "uuid" }) }
 // For clarity, defining it explicitly here.
 export const WorkoutSessionSummaryParamsSchema = Type.Object(
   {
@@ -665,7 +689,7 @@ export type WorkoutSessionSummaryParams = Static<typeof WorkoutSessionSummaryPar
 // Schema for a single set within the WorkoutSessionExerciseSummarySchema
 export const WorkoutSessionSetSummarySchema = Type.Object(
   {
-    set_id: Type.String({ format: "uuid" }), // ID of the workout_session_sets record
+    set_id: Type.String({ format: "uuid" }),
     order_index: Type.Integer(),
     planned_reps_min: Type.Optional(Type.Integer()),
     planned_reps_max: Type.Optional(Type.Integer()),
@@ -678,8 +702,8 @@ export const WorkoutSessionSetSummarySchema = Type.Object(
     rest_time_seconds: Type.Optional(Type.Integer()),
     calculated_1rm: Type.Optional(Type.Number()),
     calculated_swr: Type.Optional(Type.Number()),
-    new_pr_achieved_1rm: Type.Optional(Type.Boolean()), // Indicates if this set resulted in a new 1RM PR for this exercise
-    new_pr_achieved_swr: Type.Optional(Type.Boolean()), // Indicates if this set resulted in a new SWR PR for this exercise
+    new_pr_achieved_1rm: Type.Optional(Type.Boolean()),
+    new_pr_achieved_swr: Type.Optional(Type.Boolean()),
   },
   { $id: "WorkoutSessionSetSummarySchema" }
 );
@@ -693,7 +717,7 @@ export const WorkoutSessionExerciseSummarySchema = Type.Object(
     exercise_description: Type.Optional(Type.String()),
     exercise_video_url: Type.Optional(Type.String({ format: "uri" })),
     order_index: Type.Integer(),
-    user_notes: Type.Optional(Type.String()), // Notes for the overall exercise in this session
+    user_notes: Type.Optional(Type.String()),
     sets: Type.Array(WorkoutSessionSetSummarySchema),
     total_volume_for_exercise_kg: Type.Number(),
     max_weight_for_exercise_kg: Type.Number(),
@@ -706,7 +730,7 @@ export type WorkoutSessionExerciseSummary = Static<typeof WorkoutSessionExercise
 // Response Schema for Workout Session Summary
 export const WorkoutSessionSummaryResponseSchema = Type.Object(
   {
-    id: Type.String({ format: "uuid" }), // Session ID
+    id: Type.String({ format: "uuid" }),
     started_at: Type.String({ format: "date-time" }),
     ended_at: Type.Optional(Type.String({ format: "date-time" })),
     duration_seconds: Type.Optional(Type.Integer()),
@@ -731,7 +755,10 @@ export const WorkoutSessionSummaryResponseSchema = Type.Object(
         unit: Type.String(), // "kg" or "SWR"
       })
     ),
+    gamification_summary: Type.Optional(Type.Union([Type.Ref(GamificationSummarySchema), Type.Null()])),
   },
-  { $id: "WorkoutSessionSummaryResponseSchema" }
+  {
+    $id: "WorkoutSessionSummaryResponseSchema",
+    description: "Detailed summary of a single workout session, including exercises, sets, PRs, and gamification.",
+  }
 );
-export type WorkoutSessionSummaryResponse = Static<typeof WorkoutSessionSummaryResponseSchema>;

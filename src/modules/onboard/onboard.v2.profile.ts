@@ -1,24 +1,24 @@
 import { FastifyInstance } from "fastify";
 import { Database, Tables, TablesUpdate } from "../../types/database";
 import { generateUniqueUsername, generateUsernameFromDisplayName } from "./onboard.helpers";
-import { OnboardingData } from "./onboard.types";
+import { OnboardingV2Data } from "../../schemas/onboardSchemas";
 import { PreparedOnboardingData } from "./onboard.data";
 
 function mapUnitsToWeightPreference(
-  units: "kg" | "lbs" | undefined | null,
+  units: "kg" | "lbs" | undefined | null
 ): Database["public"]["Enums"]["unit_type"] | undefined {
   if (units === "kg") return "metric";
   if (units === "lbs") return "imperial";
   return undefined;
 }
 
-export async function _createInitialProfile(
+export async function _createInitialProfileV2(
   fastify: FastifyInstance,
   userId: string,
-  data: OnboardingData,
-  preparedData: PreparedOnboardingData,
+  data: OnboardingV2Data,
+  preparedData: PreparedOnboardingData
 ): Promise<Tables<"users">> {
-  fastify.log.info({ module: "onboard", userId }, "Creating initial profile");
+  fastify.log.info({ module: "onboard", userId }, "Creating initial profile V2");
   if (!fastify.supabase) {
     throw new Error("Supabase client not available");
   }
@@ -43,32 +43,40 @@ export async function _createInitialProfile(
     username: username,
     display_name: displayName,
     avatar_url: avatarUrl,
+    profile_data: {
+      ...(preparedData.userProfile?.profile_data as any),
+      show_physique_check: true,
+      show_bodygraph: true,
+      show_prs: true,
+      show_stats: true,
+      show_recent_workouts: true,
+    },
   };
 
-  const userPayload: TablesUpdate<"users"> = {
+  const userPayload: any = {
     id: userId,
-    //default to false for now, wait until user finishes the onboard locally
-    onboard_complete: false,
+    onboard_complete: true, // Mark V1 as complete too
+    // onboard_v2_complete: true, // Removed as column doesn't exist
     age: data.age ?? preparedData.userData?.age,
     gender: data.gender ?? preparedData.userData?.gender,
     weight_preference: mapUnitsToWeightPreference(data.units) ?? preparedData.userData?.weight_preference,
-    funnel: data.funnel ?? preparedData.userData?.funnel ?? null,
-    onboarding_metadata: data.onboarding_metadata ?? preparedData.userData?.onboarding_metadata,
+    // funnel is correctly handled via the any cast from V2 data if provided, or metadata
+    onboarding_metadata: {
+      ...(preparedData.userData?.onboarding_metadata as any),
+      ...data.onboarding_metadata,
+      onboard_v2_complete: true,
+    },
     profile_privacy: "public",
+    notification_reminder_days: data.notification_reminder_days,
+    notification_enabled:
+      data.notifications_enabled ??
+      (data.notification_reminder_days !== null && data.notification_reminder_days !== undefined),
+    push_notification_token: data.expo_push_token,
   };
 
   const { error: profileError } = await fastify.supabase.from("profiles").upsert(profilePayload);
   if (profileError) {
-    fastify.log.error({ module: "onboard", error: profileError, userId }, "Failed to create initial profile");
-    if (fastify.posthog) {
-      fastify.posthog.capture({
-        distinctId: userId,
-        event: "create_initial_profile_error",
-        properties: {
-          error: profileError,
-        },
-      });
-    }
+    fastify.log.error({ module: "onboard", error: profileError, userId }, "Failed to create initial profile V2");
     throw new Error("Failed to create initial profile");
   }
 
@@ -77,34 +85,28 @@ export async function _createInitialProfile(
     .upsert(userPayload)
     .select()
     .single();
+
   if (userError || !userData) {
-    fastify.log.error({ module: "onboard", error: userError, userId }, "Failed to update user data");
-    if (fastify.posthog) {
-      fastify.posthog.capture({
-        distinctId: userId,
-        event: "create_initial_user_error",
-        properties: {
-          error: userError,
-        },
-      });
-    }
+    fastify.log.error({ module: "onboard", error: userError, userId }, "Failed to update user data V2");
     throw new Error("Failed to update user data");
   }
 
+  // Weight measurement
   if (data.weight) {
-    const { error: bodyMeasurementError } = await fastify.supabase.from("body_measurements").insert({
+    await fastify.supabase.from("body_measurements").insert({
       user_id: userId,
       measurement_type: "body_weight",
       value: data.weight,
     });
+  }
 
-    if (bodyMeasurementError) {
-      fastify.log.warn(
-        { module: "onboard", error: bodyMeasurementError, userId },
-        "Failed to insert initial body weight measurement",
-      );
-      // This is a non-critical error, so we just log a warning and continue.
-    }
+  // Height measurement
+  if (data.height) {
+    await fastify.supabase.from("body_measurements").insert({
+      user_id: userId,
+      measurement_type: "height",
+      value: data.height,
+    });
   }
 
   return userData;

@@ -76,7 +76,7 @@ import {
 } from "./schemas/exercisesSchemas";
 // Onboarding
 // Removed PostOnboardingCompleteResponseSchema, OnboardingStep1BodySchema, OnboardingStep3BodySchema, OnboardingStep4BodySchema
-import { InitialRankBodySchema } from "./schemas/onboardSchemas";
+import { InitialRankBodySchema, OnboardingV2DataSchema } from "./schemas/onboardSchemas";
 // Profile
 import { ProfileSchema, UpdateProfileBodySchema, GetProfileResponseSchema } from "./schemas/profileSchemas";
 // User Goals
@@ -122,6 +122,8 @@ import {
   NoteSchema,
   UnchangedMuscleRankSchema,
   UnchangedExerciseRankSchema,
+  UnlockedItemSchema,
+  GamificationSummarySchema,
   // Schemas for Workout Session List & Summary (Phase 2)
   ListWorkoutSessionsQuerySchema,
   WorkoutSessionListItemSchema,
@@ -133,6 +135,7 @@ import {
   ListWorkoutSessionsSortByEnum,
   ListWorkoutSessionsPeriodEnum,
   OverallUserRankUpSchema,
+  StreakUpdateResultSchema,
 } from "./schemas/workoutSessionsSchemas";
 
 // Account
@@ -321,6 +324,8 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   app.addSchema(UnchangedExerciseRankSchema);
   app.addSchema(RankUpDataSchema);
 
+  app.addSchema(UnlockedItemSchema);
+  app.addSchema(GamificationSummarySchema);
   app.addSchema(DetailedFinishSessionResponseSchema);
 
   app.addSchema(ListWorkoutSessionsSortByEnum);
@@ -354,14 +359,14 @@ export async function buildApp(opts: BuildAppOptions = {}): Promise<FastifyInsta
   // Onboarding
   // Schemas like InitialRankBodySchema are registered within their respective route files if needed, or globally if shared.
   app.addSchema(InitialRankBodySchema);
+  app.addSchema(OnboardingV2DataSchema);
   // Removed app.addSchema for PostOnboardingCompleteResponseSchema, OnboardingStep1BodySchema, OnboardingStep3BodySchema, OnboardingStep4BodySchema
 
   // Profile
   app.addSchema(UpdateProfileBodySchema);
   app.addSchema(GetProfileResponseSchema);
 
-  // Removed Stats Schemas
-  // Removed Streaks Schemas
+  app.addSchema(StreakUpdateResultSchema);
 
   // User Goals
   console.log("DEBUG: UserGoalSchema:", UserGoalSchema);

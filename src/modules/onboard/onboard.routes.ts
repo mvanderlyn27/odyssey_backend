@@ -2,10 +2,11 @@ import { Type } from "@sinclair/typebox";
 import { FastifyInstance, FastifyPluginOptions, FastifyRequest, FastifyReply } from "fastify";
 import fp from "fastify-plugin";
 import { handleOnboarding } from "./onboard.service"; // Corrected path
+import { handleOnboardingV2 } from "./onboard.v2.service";
 import { rerollUsername } from "./onboard.helpers";
-import { type OnboardingData } from "./onboard.types"; // Renamed type and corrected path
+import { type OnboardingData, type OnboardingV2Data } from "./onboard.types"; // Renamed type and corrected path
 import { ProfileSchema, type Profile } from "../../schemas/profileSchemas";
-import { InitialRankBodySchema } from "../../schemas/onboardSchemas"; // Corrected path
+import { InitialRankBodySchema, OnboardingV2DataSchema } from "../../schemas/onboardSchemas"; // Corrected path
 // Assuming ErrorResponseSchema is globally available or added via fastify.addSchema
 // import { ErrorResponseSchema } from "../../schemas/commonSchemas"; // If needed explicitly
 
@@ -65,6 +66,56 @@ async function onboardRoutes(fastify: FastifyInstance, options: FastifyPluginOpt
         return reply
           .code(500)
           .send({ error: "Internal Server Error", message: error.message || "Failed to save initial rank data." });
+      }
+    }
+  );
+
+  // --- POST /v2/complete --- (Save initial preferences and complete onboarding V2)
+  fastify.post<{ Body: OnboardingV2Data; Reply: Profile }>(
+    "/v2/complete",
+    {
+      preHandler: [fastify.authenticate],
+      schema: {
+        description: "Save user's initial preferences and complete onboarding V2.",
+        tags: ["Onboard"],
+        summary: "Complete onboarding V2",
+        security: [{ bearerAuth: [] }],
+        body: OnboardingV2DataSchema,
+        response: {
+          200: { $ref: "ProfileSchema#" },
+          400: { $ref: "ErrorResponseSchema#" },
+          401: { $ref: "ErrorResponseSchema#" },
+          500: { $ref: "ErrorResponseSchema#" },
+        },
+      },
+    },
+    async (request: FastifyRequest<{ Body: OnboardingV2Data }>, reply: FastifyReply) => {
+      fastify.log.info({ body: request.body }, "DEBUG: Incoming Onboarding V2 Body Request Received");
+
+      const user = request.user;
+      if (!user || !user.id) {
+        return reply.code(401).send({ error: "Unauthorized", message: "User not authenticated." });
+      }
+      const userId = user.id;
+
+      try {
+        const updatedProfile = await handleOnboardingV2(fastify, userId, request.body);
+        return reply.send(updatedProfile);
+      } catch (error: any) {
+        fastify.log.error({ module: "onboard", error, userId }, "Failed saving V2 onboarding data");
+        if (fastify.posthog) {
+          fastify.posthog.capture({
+            distinctId: userId,
+            event: "onboarding_v2_error",
+            properties: {
+              error: error.message,
+              stack: error.stack,
+            },
+          });
+        }
+        return reply
+          .code(500)
+          .send({ error: "Internal Server Error", message: error.message || "Failed to save V2 onboarding data." });
       }
     }
   );
